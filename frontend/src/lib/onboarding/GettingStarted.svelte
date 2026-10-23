@@ -20,8 +20,8 @@
   import { postsApi } from '$lib/api/posts';
   import { goto } from '$app/navigation';
 
-  const DISMISS_KEY = 'social-forge-getting-started-dismissed';
-  const ANALYTICS_VISITED_KEY = 'social-forge-analytics-visited';
+  const DISMISS_KEY = 'switchpost-getting-started-dismissed';
+  const ANALYTICS_VISITED_KEY = 'switchpost-analytics-visited';
 
   let dismissed = $state(false);
   let integrations = $state<Integration[]>([]);

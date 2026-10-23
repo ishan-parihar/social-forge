@@ -4,12 +4,12 @@
 // require REDDIT_LIVE_WRITE=1 so a CI run with a token can never mutate
 // the account's public state by accident.
 
-use social_forge::config::Config;
-use social_forge::social::reddit::RedditProvider;
-use social_forge::social::SocialProvider;
+use switchpost::config::Config;
+use switchpost::social::reddit::RedditProvider;
+use switchpost::social::SocialProvider;
 
 fn get_config() -> Config {
-    social_forge::config::load_dotenv_for_live_tests();
+    switchpost::config::load_dotenv_for_live_tests();
     Config::from_env().expect("Failed to load config")
 }
 
@@ -164,7 +164,7 @@ async fn test_reddit_write_parity_roundtrip() {
             "/api/submit",
             &[
                 ("sr", "test"),
-                ("title", "social-forge P6.5 parity test"),
+                ("title", "switchpost P6.5 parity test"),
                 ("kind", "self"),
                 ("text", "temporary post — will be deleted by the test"),
             ],
@@ -195,7 +195,7 @@ async fn test_reddit_write_parity_roundtrip() {
     p.report(
         &token,
         &post_id,
-        "social-forge self-test report",
+        "switchpost self-test report",
         "",
         "",
         "",

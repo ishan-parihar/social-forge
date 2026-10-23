@@ -569,14 +569,14 @@ pub struct RepurposeRequest {
 
 #[derive(Debug, Serialize)]
 pub struct RepurposeResponse {
-    /// The newly-created Social Forge post (draft by default).
+    /// The newly-created Switchpost post (draft by default).
     pub post: PostPublic,
     /// The source feed post id, for the frontend to show provenance.
     pub source_external_post_id: Uuid,
 }
 
 /// POST /api/feed/{post_id}/repurpose — convert an imported feed post into
-/// a Social Forge `posts` row.
+/// a Switchpost `posts` row.
 ///
 /// Creates a new post in `draft` state (or `queued` if `scheduled_at` is
 /// provided) with:

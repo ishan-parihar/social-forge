@@ -22,12 +22,12 @@
 //
 // Run: cargo test --test scheduler_claim_test
 // Uses a DEDICATED database file per test (never the shared scratch DB,
-// and never data/social-forge.db).
+// and never data/switchpost.db).
 
-use social_forge::auth::middleware::DEFAULT_USER_ID;
-use social_forge::db;
-use social_forge::db::queries::{claim_posts_for_publish, get_due_posts};
-use social_forge::db::SqlitePool;
+use switchpost::auth::middleware::DEFAULT_USER_ID;
+use switchpost::db;
+use switchpost::db::queries::{claim_posts_for_publish, get_due_posts};
+use switchpost::db::SqlitePool;
 use uuid::Uuid;
 
 /// A pool over a database file this test owns.

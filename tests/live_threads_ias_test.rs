@@ -1,14 +1,14 @@
 // ─── Live Integration Tests: Threads + Instagram Standalone ──
 // Run: cargo test --test live_threads_ias_test -- --nocapture
 // Requires: SQLite file, .env with INSTAGRAM_APP_ID,
-//   THREADS_APP_ID, and real OAuth tokens in the DB for dev@social-forge.dev.
+//   THREADS_APP_ID, and real OAuth tokens in the DB for dev@switchpost.dev.
 
-use social_forge::config::Config;
-use social_forge::db;
-use social_forge::db::queries;
-use social_forge::social::instagram_standalone::InstagramStandaloneProvider;
-use social_forge::social::threads::ThreadsProvider;
-use social_forge::social::SocialProvider;
+use switchpost::config::Config;
+use switchpost::db;
+use switchpost::db::queries;
+use switchpost::social::instagram_standalone::InstagramStandaloneProvider;
+use switchpost::social::threads::ThreadsProvider;
+use switchpost::social::SocialProvider;
 
 // ── Threads Tests ──────────────────────────────────────────────
 
@@ -77,7 +77,7 @@ async fn test_ias_social_provider_meta() {
 // ── Helpers ──────────────────────────────────────────────────
 
 fn get_config() -> Config {
-    social_forge::config::load_dotenv_for_live_tests();
+    switchpost::config::load_dotenv_for_live_tests();
     Config::from_env().expect("Failed to load config")
 }
 
@@ -94,7 +94,7 @@ async fn get_token(
     pool: &sqlx::SqlitePool,
     provider_identifier: &str,
 ) -> Option<(String, String)> {
-    let user = queries::get_user_by_email(pool, "dev@social-forge.dev")
+    let user = queries::get_user_by_email(pool, "dev@switchpost.dev")
         .await
         .expect("DB query")?;
 
@@ -110,8 +110,8 @@ async fn get_token(
         .token_encryption_key
         .as_ref()
         .and_then(|k| {
-            let key = social_forge::crypto::decode_hex_key(k).ok()?;
-            social_forge::crypto::decrypt_string(&integration.access_token, &key).ok()
+            let key = switchpost::crypto::decode_hex_key(k).ok()?;
+            switchpost::crypto::decrypt_string(&integration.access_token, &key).ok()
         })
         .unwrap_or_else(|| integration.access_token.clone());
 

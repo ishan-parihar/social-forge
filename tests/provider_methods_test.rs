@@ -11,23 +11,23 @@
 
 use std::sync::Arc;
 
-use social_forge::config::Config;
-use social_forge::db;
-use social_forge::social::discord::DiscordProvider;
-use social_forge::social::instagram_standalone::InstagramStandaloneProvider;
-use social_forge::social::linkedin::LinkedInProvider;
-use social_forge::social::linkedin_page::LinkedInPageProvider;
-use social_forge::social::pinterest::PinterestProvider;
-use social_forge::social::reddit::RedditProvider;
-use social_forge::social::skool::SkoolProvider;
-use social_forge::social::threads::ThreadsProvider;
-use social_forge::social::wordpress::WordPressProvider;
-use social_forge::social::x::XProvider;
-use social_forge::social::youtube::YoutubeProvider;
-use social_forge::social::SocialProvider;
+use switchpost::config::Config;
+use switchpost::db;
+use switchpost::social::discord::DiscordProvider;
+use switchpost::social::instagram_standalone::InstagramStandaloneProvider;
+use switchpost::social::linkedin::LinkedInProvider;
+use switchpost::social::linkedin_page::LinkedInPageProvider;
+use switchpost::social::pinterest::PinterestProvider;
+use switchpost::social::reddit::RedditProvider;
+use switchpost::social::skool::SkoolProvider;
+use switchpost::social::threads::ThreadsProvider;
+use switchpost::social::wordpress::WordPressProvider;
+use switchpost::social::x::XProvider;
+use switchpost::social::youtube::YoutubeProvider;
+use switchpost::social::SocialProvider;
 
 fn get_config() -> Config {
-    social_forge::config::load_dotenv_for_tests();
+    switchpost::config::load_dotenv_for_tests();
     Config::from_env().expect("Failed to load config from .env")
 }
 
@@ -211,9 +211,9 @@ async fn test_ias_social_provider_publish_with_bad_token() {
     let config = get_config();
     let provider = InstagramStandaloneProvider::new(&config);
 
-    let post = social_forge::social::PostContent {
+    let post = switchpost::social::PostContent {
         content: "Test post".into(),
-        media: vec![social_forge::social::MediaAttachment {
+        media: vec![switchpost::social::MediaAttachment {
             url: "https://example.com/test.jpg".into(),
             mime_type: "image/jpeg".into(),
             alt: None,
@@ -399,8 +399,8 @@ async fn test_threads_social_provider_publish_with_bad_token() {
     let config = get_config();
     let provider = ThreadsProvider::new(&config);
 
-    let post = social_forge::social::PostContent {
-        content: "Test post from social-forge integration test".into(),
+    let post = switchpost::social::PostContent {
+        content: "Test post from switchpost integration test".into(),
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
         ..Default::default()
@@ -541,7 +541,7 @@ async fn test_linkedin_publish_with_bad_token() {
     let config = get_config();
     let provider = LinkedInProvider::new(&config);
 
-    let post = social_forge::social::PostContent {
+    let post = switchpost::social::PostContent {
         content: "Test LinkedIn post from integration test".into(),
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
@@ -654,10 +654,10 @@ async fn test_ias_mcp_tool_handler_full_chain() {
         .await
         .expect("Failed to connect to DB");
 
-    use social_forge::api::AppState;
-    use social_forge::mcp::SocialForgeMcpServer;
-    use social_forge::realtime::Broadcaster;
-    use social_forge::social::registry::ProviderRegistry;
+    use switchpost::api::AppState;
+    use switchpost::mcp::SwitchpostMcpServer;
+    use switchpost::realtime::Broadcaster;
+    use switchpost::social::registry::ProviderRegistry;
 
     let registry = Arc::new(ProviderRegistry::new(&config, None, None));
     let broadcaster = Broadcaster::new();
@@ -675,7 +675,7 @@ async fn test_ias_mcp_tool_handler_full_chain() {
     };
 
     // Verify MCP server can be created (all #[tool] macros compile)
-    let server = SocialForgeMcpServer::new(state.clone());
+    let server = SwitchpostMcpServer::new(state.clone());
     drop(server);
 
     // Verify Instagram Standalone provider is registered
@@ -707,7 +707,7 @@ async fn test_ias_mcp_tool_handler_full_chain() {
     );
     assert!(
         url.contains("instagram_business_basic"),
-        "Should contain business scopes (matching social-forge-app pattern)"
+        "Should contain business scopes (matching switchpost-app pattern)"
     );
 
     println!("✅ ias_mcp_handler: Full chain verified");
@@ -720,10 +720,10 @@ async fn test_threads_mcp_tool_handler_full_chain() {
         .await
         .expect("Failed to connect to DB");
 
-    use social_forge::api::AppState;
-    use social_forge::mcp::SocialForgeMcpServer;
-    use social_forge::realtime::Broadcaster;
-    use social_forge::social::registry::ProviderRegistry;
+    use switchpost::api::AppState;
+    use switchpost::mcp::SwitchpostMcpServer;
+    use switchpost::realtime::Broadcaster;
+    use switchpost::social::registry::ProviderRegistry;
 
     let registry = Arc::new(ProviderRegistry::new(&config, None, None));
     let broadcaster = Broadcaster::new();
@@ -741,7 +741,7 @@ async fn test_threads_mcp_tool_handler_full_chain() {
     };
 
     // Verify MCP server can be created
-    let server = SocialForgeMcpServer::new(state.clone());
+    let server = SwitchpostMcpServer::new(state.clone());
     drop(server);
 
     // Verify Threads provider is registered
@@ -786,10 +786,10 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
         .await
         .expect("Failed to connect to DB");
 
-    use social_forge::api::AppState;
-    use social_forge::mcp::SocialForgeMcpServer;
-    use social_forge::realtime::Broadcaster;
-    use social_forge::social::registry::ProviderRegistry;
+    use switchpost::api::AppState;
+    use switchpost::mcp::SwitchpostMcpServer;
+    use switchpost::realtime::Broadcaster;
+    use switchpost::social::registry::ProviderRegistry;
 
     let registry = Arc::new(ProviderRegistry::new(&config, None, None));
     let broadcaster = Broadcaster::new();
@@ -807,7 +807,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
     };
 
     // Verify MCP server can be created
-    let server = SocialForgeMcpServer::new(state.clone());
+    let server = SwitchpostMcpServer::new(state.clone());
     drop(server);
 
     // Verify LinkedIn provider is registered
@@ -1143,8 +1143,8 @@ async fn test_wordpress_get_post() {
 // ── Media URL Resolution Tests ──────────────────────────────────
 // Verifies that providers correctly resolve relative media URLs to absolute URLs
 
-use social_forge::social::facebook::FacebookProvider;
-use social_forge::social::MediaAttachment;
+use switchpost::social::facebook::FacebookProvider;
+use switchpost::social::MediaAttachment;
 
 fn create_facebook_provider(config: &Config) -> FacebookProvider {
     FacebookProvider::new(config)

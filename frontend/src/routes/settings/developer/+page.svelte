@@ -242,7 +242,7 @@
         <EmptyState
           icon="developer"
           title="No API keys yet"
-          description="Create one to call the Social Forge REST API or MCP server from your own tooling."
+          description="Create one to call the Switchpost REST API or MCP server from your own tooling."
         />
       {:else}
         <div class="bg-surface border border-line rounded-xl overflow-hidden">

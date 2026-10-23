@@ -1,7 +1,7 @@
 <script lang="ts">
   // Research — "what is working in my niche, and what should I post next".
   //
-  // Four read-only sections, all derived from data Social Forge already
+  // Four read-only sections, all derived from data Switchpost already
   // stores: own posts ranked by engagement, recent competitor posts ranked
   // by engagement, when the founder's own posts performed best, and topics
   // the niche uses that they have not. Plus what their connected feeds are

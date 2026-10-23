@@ -78,7 +78,7 @@ pub async fn delete(
 
 /// The default notification preferences.
 ///
-/// "push" means the in-app notification feed: Social Forge has exactly
+/// "push" means the in-app notification feed: Switchpost has exactly
 /// one delivery channel today. There is no push transport and no email
 /// transport, so the "email" option in the settings page is honoured as
 /// a stored preference but has no transport behind it yet.

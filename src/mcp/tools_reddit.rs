@@ -359,7 +359,7 @@ pub async fn handle_reddit_create_post(
     let resp = crate::social::shared_http()
         .post("https://oauth.reddit.com/api/submit")
         .header("Authorization", format!("Bearer {token}"))
-        .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+        .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
         .form(&form)
         .send()
         .await
@@ -406,7 +406,7 @@ pub async fn handle_reddit_create_comment(
     let resp = crate::social::shared_http()
         .post("https://oauth.reddit.com/api/comment")
         .header("Authorization", format!("Bearer {token}"))
-        .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+        .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
         .form(&[
             ("api_type", "json"),
             ("thing_id", &thing_id),
@@ -443,7 +443,7 @@ pub async fn handle_reddit_get_karma(
     let resp = crate::social::shared_http()
         .get("https://oauth.reddit.com/api/v1/me/karma")
         .header("Authorization", format!("Bearer {token}"))
-        .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+        .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
         .send()
         .await
         .map_err(|e| format!("Reddit karma failed: {e}"))?;

@@ -15,7 +15,7 @@ use super::*;
 use crate::config::Config;
 
 const GITHUB_API_BASE: &str = "https://api.github.com";
-const USER_AGENT: &str = "social-forge/1.0";
+const USER_AGENT: &str = "switchpost/1.0";
 
 /// Shared GitHub HTTP client (F1): ONE UA-pinned pool. GitHub REQUIRES a
 /// User-Agent header; per-provider construction rebuilt it per tool call.

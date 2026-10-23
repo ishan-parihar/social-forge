@@ -1,8 +1,8 @@
-# Social Forge — Quick Reference
+# Switchpost — Quick Reference
 
 Routing rules, ID-discovery chains, error recovery and the v11 MCP contracts.
 Per-platform command and tool listings live in `providers.md` (installed) and
-in `social-forge <command> --help` / `social-forge mcp-tools --pretty`; they are
+in `switchpost <command> --help` / `switchpost mcp-tools --pretty`; they are
 not repeated here.
 
 ---
@@ -20,11 +20,11 @@ All commands output JSON. Use `--pretty` for human-readable or `--json` for mach
 Before many commands, you need integration IDs. Here's how to find them:
 
 ```bash
-social-forge providers --pretty                    # All integration UUIDs + names
-social-forge linkedin-page list --pretty           # LinkedIn page IDs
-social-forge instagram posts <IG_ID>                # Verify Instagram account
-social-forge reddit browse <sub> --limit 1         # Verify Reddit connection
-social-forge providers --pretty                     # Facebook page IDs (internal_id)
+switchpost providers --pretty                    # All integration UUIDs + names
+switchpost linkedin-page list --pretty           # LinkedIn page IDs
+switchpost instagram posts <IG_ID>                # Verify Instagram account
+switchpost reddit browse <sub> --limit 1         # Verify Reddit connection
+switchpost providers --pretty                     # Facebook page IDs (internal_id)
 # YouTube: no list command — pass a known channel ID to `youtube stats <CHANNEL_ID>`
 ```
 
@@ -33,19 +33,19 @@ social-forge providers --pretty                     # Facebook page IDs (interna
 ## Discovery
 
 ```bash
-social-forge --help                    # All commands
-social-forge <cmd> --help              # Args for a command
-social-forge providers --pretty        # Connected accounts
-social-forge doctor                    # Provider health
-social-forge connect <provider>        # Connect a new account
-social-forge connect <provider> --wait # OAuth: prints auth_url, polls until the login lands
-social-forge mcp-tools --toolset x --pretty   # Tools in one toolset (sizing)
+switchpost --help                    # All commands
+switchpost <cmd> --help              # Args for a command
+switchpost providers --pretty        # Connected accounts
+switchpost doctor                    # Provider health
+switchpost connect <provider>        # Connect a new account
+switchpost connect <provider> --wait # OAuth: prints auth_url, polls until the login lands
+switchpost mcp-tools --toolset x --pretty   # Tools in one toolset (sizing)
 ```
 
 ### Logging a provider in (agent loop)
 
 ```bash
-social-forge connect linkedin --wait --json &   # prints {status, auth_url, redirect_uri}
+switchpost connect linkedin --wait --json &   # prints {status, auth_url, redirect_uri}
 # drive a browser to auth_url, complete the login
 # -> the CLI prints {status: connected, accounts: [...]} and exits 0
 ```
@@ -65,8 +65,8 @@ are global flags on every command.
 ## Routing
 
 - Native CLI command exists → use it (`providers.md` lists each provider's).
-- No native command → `social-forge mcp-call <tool> --args '<json>'`. It runs in-process and works while the `serve` daemon holds the writer lock.
-- Unknown tool name → `social-forge mcp-tools --pretty`, then `--toolset <set>` to narrow it.
+- No native command → `switchpost mcp-call <tool> --args '<json>'`. It runs in-process and works while the `serve` daemon holds the writer lock.
+- Unknown tool name → `switchpost mcp-tools --pretty`, then `--toolset <set>` to narrow it.
 
 ---
 
@@ -82,20 +82,20 @@ are global flags on every command.
 ## Errors
 
 ```bash
-social-forge doctor                    # Check all providers
-social-forge providers --pretty        # See what's connected
-social-forge connect <provider>        # Fix missing provider
-social-forge <cmd> --help              # Fix wrong flags
+switchpost doctor                    # Check all providers
+switchpost providers --pretty        # See what's connected
+switchpost connect <provider>        # Fix missing provider
+switchpost <cmd> --help              # Fix wrong flags
 ```
 
 ---
 
 ## MCP tool contracts (v11 — current)
 
-- **`mcp-call`** is real: `social-forge mcp-call <tool> --args '<json>'`. It runs in-process — works while the `serve` daemon holds the writer lock (thin MCP mode).
-- **Remote/HTTP MCP (F8)**: with the `serve` daemon running, the same tool surface is served at `POST {APP_URL}/mcp` (MCP streamable-HTTP). Connect an MCP client by URL with `Authorization: Bearer sf_<api-key>` (create one in the WebUI's developer page) or the `sf_session` cookie. Zero processes spawned; toolsets behave as in stdio mode (`SOCIAL_FORGE_TOOLSETS` at daemon boot).
+- **`mcp-call`** is real: `switchpost mcp-call <tool> --args '<json>'`. It runs in-process — works while the `serve` daemon holds the writer lock (thin MCP mode).
+- **Remote/HTTP MCP (F8)**: with the `serve` daemon running, the same tool surface is served at `POST {APP_URL}/mcp` (MCP streamable-HTTP). Connect an MCP client by URL with `Authorization: Bearer sf_<api-key>` (create one in the WebUI's developer page) or the `sf_session` cookie. Zero processes spawned; toolsets behave as in stdio mode (`SWITCHPOST_TOOLSETS` at daemon boot).
 - **Multi-account**: most `*_create_*` tools accept `integration` (UUID or `provider:Name`). Empty → first connected account.
-- **Toolsets**: boot default advertises `core` only. `SOCIAL_FORGE_TOOLSETS=x,reddit` pre-enables; at runtime `tools_search {"query":"…"}` finds any tool and reports its set + enabled flag; `tools_enable {"sets":["x"]}` adds sets for the session.
+- **Toolsets**: boot default advertises `core` only. `SWITCHPOST_TOOLSETS=x,reddit` pre-enables; at runtime `tools_search {"query":"…"}` finds any tool and reports its set + enabled flag; `tools_enable {"sets":["x"]}` adds sets for the session.
 - **Stage v2**: `posts_stage` takes `overrides` (per-provider content/settings), `dry_run` (readiness only, writes nothing), `force` (stage despite readiness errors), `group_id` (attach to a campaign), `scheduled_at: "next-slot"` (each account's next free slot). Readiness errors REJECT that integration unless forced.
 - **Lifecycle**: one campaign `group_id` works with `posts_reschedule` (`move_group: true` shifts the whole campaign), `posts_unschedule`, `posts_publish`, `posts_delete`, `posts_group`.
 - **Repeat**: `posts_repeat` requires `scheduled_at` + `end_date` (RFC3339) and returns the copies (`group_id`, `post_ids`, `scheduled_dates`).

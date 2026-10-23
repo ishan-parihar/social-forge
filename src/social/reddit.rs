@@ -488,7 +488,7 @@ impl RedditProvider {
             .http
             .post("https://www.reddit.com/api/v1/access_token")
             .header("Authorization", format!("Basic {auth}"))
-            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+            .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
             .form(&[
                 ("grant_type", "password"),
                 ("username", self.username.as_str()),
@@ -569,7 +569,7 @@ impl RedditProvider {
             .http
             .post(format!("https://oauth.reddit.com{endpoint}"))
             .header("Authorization", format!("Bearer {token}"))
-            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+            .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
             .form(&all_form)
             .send()
             .await?;
@@ -990,7 +990,7 @@ impl RedditProvider {
             .http
             .post("https://oauth.reddit.com/api/compose")
             .header("Authorization", format!("Bearer {token}"))
-            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+            .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
             .form(&[
                 ("api_type", "json"),
                 ("to", to),
@@ -1359,7 +1359,7 @@ impl RedditProvider {
             .http
             .get("https://oauth.reddit.com/api/v1/me")
             .header("Authorization", format!("Bearer {token}"))
-            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+            .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
             .send()
             .await?;
 
@@ -1481,7 +1481,7 @@ impl SocialProvider for RedditProvider {
                 .http
                 .post("https://www.reddit.com/api/v1/access_token")
                 .header("Authorization", format!("Basic {auth}"))
-                .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+                .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
                 .form(&[
                     ("grant_type", "authorization_code"),
                     ("code", code),
@@ -1503,7 +1503,7 @@ impl SocialProvider for RedditProvider {
                     .http
                     .get("https://oauth.reddit.com/api/v1/me")
                     .header("Authorization", format!("Bearer {access_token}"))
-                    .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+                    .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
                     .send()
                     .await?;
                 let user: serde_json::Value = me_resp.json().await.unwrap_or_default();
@@ -1533,7 +1533,7 @@ impl SocialProvider for RedditProvider {
                 .http
                 .get("https://oauth.reddit.com/api/v1/me")
                 .header("Authorization", format!("Bearer {token}"))
-                .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+                .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
                 .send()
                 .await?;
 
@@ -1568,7 +1568,7 @@ impl SocialProvider for RedditProvider {
                 .http
                 .post("https://www.reddit.com/api/v1/access_token")
                 .header("Authorization", format!("Basic {auth}"))
-                .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+                .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
                 .form(&[("grant_type", "refresh_token"), ("refresh_token", rt)])
                 .send()
                 .await?;
@@ -1625,7 +1625,7 @@ impl SocialProvider for RedditProvider {
                 .http
                 .post("https://www.reddit.com/api/v1/access_token")
                 .header("Authorization", format!("Basic {auth}"))
-                .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+                .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
                 .form(&[
                     ("grant_type", "refresh_token"),
                     ("refresh_token", rt.as_str()),
@@ -1720,7 +1720,7 @@ impl SocialProvider for RedditProvider {
                 .http
                 .post("https://oauth.reddit.com/api/submit")
                 .header("Authorization", format!("Bearer {access_token}"))
-                .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+                .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
                 .form(&post_data);
             if let Some(ref key) = post.idempotency_key {
                 req = req.header("Idempotency-Key", key);
@@ -1816,7 +1816,7 @@ impl SocialProvider for RedditProvider {
             .http
             .get("https://oauth.reddit.com/api/info.json")
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+            .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
             .query(&[("id", &full_id)])
             .send()
             .await?;
@@ -1910,7 +1910,7 @@ impl SocialProvider for RedditProvider {
             .http
             .post("https://oauth.reddit.com/api/comment")
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+            .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
             .form(&[
                 ("api_type", "json"),
                 ("thing_id", &parent_id),
@@ -1970,7 +1970,7 @@ impl SocialProvider for RedditProvider {
             .http
             .post("https://oauth.reddit.com/api/comment")
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+            .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
             .form(&[
                 ("api_type", "json"),
                 ("thing_id", &thing_id),
@@ -2071,7 +2071,7 @@ impl SocialProvider for RedditProvider {
             .http
             .get("https://oauth.reddit.com/api/v1/me/karma")
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+            .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
             .send()
             .await?;
 
@@ -2099,7 +2099,7 @@ impl SocialProvider for RedditProvider {
             .http
             .get(format!("https://oauth.reddit.com/by_id/{}", fullname))
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+            .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
             .send()
             .await?;
 
@@ -2121,7 +2121,7 @@ impl SocialProvider for RedditProvider {
             .http
             .get("https://oauth.reddit.com/message/inbox")
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+            .header("User-Agent", "switchpost:v0.1.0 (by /u/switchpost)")
             .query(&[("limit", "25")])
             .send()
             .await?;

@@ -86,9 +86,9 @@ pub async fn handle(action: RedditAction, state: &AppState) -> anyhow::Result<()
                     .header(
                         "User-Agent",
                         concat!(
-                            "social-forge:v",
+                            "switchpost:v",
                             env!("CARGO_PKG_VERSION"),
-                            " (by /u/social_forge)"
+                            " (by /u/switchpost)"
                         ),
                     )
                     .form(&form)
@@ -135,9 +135,9 @@ pub async fn handle(action: RedditAction, state: &AppState) -> anyhow::Result<()
                 .header(
                     "User-Agent",
                     concat!(
-                        "social-forge:v",
+                        "switchpost:v",
                         env!("CARGO_PKG_VERSION"),
-                        " (by /u/social_forge)"
+                        " (by /u/switchpost)"
                     ),
                 )
                 .form(&[("api_type", "json"), ("thing_id", &*tid), ("text", &*text)])

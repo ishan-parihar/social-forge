@@ -9,7 +9,7 @@
   //         "Get Started" closes the modal and routes to /calendar.
   //
   // Inspired by postiz-app's onboarding.modal.tsx (2-step: connect → tutorial).
-  // Adapted for Social Forge's single-user model (no team invite step).
+  // Adapted for Switchpost's single-user model (no team invite step).
 
   import { onMount } from 'svelte';
   import { integrationsApi, type Integration } from '$lib/api/integrations';
@@ -22,7 +22,7 @@
   let integrations = $state<Integration[]>([]);
   let loading = $state(true);
 
-  const ONBOARDING_KEY = 'social-forge-onboarded';
+  const ONBOARDING_KEY = 'switchpost-onboarded';
 
   // Available providers to show in the connect grid (Step 1).
   // Subset of the full provider list - the most popular ones.
@@ -117,7 +117,7 @@
       <div class="flex items-center justify-between">
         <h2 id="onboarding-title" class="text-xl font-bold text-accent">
           {#if step === 1}
-            Welcome to Social Forge
+            Welcome to Switchpost
           {:else}
             Quick Tour
           {/if}
@@ -143,7 +143,7 @@
         <!-- Step 1: Connect Channels -->
         <div>
           <p class="text-sm text-muted mb-4">
-            Social Forge is your solo-founder social media command center.
+            Switchpost is your solo-founder social media command center.
             Connect your channels to get started - you can add more later.
           </p>
 

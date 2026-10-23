@@ -18,19 +18,19 @@
 
 use axum::http::{Method, StatusCode};
 use serde_json::json;
-use social_forge::api::{build_router, AppState};
-use social_forge::auth::jwt::create_token;
-use social_forge::auth::middleware::{DEFAULT_USER_ID, SESSION_COOKIE};
-use social_forge::config::Config;
-use social_forge::db;
-use social_forge::realtime::Broadcaster;
-use social_forge::social::registry::ProviderRegistry;
+use switchpost::api::{build_router, AppState};
+use switchpost::auth::jwt::create_token;
+use switchpost::auth::middleware::{DEFAULT_USER_ID, SESSION_COOKIE};
+use switchpost::config::Config;
+use switchpost::db;
+use switchpost::realtime::Broadcaster;
+use switchpost::social::registry::ProviderRegistry;
 use tower::ServiceExt;
 use uuid::Uuid;
 
 /// A real router + pool on the isolated test DB (never the operator's).
 async fn state() -> AppState {
-    social_forge::config::load_dotenv_for_tests();
+    switchpost::config::load_dotenv_for_tests();
     let config = Config::from_env().expect("config");
     let db = db::create_pool(&config.database_url).await.expect("pool");
     db::ensure_local_user(&db).await.expect("local user");
@@ -88,11 +88,11 @@ async fn seed_published(state: &AppState, user_id: Uuid, epoch: i64) {
     .bind(post_id)
     .bind(user_id)
     .bind(integration_id)
-    .bind(social_forge::db::types::EpochUtc::from(
+    .bind(switchpost::db::types::EpochUtc::from(
         chrono::DateTime::from_timestamp(epoch, 0).unwrap(),
     ))
-    .bind(social_forge::db::types::EpochUtc::from(chrono::Utc::now()))
-    .bind(social_forge::db::types::EpochUtc::from(chrono::Utc::now()))
+    .bind(switchpost::db::types::EpochUtc::from(chrono::Utc::now()))
+    .bind(switchpost::db::types::EpochUtc::from(chrono::Utc::now()))
     .bind(idem)
     .execute(&state.db)
     .await

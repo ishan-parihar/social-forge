@@ -3,11 +3,11 @@
 // di_search additionally needs DISCORD_TEST_GUILD_ID (and a bot with Read
 // Message History + View Channel on that guild).
 
-use social_forge::config::Config;
-use social_forge::social::discord::DiscordProvider;
+use switchpost::config::Config;
+use switchpost::social::discord::DiscordProvider;
 
 fn get_config() -> Config {
-    social_forge::config::load_dotenv_for_live_tests();
+    switchpost::config::load_dotenv_for_live_tests();
     Config::from_env().expect("Failed to load config")
 }
 

@@ -104,7 +104,7 @@
               class="min-h-11 shrink-0 bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-accent/50 transition-colors"
             >
               <!--
-                Social Forge has exactly one delivery channel today: the
+                Switchpost has exactly one delivery channel today: the
                 in-app notification feed. There is no push transport and
                 no email transport, so offering "Email" would be a
                 setting that silently does nothing. The preference values

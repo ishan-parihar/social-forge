@@ -460,7 +460,7 @@ pub async fn test(
         "event_type": "test",
         "timestamp": Utc::now().to_rfc3339(),
         "data": {
-            "message": "This is a test webhook event from Social Forge"
+            "message": "This is a test webhook event from Switchpost"
         }
     });
 

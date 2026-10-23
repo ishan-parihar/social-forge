@@ -2,15 +2,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use rmcp::Json;
-use social_forge::config::Config;
-use social_forge::mcp::tools_whatsapp;
-use social_forge::social::registry::ProviderRegistry;
-use social_forge::social::whatsapp::WhatsAppProvider;
-use social_forge::social::SocialProvider;
-use social_forge::wa::chats;
+use switchpost::config::Config;
+use switchpost::mcp::tools_whatsapp;
+use switchpost::social::registry::ProviderRegistry;
+use switchpost::social::whatsapp::WhatsAppProvider;
+use switchpost::social::SocialProvider;
+use switchpost::wa::chats;
 
 fn get_config() -> Config {
-    social_forge::config::load_dotenv_for_tests();
+    switchpost::config::load_dotenv_for_tests();
     Config::from_env().expect("Failed to load config from .env")
 }
 
@@ -62,7 +62,7 @@ fn test_whatsapp_provider_metadata() {
     let scopes = wa.scopes();
     assert!(scopes.is_empty(), "WhatsApp should have no OAuth scopes");
 
-    use social_forge::social::EditorType;
+    use switchpost::social::EditorType;
     assert_eq!(wa.editor_type(), EditorType::Normal);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -88,7 +88,7 @@ fn test_whatsapp_provider_metadata() {
         "refresh_token should error for non-OAuth provider"
     );
 
-    use social_forge::social::PostContent;
+    use switchpost::social::PostContent;
     let post = PostContent {
         content: "Hello WhatsApp".into(),
         media: vec![],
@@ -332,13 +332,13 @@ fn test_whatsapp_provider_creation_with_real_config() {
 #[tokio::test]
 async fn test_whatsapp_mcp_tool_compilation() {
     let config = get_config();
-    let db = social_forge::db::create_pool(&config.database_url)
+    let db = switchpost::db::create_pool(&config.database_url)
         .await
         .expect("Failed to connect to DB");
 
-    use social_forge::api::AppState;
-    use social_forge::mcp::SocialForgeMcpServer;
-    use social_forge::realtime::Broadcaster;
+    use switchpost::api::AppState;
+    use switchpost::mcp::SwitchpostMcpServer;
+    use switchpost::realtime::Broadcaster;
 
     let broadcaster = Broadcaster::new();
     let registry = ProviderRegistry::new(&config, None, None);
@@ -355,7 +355,7 @@ async fn test_whatsapp_mcp_tool_compilation() {
         media_wreq_client: wreq::Client::new(),
     };
 
-    let server = SocialForgeMcpServer::new(state.clone());
+    let server = SwitchpostMcpServer::new(state.clone());
     assert!(
         server.state.config.whatsapp_store_dir.is_some()
             || server.state.config.whatsapp_store_dir.is_none()
@@ -370,18 +370,18 @@ async fn test_whatsapp_mcp_tool_compilation() {
     assert_eq!(wa.identifier(), "whatsapp");
     assert_eq!(wa.name(), "WhatsApp");
 
-    println!("PASS: SocialForgeMcpServer includes WhatsApp provider");
+    println!("PASS: SwitchpostMcpServer includes WhatsApp provider");
 }
 
 #[tokio::test]
 async fn test_whatsapp_mcp_handler_functions() {
     let config = get_config();
-    let db = social_forge::db::create_pool(&config.database_url)
+    let db = switchpost::db::create_pool(&config.database_url)
         .await
         .expect("Failed to connect to DB");
 
-    use social_forge::api::AppState;
-    use social_forge::realtime::Broadcaster;
+    use switchpost::api::AppState;
+    use switchpost::realtime::Broadcaster;
 
     let broadcaster = Broadcaster::new();
     let registry = ProviderRegistry::new(&config, None, None);

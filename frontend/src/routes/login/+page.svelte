@@ -27,7 +27,7 @@
 </script>
 
 <svelte:head>
-  <title>Social Forge - Login</title>
+  <title>Switchpost - Login</title>
 </svelte:head>
 
 <div class="page-enter min-h-dvh flex items-center justify-center bg-background px-4">
@@ -36,7 +36,7 @@
       <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-accent-fill/10 border border-accent/30 mb-4">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 text-accent"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
       </div>
-      <h1 class="text-2xl font-bold text-content">Social Forge</h1>
+      <h1 class="text-2xl font-bold text-content">Switchpost</h1>
       <p class="text-sm text-muted mt-1">Enter your password to access the dashboard</p>
     </div>
 

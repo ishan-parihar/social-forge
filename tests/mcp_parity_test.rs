@@ -4,17 +4,17 @@
 // round trip and the argument validation.
 //
 // Run: cargo test --test mcp_parity_test
-// Uses the scratch DB from `load_dotenv_for_tests` (never data/social-forge.db).
+// Uses the scratch DB from `load_dotenv_for_tests` (never data/switchpost.db).
 
-use social_forge::api::AppState;
-use social_forge::config::Config;
-use social_forge::db;
-use social_forge::mcp::{tools_analytics, tools_campaigns, tools_rss, tools_sets};
-use social_forge::realtime::Broadcaster;
-use social_forge::social::registry::ProviderRegistry;
+use switchpost::api::AppState;
+use switchpost::config::Config;
+use switchpost::db;
+use switchpost::mcp::{tools_analytics, tools_campaigns, tools_rss, tools_sets};
+use switchpost::realtime::Broadcaster;
+use switchpost::social::registry::ProviderRegistry;
 
 async fn state() -> AppState {
-    social_forge::config::load_dotenv_for_tests();
+    switchpost::config::load_dotenv_for_tests();
     let config = Config::from_env().expect("config");
     let db = db::create_pool(&config.database_url).await.expect("pool");
     db::ensure_local_user(&db).await.expect("local user");
@@ -183,7 +183,7 @@ async fn streak_tool_reports_the_streak_fields() {
 // and failed at runtime on SQLite. They must execute against the real schema.
 #[tokio::test]
 async fn admin_analytics_and_integration_toggle_run_on_sqlite() {
-    use social_forge::mcp::tools_admin;
+    use switchpost::mcp::tools_admin;
 
     let state = state().await;
 
@@ -208,7 +208,7 @@ async fn admin_analytics_and_integration_toggle_run_on_sqlite() {
     // An unknown integration id is a clean "no row" result, not a SQL error.
     let matched = db::queries::set_integration_disabled(
         &state.db,
-        social_forge::auth::middleware::DEFAULT_USER_ID,
+        switchpost::auth::middleware::DEFAULT_USER_ID,
         uuid::Uuid::new_v4(),
         true,
     )
@@ -242,8 +242,8 @@ async fn admin_analytics_and_integration_toggle_run_on_sqlite() {
 // These tests call the MCP tool functions directly and read the row
 // back, so they exercise the real write.
 
-use social_forge::auth::middleware::DEFAULT_USER_ID;
-use social_forge::mcp::{tools_automation, tools_posts};
+use switchpost::auth::middleware::DEFAULT_USER_ID;
+use switchpost::mcp::{tools_automation, tools_posts};
 use uuid::Uuid;
 
 async fn seed_integration(state: &AppState) -> Uuid {

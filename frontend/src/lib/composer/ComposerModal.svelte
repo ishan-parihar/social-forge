@@ -177,7 +177,7 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
   type DraftState = 'idle' | 'saving' | 'saved';
   let draftState = $state<DraftState>('idle');
   let draftTimer: ReturnType<typeof setTimeout>;
-  const DRAFT_KEY = 'social-forge-composer-draft';
+  const DRAFT_KEY = 'switchpost-composer-draft';
 
   // Target selection
   //

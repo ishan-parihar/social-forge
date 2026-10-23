@@ -110,7 +110,7 @@ fn the_servers_zone_offset_agrees_with_the_composers_per_instant() {
         let dt = chrono::DateTime::parse_from_rfc3339(iso)
             .expect("valid RFC 3339 case")
             .with_timezone(&chrono::Utc);
-        let server = social_forge::api::calendar::zone_offset_by_name(zone, dt)
+        let server = switchpost::api::calendar::zone_offset_by_name(zone, dt)
             .unwrap_or_else(|| panic!("server must know the zone: {zone}"));
         assert_eq!(
             server, browser[i],
@@ -170,7 +170,7 @@ fn a_scheduled_wall_clock_lands_on_the_slot_the_server_reads_back() {
         let dt = chrono::DateTime::parse_from_rfc3339(&instants[i])
             .unwrap_or_else(|_| panic!("wallClockToUtc must return RFC 3339, got {}", instants[i]))
             .with_timezone(&chrono::Utc);
-        let offset = social_forge::api::calendar::zone_offset_by_name(zone, dt)
+        let offset = switchpost::api::calendar::zone_offset_by_name(zone, dt)
             .unwrap_or_else(|| panic!("server must know the zone: {zone}"));
         let read_back = dt + chrono::Duration::seconds(offset);
 

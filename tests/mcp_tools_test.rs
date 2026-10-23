@@ -11,14 +11,14 @@
 
 use std::sync::Arc;
 
-use social_forge::config::Config;
-use social_forge::db;
-use social_forge::social::registry::ProviderRegistry;
+use switchpost::config::Config;
+use switchpost::db;
+use switchpost::social::registry::ProviderRegistry;
 
 // ── Helper: Test fixtures ────────────────────────────────────────
 
 fn get_config() -> Config {
-    social_forge::config::load_dotenv_for_tests();
+    switchpost::config::load_dotenv_for_tests();
     Config::from_env().expect("Failed to load config from .env")
 }
 
@@ -288,9 +288,9 @@ async fn test_mcp_tools_registration() {
         .await
         .expect("Failed to connect to DB");
 
-    use social_forge::api::AppState;
-    use social_forge::mcp::SocialForgeMcpServer;
-    use social_forge::realtime::Broadcaster;
+    use switchpost::api::AppState;
+    use switchpost::mcp::SwitchpostMcpServer;
+    use switchpost::realtime::Broadcaster;
 
     let broadcaster = Broadcaster::new();
     let registry = Arc::new(get_registry(&config));
@@ -307,7 +307,7 @@ async fn test_mcp_tools_registration() {
         media_wreq_client: wreq::Client::new(),
     };
 
-    let server = SocialForgeMcpServer::new(state.clone());
+    let server = SwitchpostMcpServer::new(state.clone());
     // Verify server creation succeeds (tests that all #[tool] macros compile)
     assert!(
         server.state.config.provider_credentials("x").is_some(),
@@ -318,7 +318,7 @@ async fn test_mcp_tools_registration() {
         "Reddit credentials should be loaded"
     );
 
-    println!("✅ MCP server: SocialForgeMcpServer instantiated successfully");
+    println!("✅ MCP server: SwitchpostMcpServer instantiated successfully");
     println!("✅ MCP tools: All {} #[tool] entries compile", 115); // 7 reddit + 20 x + 16 fb + 17 ig + 7 ias + 9 th + 6 li + 4 lip + 9 yt + 7 pi + 10 di + 5 sk
 }
 

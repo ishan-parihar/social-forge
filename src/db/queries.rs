@@ -1599,7 +1599,7 @@ const SCHEDULED_AT_EPOCH: &str = "CASE WHEN typeof(p.scheduled_at) = 'integer' \
 /// Get posts due for publishing.
 ///
 /// Uses `FOR UPDATE SKIP LOCKED` to claim rows atomically so multiple
-/// `social-forge serve` instances running in parallel do not double-publish
+/// `switchpost serve` instances running in parallel do not double-publish
 /// the same post. Rows are still returned in `state = 'queued'`; the caller
 /// is expected to commit/rollback to release the lock.
 /// §6.2: the earliest `scheduled_at` (unix epoch) of any publishable
@@ -1673,7 +1673,7 @@ pub async fn get_due_posts(
     // Atomically claim due posts by transitioning them
     // `queued -> publishing` in the same transaction that selects them.
     // This closes the dual-instance double-publish hole: a second
-    // `social-forge serve` instance running concurrently will not see
+    // `switchpost serve` instance running concurrently will not see
     // rows already claimed by the first, because the WHERE clause
     // filters on `state = 'queued'` and we just flipped them to
     // `'publishing'`.
@@ -2970,7 +2970,7 @@ pub async fn get_post_engagement_by_post_id(
 /// E5: per-(provider, weekday, hour) engagement histogram over imported
 /// posts with synced engagement — the input for best-time-to-post
 /// suggestions. The engagement history for the user's own posts lives on
-/// external_posts (the `social-forge import` flow + the feed refresher's
+/// external_posts (the `switchpost import` flow + the feed refresher's
 /// engagement sync); weekday is SQLite's %w (0=Sunday..6=Saturday),
 /// hour 0-23, both UTC over the platform post timestamp.
 pub async fn engagement_histogram_by_slot(

@@ -1,18 +1,18 @@
-use social_forge::config::Config;
-use social_forge::crypto;
-use social_forge::db;
-use social_forge::social::calendar::CalendarProvider;
-use social_forge::social::drive::DriveProvider;
-use social_forge::social::github::GithubProvider;
-use social_forge::social::gmail::GmailProvider;
-use social_forge::social::youtube::YoutubeProvider;
-use social_forge::social::SocialProvider;
+use switchpost::config::Config;
+use switchpost::crypto;
+use switchpost::db;
+use switchpost::social::calendar::CalendarProvider;
+use switchpost::social::drive::DriveProvider;
+use switchpost::social::github::GithubProvider;
+use switchpost::social::gmail::GmailProvider;
+use switchpost::social::youtube::YoutubeProvider;
+use switchpost::social::SocialProvider;
 
 mod common;
 use common::skip_on_environment_failure;
 
 fn get_config() -> Config {
-    social_forge::config::load_dotenv_for_live_tests();
+    switchpost::config::load_dotenv_for_live_tests();
     Config::from_env().expect("Failed to load config")
 }
 
@@ -28,7 +28,7 @@ fn decrypt_token(raw: &str) -> Option<String> {
 async fn get_google_token() -> Option<String> {
     let cfg = get_config();
     let pool = db::create_pool(&cfg.database_url).await.ok()?;
-    let user = sqlx::query!("SELECT id FROM users WHERE email = 'dev@social-forge.dev'")
+    let user = sqlx::query!("SELECT id FROM users WHERE email = 'dev@switchpost.dev'")
         .fetch_optional(&pool)
         .await
         .ok()??;
@@ -40,7 +40,7 @@ async fn get_google_token() -> Option<String> {
 }
 
 const GH_OWNER: &str = "ishan-parihar";
-const GH_REPO: &str = "social-forge";
+const GH_REPO: &str = "switchpost";
 
 #[tokio::test]
 async fn test_gh_user() {
@@ -247,7 +247,7 @@ async fn test_goog_channel() {
         return;
     };
     let p = YoutubeProvider::new(&get_config());
-    let pages: Vec<social_forge::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
+    let pages: Vec<switchpost::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
     if let Some(page) = pages.first() {
         let r = p.get_channel_stats(&t, &page.id).await.unwrap();
         let s = &r["items"][0]["statistics"];
@@ -283,7 +283,7 @@ async fn test_goog_playlists() {
         return;
     };
     let p = YoutubeProvider::new(&get_config());
-    let pages: Vec<social_forge::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
+    let pages: Vec<switchpost::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
     if let Some(page) = pages.first() {
         let r = p.get_playlists(&t, &page.id, 5).await.unwrap();
         println!(
@@ -336,7 +336,7 @@ async fn test_goog_analytics() {
         return;
     };
     let p = YoutubeProvider::new(&get_config());
-    let pages: Vec<social_forge::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
+    let pages: Vec<switchpost::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
     if let Some(page) = pages.first() {
         match p
             .get_analytics(

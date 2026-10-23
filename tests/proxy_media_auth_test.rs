@@ -4,19 +4,19 @@
 // fix it was public: an anonymous caller reached the upstream fetch.
 //
 // Run: cargo test --test proxy_media_auth_test
-// Uses the isolated test DB from `load_dotenv_for_tests` (never data/social-forge.db).
+// Uses the isolated test DB from `load_dotenv_for_tests` (never data/switchpost.db).
 
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
-use social_forge::api::{build_router, AppState};
-use social_forge::config::Config;
-use social_forge::db;
-use social_forge::realtime::Broadcaster;
-use social_forge::social::registry::ProviderRegistry;
+use switchpost::api::{build_router, AppState};
+use switchpost::config::Config;
+use switchpost::db;
+use switchpost::realtime::Broadcaster;
+use switchpost::social::registry::ProviderRegistry;
 use tower::ServiceExt;
 
 async fn state() -> AppState {
-    social_forge::config::load_dotenv_for_tests();
+    switchpost::config::load_dotenv_for_tests();
     let config = Config::from_env().expect("config");
     let db = db::create_pool(&config.database_url).await.expect("pool");
     db::ensure_local_user(&db).await.expect("local user");

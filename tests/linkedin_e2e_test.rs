@@ -13,20 +13,20 @@
 
 use std::sync::Arc;
 
-use social_forge::api::AppState;
-use social_forge::config::Config;
-use social_forge::db;
-use social_forge::mcp::SocialForgeMcpServer;
-use social_forge::realtime::Broadcaster;
-use social_forge::social::linkedin::LinkedInProvider;
-use social_forge::social::linkedin_page::LinkedInPageProvider;
-use social_forge::social::registry::ProviderRegistry;
-use social_forge::social::SocialProvider;
+use switchpost::api::AppState;
+use switchpost::config::Config;
+use switchpost::db;
+use switchpost::mcp::SwitchpostMcpServer;
+use switchpost::realtime::Broadcaster;
+use switchpost::social::linkedin::LinkedInProvider;
+use switchpost::social::linkedin_page::LinkedInPageProvider;
+use switchpost::social::registry::ProviderRegistry;
+use switchpost::social::SocialProvider;
 
 // ── Helpers ─────────────────────────────────────────────────────
 
 fn get_config() -> Config {
-    social_forge::config::load_dotenv_for_tests();
+    switchpost::config::load_dotenv_for_tests();
     Config::from_env().expect("Failed to load config from .env")
 }
 
@@ -317,7 +317,7 @@ async fn test_linkedin_provider_constructors() {
 #[tokio::test]
 async fn test_linkedin_mcp_server_startup_and_registration() {
     let state = create_test_state(&get_config()).await;
-    let server = SocialForgeMcpServer::new(state.clone());
+    let server = SwitchpostMcpServer::new(state.clone());
 
     // Verify server created
     assert!(
@@ -364,7 +364,7 @@ async fn test_linkedin_li_tools_return_user_friendly_error_when_no_integration()
         .expect("Failed to query users");
 
     if let Some((uid,)) = users.first() {
-        let integrations = social_forge::db::queries::list_integrations(&state.db, *uid)
+        let integrations = switchpost::db::queries::list_integrations(&state.db, *uid)
             .await
             .expect("Failed to list integrations");
 
@@ -424,7 +424,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
 
     // Verify publish through SocialProvider trait compiles correctly
     let provider = LinkedInProvider::new(&state.config);
-    let post = social_forge::social::PostContent {
+    let post = switchpost::social::PostContent {
         content: "End-to-end test post".into(),
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
@@ -466,7 +466,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
 
     // LinkedIn Page publish via trait
     let lip_provider = LinkedInPageProvider::new(&state.config);
-    let lip_post = social_forge::social::PostContent {
+    let lip_post = switchpost::social::PostContent {
         content: "End-to-end page test post".into(),
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
@@ -713,7 +713,7 @@ async fn test_linkedin_publish_full_flow() {
     // Test 1: Personal publish via SocialProvider trait
     {
         let provider = LinkedInProvider::new(&config);
-        let post = social_forge::social::PostContent {
+        let post = switchpost::social::PostContent {
             content: "E2E test - personal publish".into(),
             media: vec![],
             settings: serde_json::Value::Object(serde_json::Map::new()),
@@ -730,7 +730,7 @@ async fn test_linkedin_publish_full_flow() {
     // Test 2: Page publish via SocialProvider trait
     {
         let provider = LinkedInPageProvider::new(&config);
-        let post = social_forge::social::PostContent {
+        let post = switchpost::social::PostContent {
             content: "E2E test - page publish".into(),
             media: vec![],
             settings: serde_json::Value::Object(serde_json::Map::new()),
@@ -746,7 +746,7 @@ async fn test_linkedin_publish_full_flow() {
         let provider = LinkedInProvider::new(&config);
 
         // Should reject empty content via validate_post
-        let empty_post = social_forge::social::PostContent {
+        let empty_post = switchpost::social::PostContent {
             content: "".into(), // LinkedIn allows non-empty but SocialProvider doesn't validate emptiness
             media: vec![],
             settings: serde_json::Value::Object(serde_json::Map::new()),
@@ -759,7 +759,7 @@ async fn test_linkedin_publish_full_flow() {
 
         // Content over max_length should be caught by validate_post
         let long_content = "x".repeat(3001);
-        let long_post = social_forge::social::PostContent {
+        let long_post = switchpost::social::PostContent {
             content: long_content,
             media: vec![],
             settings: serde_json::Value::Object(serde_json::Map::new()),

@@ -7,7 +7,7 @@
 // global, because that's what other components need to trigger.
 //
 // Inspired by postiz-app's useLaunchStore + useExistingData pattern, but
-// simplified for Svelte 5 runes and Social Forge's single-user model.
+// simplified for Svelte 5 runes and Switchpost's single-user model.
 //
 // Usage:
 //   import { composer } from '$lib/stores/composer.svelte';

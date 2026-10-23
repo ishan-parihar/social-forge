@@ -6,27 +6,27 @@
 // Requires: running DB at DATABASE_URL, configured .env with
 //   TOKEN_ENCRYPTION_KEY and OAuth client credentials.
 //
-// Connects to the DB, looks up the dev user (dev@social-forge.dev),
+// Connects to the DB, looks up the dev user (dev@switchpost.dev),
 // fetches encrypted tokens for linkedin / linkedin-page / youtube,
 // decrypts them, and calls every public provider method.
 
 use std::sync::OnceLock;
 use uuid::Uuid;
 
-use social_forge::config::Config;
-use social_forge::crypto;
-use social_forge::db;
-use social_forge::db::queries;
-use social_forge::social::linkedin::LinkedInProvider;
-use social_forge::social::linkedin_page::LinkedInPageProvider;
-use social_forge::social::youtube::YoutubeProvider;
-use social_forge::social::SocialProvider;
+use switchpost::config::Config;
+use switchpost::crypto;
+use switchpost::db;
+use switchpost::db::queries;
+use switchpost::social::linkedin::LinkedInProvider;
+use switchpost::social::linkedin_page::LinkedInPageProvider;
+use switchpost::social::youtube::YoutubeProvider;
+use switchpost::social::SocialProvider;
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
 
 fn get_config() -> &'static Config {
     CONFIG.get_or_init(|| {
-        social_forge::config::load_dotenv_for_live_tests();
+        switchpost::config::load_dotenv_for_live_tests();
         Config::from_env().expect("Failed to load config from env")
     })
 }
@@ -53,7 +53,7 @@ fn decrypt_token(raw: &str) -> Option<String> {
     crypto::decrypt_string(raw, &key).ok()
 }
 
-/// Fetch all integrations for dev@social-forge.dev from the DB.
+/// Fetch all integrations for dev@switchpost.dev from the DB.
 async fn get_dev_user_integrations() -> Option<(Vec<db::models::Integration>, Uuid)> {
     let config = get_config();
     let pool = db::create_pool(&config.database_url)
@@ -61,7 +61,7 @@ async fn get_dev_user_integrations() -> Option<(Vec<db::models::Integration>, Uu
         .expect("Failed to connect to DB");
 
     // Look up dev user
-    let user = queries::get_user_by_email(&pool, "dev@social-forge.dev")
+    let user = queries::get_user_by_email(&pool, "dev@switchpost.dev")
         .await
         .expect("DB error")?;
 

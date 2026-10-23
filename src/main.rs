@@ -1,4 +1,4 @@
-// ─── Social Forge ──────────────────────────────────────────────
+// ─── Switchpost ──────────────────────────────────────────────
 // Social Media Scheduling Platform — Rust implementation.
 //
 // Architecture:
@@ -16,21 +16,21 @@ use std::sync::Arc;
 
 use clap::Parser;
 
-use social_forge::api;
-use social_forge::cli::{self, Cli, Command};
-use social_forge::config;
-use social_forge::db;
-use social_forge::mcp;
-use social_forge::rss;
-use social_forge::scheduler;
+use switchpost::api;
+use switchpost::cli::{self, Cli, Command};
+use switchpost::config;
+use switchpost::db;
+use switchpost::mcp;
+use switchpost::rss;
+use switchpost::scheduler;
 
 use anyhow::Context;
 
-use social_forge::api::AppState;
-use social_forge::realtime::Broadcaster;
-use social_forge::services::telegram_client::TelegramClientManager;
-use social_forge::social::registry::ProviderRegistry;
-use social_forge::wa::WhaClient;
+use switchpost::api::AppState;
+use switchpost::realtime::Broadcaster;
+use switchpost::services::telegram_client::TelegramClientManager;
+use switchpost::social::registry::ProviderRegistry;
+use switchpost::wa::WhaClient;
 
 /// Start the six background pollers. One call site at boot. Loop bodies
 /// are untouched. There is no leader gate: SQLite is a single-writer
@@ -82,7 +82,7 @@ fn spawn_pollers(
 
     // ── Start feed refresher ────────────────────────────────────
     let feed_rx = shutdown_tx.subscribe();
-    social_forge::feed::start_feed_refresher(
+    switchpost::feed::start_feed_refresher(
         db.clone(),
         providers_arc.clone(),
         broadcaster.clone(),
@@ -127,11 +127,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // ── Init logging ──────────────────────────────────────────
-    social_forge::config::load_dotenv();
+    switchpost::config::load_dotenv();
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,social_forge=debug".into()),
+                .unwrap_or_else(|_| "info,switchpost=debug".into()),
         )
         .with_writer(std::io::stderr)
         .with_ansi(false)
@@ -142,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Configuration loaded");
 
     // ── §5.1(a): thin MCP ──────────────────────────────
-    // `social-forge mcp` used to boot the FULL server — writer lock,
+    // `switchpost mcp` used to boot the FULL server — writer lock,
     // HTTP, all 6 pollers, Telegram/WhatsApp clients — so it died on
     // the lock whenever the systemd `serve` daemon was running, and
     // without systemd each agent session ran its own rival scheduler.
@@ -216,7 +216,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // ── WhatsApp Web client (wa-rs replaces Go wacli sidecar) ──
-    let wa_client: social_forge::wa::OptionalWhaClient =
+    let wa_client: switchpost::wa::OptionalWhaClient =
         if let Some(dir) = &config.whatsapp_store_dir {
             let store_dir = PathBuf::from(dir);
             match WhaClient::new(store_dir).await {
@@ -244,7 +244,7 @@ async fn main() -> anyhow::Result<()> {
     let token_key = config
         .token_encryption_key
         .as_ref()
-        .and_then(|k| social_forge::crypto::decode_hex_key(k).ok());
+        .and_then(|k| switchpost::crypto::decode_hex_key(k).ok());
     if token_key.is_some() {
         tracing::info!("Token encryption at rest: ENABLED");
     } else {
@@ -262,7 +262,7 @@ async fn main() -> anyhow::Result<()> {
         // No total timeout — needed for streaming large video files via proxy.
         // The browser manages video playback timeout independently.
         .build()
-        .unwrap_or_else(|_| social_forge::social::shared_http());
+        .unwrap_or_else(|_| switchpost::social::shared_http());
 
     // wreq client with Chrome TLS fingerprinting for X/Twitter CDN.
     // video.twimg.com blocks requests that don't match a real browser's TLS fingerprint.
@@ -272,7 +272,7 @@ async fn main() -> anyhow::Result<()> {
         .gzip(true)
         .brotli(true)
         .build()
-        .unwrap_or_else(|_| social_forge::social::shared_wreq());
+        .unwrap_or_else(|_| switchpost::social::shared_wreq());
 
     let state = AppState {
         db: db.clone(),
@@ -294,10 +294,10 @@ async fn main() -> anyhow::Result<()> {
     {
         let db_for_qids = db.clone();
         tokio::spawn(async move {
-            social_forge::social::x_queryids::hydrate_from_db(&db_for_qids).await;
-            social_forge::social::x_queryids::refresh_if_stale(
+            switchpost::social::x_queryids::hydrate_from_db(&db_for_qids).await;
+            switchpost::social::x_queryids::refresh_if_stale(
                 &db_for_qids,
-                &social_forge::social::shared_wreq(),
+                &switchpost::social::shared_wreq(),
             )
             .await;
         });
@@ -501,27 +501,27 @@ async fn main() -> anyhow::Result<()> {
 /// the MCP tool surface on stdio. No pollers, no HTTP port, no Telegram /
 /// WhatsApp clients, no second scheduler — the daemon picks up the rows
 /// this session writes. ~15 MB RSS instead of a full server.
-async fn run_mcp_thin(config: social_forge::config::Config) -> anyhow::Result<()> {
-    let db = social_forge::db::create_pool(&config.database_url)
+async fn run_mcp_thin(config: switchpost::config::Config) -> anyhow::Result<()> {
+    let db = switchpost::db::create_pool(&config.database_url)
         .await
         .context("thin mcp: failed to create database pool")?;
-    if let Err(e) = social_forge::db::ensure_local_user(&db).await {
+    if let Err(e) = switchpost::db::ensure_local_user(&db).await {
         tracing::warn!("thin mcp: ensure_local_user: {e} — DB inserts may fail");
     }
 
     let token_key = config
         .token_encryption_key
         .as_ref()
-        .and_then(|k| social_forge::crypto::decode_hex_key(k).ok());
+        .and_then(|k| switchpost::crypto::decode_hex_key(k).ok());
 
-    let media_http_client = social_forge::social::shared_http();
-    let media_wreq_client = social_forge::social::shared_wreq();
+    let media_http_client = switchpost::social::shared_http();
+    let media_wreq_client = switchpost::social::shared_wreq();
 
-    let state = social_forge::api::AppState {
+    let state = switchpost::api::AppState {
         db,
         config: config.clone(),
-        broadcast: social_forge::realtime::Broadcaster::new(),
-        providers: social_forge::social::registry::ProviderRegistry::new(&config, None, None),
+        broadcast: switchpost::realtime::Broadcaster::new(),
+        providers: switchpost::social::registry::ProviderRegistry::new(&config, None, None),
         token_key,
         telegram_client_manager: None,
         wa_client: None,
@@ -529,5 +529,5 @@ async fn run_mcp_thin(config: social_forge::config::Config) -> anyhow::Result<()
         media_wreq_client,
     };
 
-    social_forge::mcp::run_mcp_stdio(state).await
+    switchpost::mcp::run_mcp_stdio(state).await
 }

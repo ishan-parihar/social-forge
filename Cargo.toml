@@ -1,13 +1,13 @@
 [package]
-name = "social-forge"
+name = "switchpost"
 version = "0.3.0"
 edition = "2021"
-description = "Social media scheduling platform — Rust backend with axum REST API + rmcp MCP server, JWT auth, SSE realtime, and in-process scheduler"
+description = "Social posting infrastructure that runs on your own hardware — one Rust binary, 26 platforms, driven by CLI, REST, or MCP"
 authors = ["Ishan Parihar"]
 license = "MIT"
-repository = "https://github.com/ishan-parihar/social-forge"
-homepage = "https://github.com/ishan-parihar/social-forge"
-keywords = ["mcp", "social-media", "scheduler", "axum", "social-forge"]
+repository = "https://github.com/ishan-parihar/switchpost"
+homepage = "https://github.com/ishan-parihar/switchpost"
+keywords = ["mcp", "social-media", "scheduler", "axum", "switchpost"]
 categories = ["command-line-utilities", "web-programming::http-server"]
 
 # Lint gate (audit 2026-10-14 §9). `clippy::all = deny` makes
@@ -24,7 +24,7 @@ categories = ["command-line-utilities", "web-programming::http-server"]
 all = "deny"
 
 [[bin]]
-name = "social-forge"
+name = "switchpost"
 path = "src/main.rs"
 
 [dependencies]

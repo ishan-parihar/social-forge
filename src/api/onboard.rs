@@ -389,7 +389,7 @@ pub async fn onboard_page(
         format!(
             r#"<div id="connected-section">
             <h2 class="section-title">✅ Connected Channels <span class="count-badge">{count}</span></h2>
-            <p class="section-subtitle">These social accounts are already linked to your Social Forge account.</p>
+            <p class="section-subtitle">These social accounts are already linked to your Switchpost account.</p>
             <div class="connected-grid">{cards}</div>
             <h2 class="section-title" style="margin-top:28px;">🔌 Available Providers</h2>
             <p class="section-subtitle">Click <strong>Connect</strong> to add more channels.</p>
@@ -407,7 +407,7 @@ pub async fn onboard_page(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Social Forge — Channel Onboarding</title>
+    <title>Switchpost — Channel Onboarding</title>
     <style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{
@@ -521,7 +521,7 @@ pub async fn onboard_page(
 </head>
 <body>
     <div class="container">
-        <h1>🔗 Social Forge — Channel Onboarding</h1>
+        <h1>🔗 Switchpost — Channel Onboarding</h1>
 
         <div class="user-info">
             <span>👤 <span class="label">User:</span> <strong>{dev_email}</strong></span>
@@ -546,7 +546,7 @@ pub async fn onboard_page(
         </div>
 
         <div class="footer">
-            Social Forge v{version} · server: {app_url} · MCP stdio available with `social-forge mcp`
+            Switchpost v{version} · server: {app_url} · MCP stdio available with `switchpost mcp`
         </div>
     </div>
 <script>
@@ -581,7 +581,7 @@ function dc(iid){{
 </script>
 </body>
 </html>"#,
-        dev_email = "local@socialforge",
+        dev_email = "local@switchpost",
         app_url = app_url,
         frontend_url = frontend_url,
         banner_html = banner_html,
@@ -1488,7 +1488,7 @@ pub async fn telegram_bot_token_form(
     Ok(axum::response::Html(format!(
         r#"<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Social Forge — Telegram Bot Token</title>
+<title>Switchpost — Telegram Bot Token</title>
 <style>body{{font-family:system-ui;background:#0b0e14;color:#d1d5db;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}}
 .card{{background:#131720;border:1px solid #1e2435;border-radius:12px;padding:2rem;max-width:480px;width:100%}}
 h2{{color:#fff;margin-top:0}}input{{width:100%;padding:.75rem;border:1px solid #1e2435;border-radius:8px;background:#0d1117;color:#d1d5db;margin:.5rem 0;box-sizing:border-box}}

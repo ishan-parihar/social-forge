@@ -23,7 +23,7 @@
 </script>
 
 <svelte:head>
-  <title>{code} · Social Forge</title>
+  <title>{code} · Switchpost</title>
 </svelte:head>
 
 <div class="min-h-dvh bg-background text-content flex items-center justify-center p-6">

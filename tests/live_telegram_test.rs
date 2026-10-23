@@ -10,11 +10,11 @@
 
 use std::sync::Arc;
 
-use social_forge::config::Config;
-use social_forge::services::telegram_client::TelegramClientManager;
+use switchpost::config::Config;
+use switchpost::services::telegram_client::TelegramClientManager;
 
 async fn manager() -> Option<Arc<TelegramClientManager>> {
-    social_forge::config::load_dotenv_for_live_tests();
+    switchpost::config::load_dotenv_for_live_tests();
     let config = Config::from_env().expect("Failed to load config");
     let (api_id, api_hash) = (
         config.telegram_api_id.clone(),
@@ -99,12 +99,12 @@ async fn test_tu_parity_full_roundtrip() {
 
     // ── send → edit → delete (write side, own messages) ──────────
     let sent = mgr
-        .send_message(&peer, "social-forge P6.4 parity probe")
+        .send_message(&peer, "switchpost P6.4 parity probe")
         .await
         .unwrap_or_else(|e| panic!("send failed: {e}"));
     let id = sent["id"].as_i64().expect("send returned an id") as i32;
 
-    mgr.edit_message(&peer, id, "social-forge P6.4 parity probe (edited)")
+    mgr.edit_message(&peer, id, "switchpost P6.4 parity probe (edited)")
         .await
         .unwrap_or_else(|e| panic!("edit failed: {e}"));
 

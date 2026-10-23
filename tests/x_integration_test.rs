@@ -15,14 +15,14 @@
 
 use std::sync::OnceLock;
 
-use social_forge::config::Config;
-use social_forge::social::x::XProvider;
+use switchpost::config::Config;
+use switchpost::social::x::XProvider;
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
 
 fn get_config() -> &'static Config {
     CONFIG.get_or_init(|| {
-        social_forge::config::load_dotenv_for_tests();
+        switchpost::config::load_dotenv_for_tests();
         Config::from_env().expect("Failed to load config from env")
     })
 }
@@ -389,12 +389,12 @@ async fn test_x_cookie_parsing() {
     let _ = provider; // just need the impl
 
     // Verify cookie token is detected
-    let is_cookie = social_forge::social::x::XProvider::is_cookie_auth_static(valid);
+    let is_cookie = switchpost::social::x::XProvider::is_cookie_auth_static(valid);
     println!("  ✅ cookie parse (valid): {is_cookie}");
 
-    let not_cookie = social_forge::social::x::XProvider::is_cookie_auth_static(invalid);
+    let not_cookie = switchpost::social::x::XProvider::is_cookie_auth_static(invalid);
     println!("  ✅ cookie parse (invalid): {not_cookie}");
 
-    let empty_cookie = social_forge::social::x::XProvider::is_cookie_auth_static(empty);
+    let empty_cookie = switchpost::social::x::XProvider::is_cookie_auth_static(empty);
     println!("  ✅ cookie parse (empty): {empty_cookie}");
 }

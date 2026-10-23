@@ -10,7 +10,7 @@
 //   - close(id), closeAll(), closeCurrent()
 //
 // Inspired by postiz-app's useModalStore (Zustand) but adapted for Svelte 5
-// runes and Social Forge's architectural preferences (no external deps,
+// runes and Switchpost's architectural preferences (no external deps,
 // no Mantine, no Headless UI - just Svelte + Tailwind).
 //
 // Usage:

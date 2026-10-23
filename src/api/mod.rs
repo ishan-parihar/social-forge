@@ -616,7 +616,7 @@ pub fn build_router(state: AppState) -> Router {
         // spawned, behind the same auth as the REST API (Authorization:
         // Bearer sf_… API key, or the sf_session cookie). rmcp's tower
         // service hosts it; each MCP session gets a fresh in-process
-        // SocialForgeMcpServer (thin-MCP coexistence: the stdio `social-forge
+        // SwitchpostMcpServer (thin-MCP coexistence: the stdio `switchpost
         // mcp` path is unchanged).
         .route_service(
             "/mcp",
@@ -635,7 +635,7 @@ pub fn build_router(state: AppState) -> Router {
                     mcp_cfg.allowed_hosts.push(host);
                 }
                 rmcp::transport::streamable_http_server::StreamableHttpService::new(
-                    move || Ok(crate::mcp::SocialForgeMcpServer::new(mcp_state.clone())),
+                    move || Ok(crate::mcp::SwitchpostMcpServer::new(mcp_state.clone())),
                     std::sync::Arc::new(
                         rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default(),
                     ),
@@ -1119,7 +1119,7 @@ async fn csrf_origin_check(
 
     // v23-9: support comma-separated allowed origins. Previously the
     // operator could only set a single origin, so a deployment reachable
-    // via multiple origins (e.g. https://social-forge.example.com AND
+    // via multiple origins (e.g. https://switchpost.example.com AND
     // http://localhost:6543 for local dev) had to set CSRF_ALLOWED_ORIGIN=*
     // (disabling the check entirely). Now the operator can set
     // FRONTEND_URL=https://a.com,http://localhost:6543 and each is checked.

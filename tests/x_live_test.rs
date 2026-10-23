@@ -1,8 +1,8 @@
-use social_forge::config::Config;
-use social_forge::social::x::XProvider;
+use switchpost::config::Config;
+use switchpost::social::x::XProvider;
 
 fn get_config() -> Config {
-    social_forge::config::load_dotenv_for_live_tests();
+    switchpost::config::load_dotenv_for_live_tests();
     Config::from_env().expect("Failed to load config")
 }
 

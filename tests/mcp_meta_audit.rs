@@ -3,19 +3,19 @@
 // It uses the real AppState and DB to verify end-to-end functionality.
 
 use rmcp::Json;
-use social_forge::api::AppState;
-use social_forge::config::Config;
-use social_forge::db;
-use social_forge::realtime::Broadcaster;
-use social_forge::social::registry::ProviderRegistry;
+use switchpost::api::AppState;
+use switchpost::config::Config;
+use switchpost::db;
+use switchpost::realtime::Broadcaster;
+use switchpost::social::registry::ProviderRegistry;
 
-use social_forge::mcp::tools_facebook as fb;
-use social_forge::mcp::tools_instagram as ig;
+use switchpost::mcp::tools_facebook as fb;
+use switchpost::mcp::tools_instagram as ig;
 
 // ─── Test Fixtures ───────────────────────────────────────────────────
 
 fn get_config() -> Config {
-    social_forge::config::load_dotenv_for_tests();
+    switchpost::config::load_dotenv_for_tests();
     Config::from_env().expect("Failed to load config from .env")
 }
 
@@ -212,7 +212,7 @@ async fn audit_facebook_tools() {
     let search = fb::handle_fb_search_pages(
         &state,
         &fb::FbSearchPagesInput {
-            query: "Social Forge".to_string(),
+            query: "Switchpost".to_string(),
         },
     )
     .await;

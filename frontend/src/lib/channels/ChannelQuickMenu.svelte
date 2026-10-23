@@ -10,7 +10,7 @@
   //   - Delete (with confirm, refuses if posts exist)
   //
   // Inspired by postiz-app's menu/menu.tsx (10-item context menu).
-  // Adapted for Social Forge's single-user model (no customer groups).
+  // Adapted for Switchpost's single-user model (no customer groups).
   //
   // This is distinct from ChannelContextMenu.svelte (which is a
   // presentational component used by ChannelCard on the /channels page).

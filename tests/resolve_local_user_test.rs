@@ -15,19 +15,19 @@
 //
 // Run: cargo test --test resolve_local_user_test
 
-use social_forge::api::AppState;
-use social_forge::auth::middleware::DEFAULT_USER_ID;
-use social_forge::config::Config;
-use social_forge::db;
-use social_forge::mcp::auth::resolve_first_user;
-use social_forge::realtime::Broadcaster;
-use social_forge::social::registry::ProviderRegistry;
+use switchpost::api::AppState;
+use switchpost::auth::middleware::DEFAULT_USER_ID;
+use switchpost::config::Config;
+use switchpost::db;
+use switchpost::mcp::auth::resolve_first_user;
+use switchpost::realtime::Broadcaster;
+use switchpost::social::registry::ProviderRegistry;
 use uuid::Uuid;
 
 /// A state on the isolated test DB, WITHOUT ensure_local_user: the
 /// users table is whatever this test makes it.
 async fn bare_state() -> AppState {
-    social_forge::config::load_dotenv_for_tests();
+    switchpost::config::load_dotenv_for_tests();
     let config = Config::from_env().expect("config");
     let pool = db::create_pool(&config.database_url).await.expect("pool");
     let registry = ProviderRegistry::new(&config, None, None);

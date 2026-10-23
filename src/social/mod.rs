@@ -1847,7 +1847,7 @@ pub(crate) fn test_config() -> crate::config::Config {
         database_url: format!(
             "sqlite://{}?mode=rwc",
             std::env::temp_dir()
-                .join(format!("social-forge-test-{}.db", uuid::Uuid::new_v4()))
+                .join(format!("switchpost-test-{}.db", uuid::Uuid::new_v4()))
                 .display()
         ),
         jwt_secret: "test".into(),

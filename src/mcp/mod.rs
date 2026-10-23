@@ -1,5 +1,5 @@
 // ─── MCP Server ───────────────────────────────────────────────
-// Model Context Protocol server exposing all Social Forge operations as tools.
+// Model Context Protocol server exposing all Switchpost operations as tools.
 // Designed for AI agents to schedule, manage, and monitor posts.
 //
 // Uses rmcp crate with ServerHandler + #[tool_router] pattern.
@@ -129,10 +129,10 @@ impl Toolsets {
 }
 
 #[derive(Clone)]
-pub struct SocialForgeMcpServer {
+pub struct SwitchpostMcpServer {
     pub state: AppState,
     /// §5.5: enabled toolsets for THIS session. Boot default comes from
-    /// SOCIAL_FORGE_TOOLSETS (default `core`); `tools_enable` adds sets at
+    /// SWITCHPOST_TOOLSETS (default `core`); `tools_enable` adds sets at
     /// runtime. Guards the per-session prompt cost: an agent only advertises
     /// the toolsets it works with instead of all 329 schemas.
     pub toolsets: Toolsets,
@@ -158,7 +158,7 @@ pub struct EmptyParams {
 // Helper: get DB pool from state
 
 #[tool_router]
-impl SocialForgeMcpServer {
+impl SwitchpostMcpServer {
     pub fn new(state: AppState) -> Self {
         Self {
             state,
@@ -166,11 +166,11 @@ impl SocialForgeMcpServer {
         }
     }
 
-    /// §5.5: SOCIAL_FORGE_TOOLSETS (comma-separated). Default: `core`
+    /// §5.5: SWITCHPOST_TOOLSETS (comma-separated). Default: `core`
     /// (posts/stage/media/tags/notifications/setup/integrations/analytics/
     /// feed + the meta tools). `all` disables filtering.
     fn boot_toolsets() -> std::collections::HashSet<String> {
-        std::env::var("SOCIAL_FORGE_TOOLSETS")
+        std::env::var("SWITCHPOST_TOOLSETS")
             .unwrap_or_else(|_| "core".into())
             .split(',')
             .map(|s| s.trim().to_ascii_lowercase())
@@ -244,7 +244,7 @@ impl SocialForgeMcpServer {
 
     // ── Auth Tools ──────────────────────────────────────────
     //
-    // Social Forge is a single-user local-deployment app — there is
+    // Switchpost is a single-user local-deployment app — there is
     // no register/login flow exposed over MCP. The WebUI is gated by
     // a single password (`APP_PASSWORD` env var); MCP stdio is local
     // (shell access already implies trust) and bypasses the gate.
@@ -363,7 +363,7 @@ impl SocialForgeMcpServer {
     }
 
     #[tool(
-        description = "Set a configuration value in ~/.social-forge/.env. Creates file if needed. Restart social-forge after setting."
+        description = "Set a configuration value in ~/.switchpost/.env. Creates file if needed. Restart switchpost after setting."
     )]
     async fn setup_config_set(
         &self,
@@ -380,7 +380,7 @@ impl SocialForgeMcpServer {
         tools_setup::config_get(&self.state, &params.0).map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List all configuration entries in ~/.social-forge/.env.")]
+    #[tool(description = "List all configuration entries in ~/.switchpost/.env.")]
     async fn setup_config_list(
         &self,
         _params: Parameters<EmptyParams>,
@@ -4082,7 +4082,7 @@ impl SocialForgeMcpServer {
     }
 
     #[tool(
-        description = "Enable additional toolsets for this session (e.g. [\"x\", \"reddit\"]). Discover sets with tools_search. Ads are per-session; the boot default is SOCIAL_FORGE_TOOLSETS (default: core)."
+        description = "Enable additional toolsets for this session (e.g. [\"x\", \"reddit\"]). Discover sets with tools_search. Ads are per-session; the boot default is SWITCHPOST_TOOLSETS (default: core)."
     )]
     pub async fn tools_enable(
         &self,
@@ -4107,7 +4107,7 @@ impl SocialForgeMcpServer {
 // router — hidden toolsets disappear from tools/list and tools/call rejects
 // them by name.
 #[tool_handler(router = self.filtered_tool_router())]
-impl rmcp::ServerHandler for SocialForgeMcpServer {}
+impl rmcp::ServerHandler for SwitchpostMcpServer {}
 
 // ══════════════════════════════════════════════════════════════
 // RUNNER
@@ -4115,7 +4115,7 @@ impl rmcp::ServerHandler for SocialForgeMcpServer {}
 
 /// Crate-visible accessor for the (privately generated) tool router —
 /// `mcp-call` (§5.3) dispatches tools in-process through it.
-impl SocialForgeMcpServer {
+impl SwitchpostMcpServer {
     pub(crate) fn router() -> rmcp::handler::server::router::tool::ToolRouter<Self> {
         Self::tool_router()
     }
@@ -4123,7 +4123,7 @@ impl SocialForgeMcpServer {
 
 /// Start the MCP server on stdio (for AI clients that spawn the binary)
 pub async fn run_mcp_stdio(state: AppState) -> anyhow::Result<()> {
-    let server = SocialForgeMcpServer::new(state);
+    let server = SwitchpostMcpServer::new(state);
     let service = server.serve(stdio()).await?;
     tracing::info!("MCP server started on stdio");
     service.waiting().await?;

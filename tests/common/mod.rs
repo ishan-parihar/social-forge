@@ -20,7 +20,7 @@
 //! `cargo test` reports a skip as a skip, and the suite stays green for
 //! the right reason.
 
-use social_forge::social::ProviderError;
+use switchpost::social::ProviderError;
 
 /// The environment's fault, not the code's.
 fn is_environment_failure(err: &ProviderError) -> bool {

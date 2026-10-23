@@ -1,5 +1,5 @@
 // ─── MCP Setup/Onboarding Tools ──────────────────────────────
-// Tools for AI agents to guide users through social-forge setup:
+// Tools for AI agents to guide users through switchpost setup:
 // - Check overall setup status
 // - Get guided setup instructions per provider
 // - Import browser cookies programmatically
@@ -140,9 +140,9 @@ pub fn setup_guide(
             env_vars: vec![],
             setup_steps: vec![
                 "1. Log into x.com in Chrome, Brave, Firefox, or Zen browser".into(),
-                "2. Run 'social-forge connect x' to auto-import cookies".into(),
+                "2. Run 'switchpost connect x' to auto-import cookies".into(),
                 "3. Or use the MCP import_cookies tool with provider='x'".into(),
-                "4. Alternatively, set X_AUTH_TOKEN + X_CT0 in ~/.social-forge/.env".into(),
+                "4. Alternatively, set X_AUTH_TOKEN + X_CT0 in ~/.switchpost/.env".into(),
                 format!("5. Or visit the web UI at {app_url}/api/public/connect/x-cookies for manual entry"),
             ],
             credential_request_url: None,
@@ -156,7 +156,7 @@ pub fn setup_guide(
             env_vars: vec![],
             setup_steps: vec![
                 "1. Log into reddit.com in Chrome, Brave, Firefox, or Zen browser".into(),
-                "2. Run 'social-forge connect reddit' to auto-import cookies".into(),
+                "2. Run 'switchpost connect reddit' to auto-import cookies".into(),
                 "3. Or use the MCP import_cookies tool with provider='reddit'".into(),
                 format!("4. Or visit the web UI at {app_url}/api/public/connect/reddit-cookies for manual entry"),
             ],
@@ -176,8 +176,8 @@ pub fn setup_guide(
             ],
             setup_steps: vec![
                 "1. Create a Meta app at https://developers.facebook.com/apps/".into(),
-                "2. Set FACEBOOK_CLIENT_ID and FACEBOOK_CLIENT_SECRET in ~/.social-forge/.env".into(),
-                "3. Run 'social-forge connect facebook' or visit the web UI".into(),
+                "2. Set FACEBOOK_CLIENT_ID and FACEBOOK_CLIENT_SECRET in ~/.switchpost/.env".into(),
+                "3. Run 'switchpost connect facebook' or visit the web UI".into(),
                 "4. Authorize the Facebook Pages OAuth flow".into(),
             ],
             credential_request_url: Some("https://developers.facebook.com/apps/".into()),
@@ -195,8 +195,8 @@ pub fn setup_guide(
             setup_steps: vec![
                 "1. Create a Meta app at https://developers.facebook.com/apps/".into(),
                 "2. Enable Instagram Graph API product".into(),
-                "3. Set INSTAGRAM_CLIENT_ID and INSTAGRAM_CLIENT_SECRET in ~/.social-forge/.env".into(),
-                "4. Run 'social-forge connect instagram' or visit the web UI".into(),
+                "3. Set INSTAGRAM_CLIENT_ID and INSTAGRAM_CLIENT_SECRET in ~/.switchpost/.env".into(),
+                "4. Run 'switchpost connect instagram' or visit the web UI".into(),
             ],
             credential_request_url: Some("https://developers.facebook.com/apps/".into()),
             oauth_redirect_uri: Some(format!("{app_url}/api/auth/callback")),
@@ -213,7 +213,7 @@ pub fn setup_guide(
             setup_steps: vec![
                 "1. Create a Meta app at https://developers.facebook.com/apps/".into(),
                 "2. Enable Threads API product".into(),
-                "3. Set THREADS_APP_ID and THREADS_APP_SECRET in ~/.social-forge/.env".into(),
+                "3. Set THREADS_APP_ID and THREADS_APP_SECRET in ~/.switchpost/.env".into(),
             ],
             credential_request_url: Some("https://developers.facebook.com/apps/".into()),
             oauth_redirect_uri: Some(format!("{app_url}/api/auth/callback")),
@@ -232,8 +232,8 @@ pub fn setup_guide(
             setup_steps: vec![
                 "1. Create an app at https://www.linkedin.com/developers/apps".into(),
                 "2. Request the 'Sign In with LinkedIn using OpenID Connect' product".into(),
-                "3. Set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET in ~/.social-forge/.env".into(),
-                "4. Run 'social-forge connect linkedin' or visit the web UI".into(),
+                "3. Set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET in ~/.switchpost/.env".into(),
+                "4. Run 'switchpost connect linkedin' or visit the web UI".into(),
             ],
             credential_request_url: Some("https://www.linkedin.com/developers/apps".into()),
             oauth_redirect_uri: Some(format!("{app_url}/api/auth/callback")),
@@ -270,7 +270,7 @@ pub fn setup_guide(
             setup_steps: vec![
                 "1. Go to Bluesky Settings > Advanced > App Passwords".into(),
                 "2. Generate a new app password".into(),
-                "3. Set BLUESKY_HANDLE and BLUESKY_APP_PASSWORD in ~/.social-forge/.env".into(),
+                "3. Set BLUESKY_HANDLE and BLUESKY_APP_PASSWORD in ~/.switchpost/.env".into(),
             ],
             credential_request_url: None,
             oauth_redirect_uri: None,
@@ -287,7 +287,7 @@ pub fn setup_guide(
                 "1. Go to https://github.com/settings/tokens".into(),
                 "2. Generate a fine-grained Personal Access Token".into(),
                 "3. Grant permissions: repo, read:org, read:user".into(),
-                "4. Set GITHUB_TOKEN in ~/.social-forge/.env".into(),
+                "4. Set GITHUB_TOKEN in ~/.switchpost/.env".into(),
             ],
             credential_request_url: Some("https://github.com/settings/tokens".into()),
             oauth_redirect_uri: None,
@@ -303,7 +303,7 @@ pub fn setup_guide(
             setup_steps: vec![
                 "1. Message @BotFather on Telegram: /newbot".into(),
                 "2. Copy the bot token".into(),
-                "3. Set TELEGRAM_BOT_TOKENS in ~/.social-forge/.env".into(),
+                "3. Set TELEGRAM_BOT_TOKENS in ~/.switchpost/.env".into(),
                 "4. For multiple bots, comma-separate tokens".into(),
             ],
             credential_request_url: Some("https://t.me/BotFather".into()),
@@ -320,7 +320,7 @@ pub fn setup_guide(
             ],
             setup_steps: vec![
                 "1. Create an app at https://discord.com/developers/applications".into(),
-                "2. Set DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET in ~/.social-forge/.env".into(),
+                "2. Set DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET in ~/.switchpost/.env".into(),
                 "3. Add bot to your server with required permissions".into(),
             ],
             credential_request_url: Some("https://discord.com/developers/applications".into()),
@@ -337,7 +337,7 @@ pub fn setup_guide(
             ],
             setup_steps: vec![
                 "1. Create an app at https://api.slack.com/apps".into(),
-                "2. Set SLACK_CLIENT_ID and SLACK_CLIENT_SECRET in ~/.social-forge/.env".into(),
+                "2. Set SLACK_CLIENT_ID and SLACK_CLIENT_SECRET in ~/.switchpost/.env".into(),
                 "3. Add OAuth scopes: channels:read, chat:write, users:read".into(),
                 "4. Install to workspace via the web UI".into(),
             ],
@@ -439,7 +439,7 @@ pub fn setup_guide(
             setup_steps: vec![
                 "1. Go to https://medium.com/me/settings/security".into(),
                 "2. Create an integration token".into(),
-                "3. Set MEDIUM_ACCESS_TOKEN in ~/.social-forge/.env".into(),
+                "3. Set MEDIUM_ACCESS_TOKEN in ~/.switchpost/.env".into(),
             ],
             credential_request_url: Some("https://medium.com/me/settings/security".into()),
             oauth_redirect_uri: None,
@@ -455,7 +455,7 @@ pub fn setup_guide(
             setup_steps: vec![
                 "1. Go to https://dev.to/settings/extensions".into(),
                 "2. Generate a new API key".into(),
-                "3. Set DEVTO_API_KEY in ~/.social-forge/.env".into(),
+                "3. Set DEVTO_API_KEY in ~/.switchpost/.env".into(),
             ],
             credential_request_url: Some("https://dev.to/settings/extensions".into()),
             oauth_redirect_uri: None,
@@ -471,7 +471,7 @@ pub fn setup_guide(
             setup_steps: vec![
                 "1. Go to https://hashnode.com/settings/integrations".into(),
                 "2. Generate a Personal Access Token".into(),
-                "3. Set HASHNODE_API_KEY in ~/.social-forge/.env".into(),
+                "3. Set HASHNODE_API_KEY in ~/.switchpost/.env".into(),
             ],
             credential_request_url: Some("https://hashnode.com/settings/integrations".into()),
             oauth_redirect_uri: None,
@@ -505,7 +505,7 @@ pub fn setup_guide(
     Ok(Json(SetupGuideOutput { providers: guides }))
 }
 
-/// Check the overall setup status of social-forge.
+/// Check the overall setup status of switchpost.
 /// Returns database health, user existence, connected providers, and next actions.
 pub async fn setup_status(
     state: &AppState,
@@ -652,7 +652,7 @@ pub async fn setup_status(
         .map(|p| p.name.as_str())
         .collect();
     if !unconfigured_oauth.is_empty() {
-        next_actions.push(format!("Set OAuth credentials for: {}. Use 'social-forge config set KEY VALUE' or visit the web UI.", unconfigured_oauth.join(", ")));
+        next_actions.push(format!("Set OAuth credentials for: {}. Use 'switchpost config set KEY VALUE' or visit the web UI.", unconfigured_oauth.join(", ")));
     }
 
     let ready = database_ok && user_exists && !connected_providers.is_empty();
@@ -909,7 +909,7 @@ pub async fn import_cookies(
     Ok(Json(ImportCookiesOutput { results }))
 }
 
-/// Set a configuration value in ~/.social-forge/.env.
+/// Set a configuration value in ~/.switchpost/.env.
 /// Creates the file if it doesn't exist. Overwrites existing values for the same key.
 pub fn config_set(
     _state: &AppState,
@@ -963,7 +963,7 @@ pub fn config_set(
         "status": "set",
         "key": key_upper,
         "path": env_path.display().to_string(),
-        "message": format!("Set {key_upper}. Restart social-forge to apply."),
+        "message": format!("Set {key_upper}. Restart switchpost to apply."),
     })))
 }
 
@@ -1023,7 +1023,7 @@ pub fn config_get(
     }
 }
 
-/// List all configuration entries in ~/.social-forge/.env (redacts secrets).
+/// List all configuration entries in ~/.switchpost/.env (redacts secrets).
 pub fn config_list(_state: &AppState) -> Result<Json<ConfigListOutput>, String> {
     let dir = crate::config::config_dir();
     let env_path = dir.join(".env");

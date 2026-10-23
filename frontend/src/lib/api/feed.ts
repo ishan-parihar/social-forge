@@ -124,7 +124,7 @@ export const feedApi = {
   update: (postId: string, d: { text?: string; media?: unknown; metadata?: unknown }) =>
     api.put<{ id: string; text: string; media: unknown; metadata: unknown }>(`/api/feed/${postId}`, d),
   /**
-   * Convert an imported feed post into a Social Forge `posts` row.
+   * Convert an imported feed post into a Switchpost `posts` row.
    * Creates a new draft (or queued if scheduled_at is provided) post with
    * source_external_post_id set to the feed post's id for provenance.
    * Returns the newly-created post so the caller can open the composer

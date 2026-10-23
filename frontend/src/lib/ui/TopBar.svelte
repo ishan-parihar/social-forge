@@ -42,7 +42,7 @@
           </svg>
         </button>
       {/if}
-      <span class="text-accent font-bold text-lg truncate">Social Forge</span>
+      <span class="text-accent font-bold text-lg truncate">Switchpost</span>
     </div>
     <!-- The live widgets. One instance, one source of truth. -->
     <div class="flex items-center gap-1 flex-shrink-0">
@@ -52,5 +52,5 @@
   </div>
 {:else}
   <!-- rail: brand mark only. Streak + notifications live in the top bar. -->
-  <span class="text-accent font-bold text-lg truncate">Social Forge</span>
+  <span class="text-accent font-bold text-lg truncate">Switchpost</span>
 {/if}

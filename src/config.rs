@@ -1,22 +1,22 @@
 // ─── Configuration ─────────────────────────────────────────────
 // Loads from environment variables (12-factor app style).
-// Priority: env vars > .env (cwd) > ~/.social-forge/.env (user config)
+// Priority: env vars > .env (cwd) > ~/.switchpost/.env (user config)
 
 use serde::Deserialize;
 
-/// Returns the user config directory: ~/.social-forge/
+/// Returns the user config directory: ~/.switchpost/
 pub fn config_dir() -> std::path::PathBuf {
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| "/tmp".into());
-    std::path::PathBuf::from(home).join(".social-forge")
+    std::path::PathBuf::from(home).join(".switchpost")
 }
 
 /// Load .env files in priority order (later values don't override earlier ones)
 pub fn load_dotenv() {
     // 1. CWD .env (highest priority for local dev)
     dotenvy::dotenv().ok();
-    // 2. ~/.social-forge/.env (user-level config)
+    // 2. ~/.switchpost/.env (user-level config)
     let user_env = config_dir().join(".env");
     if user_env.exists() {
         dotenvy::from_path(&user_env).ok();
@@ -25,15 +25,15 @@ pub fn load_dotenv() {
 
 /// Fallback when `DATABASE_URL` is unset. Relative to the process CWD, which
 /// is the install/serve directory. Must stay in sync with the value written by
-/// `social-forge init`, `.env.example`, and the installer.
-pub const DEFAULT_DATABASE_URL: &str = "sqlite://data/social-forge.db";
+/// `switchpost init`, `.env.example`, and the installer.
+pub const DEFAULT_DATABASE_URL: &str = "sqlite://data/switchpost.db";
 
 /// SQLite-only guard for `DATABASE_URL`.
 ///
 /// `sqlx`'s `SqliteConnectOptions::from_str` just `trim_start_matches("sqlite:")`
 /// and treats *everything else* as a bare filename — so a stale
 /// `postgres://user:pass@host:5432/db` is not rejected by sqlx, it becomes a
-/// path and fails much later with an opaque filesystem error. Social Forge
+/// path and fails much later with an opaque filesystem error. Switchpost
 /// links no Postgres driver, so reject the URL here, at config load, before
 /// anything opens a connection or a socket.
 ///
@@ -52,11 +52,11 @@ fn ensure_sqlite_url(database_url: &str) -> anyhow::Result<()> {
         .unwrap_or_default()
         .to_ascii_lowercase();
     Err(anyhow::anyhow!(
-        "DATABASE_URL uses the `{scheme}` scheme, but Social Forge is SQLite-only \
+        "DATABASE_URL uses the `{scheme}` scheme, but Switchpost is SQLite-only \
          (no Postgres driver is linked into this binary).\n\
          Set it to a SQLite file URL, e.g. {DEFAULT_DATABASE_URL}\n\
-         Sources are tried in order: environment, then ./.env, then ~/.social-forge/.env.\n\
-         Fix it with:  social-forge config set DATABASE_URL {DEFAULT_DATABASE_URL}\n\
+         Sources are tried in order: environment, then ./.env, then ~/.switchpost/.env.\n\
+         Fix it with:  switchpost config set DATABASE_URL {DEFAULT_DATABASE_URL}\n\
          or edit the file directly."
     ))
 }
@@ -71,7 +71,7 @@ pub struct Config {
     /// If unset, derived from `app_password` at startup (see `Config::from_env`).
     pub jwt_secret: String,
     /// Single password gate for the WebUI. If unset, a random one is
-    /// generated and persisted to `~/.social-forge/.env` on first run.
+    /// generated and persisted to `~/.switchpost/.env` on first run.
     pub app_password: String,
     pub app_url: String,
     pub frontend_url: String,
@@ -175,10 +175,10 @@ pub struct Config {
 }
 
 /// Scratch database for test processes. Under `target/`, so `cargo test` never
-/// migrates or writes the operator's `data/social-forge.db`.
+/// migrates or writes the operator's `data/switchpost.db`.
 ///
 /// The prefix for the per-binary file. See [`test_database_url`].
-pub const TEST_DATABASE_URL: &str = "sqlite://target/test-data/social-forge-test.db";
+pub const TEST_DATABASE_URL: &str = "sqlite://target/test-data/switchpost-test.db";
 
 /// The scratch database for THIS test binary.
 ///
@@ -239,7 +239,7 @@ impl Config {
         let frontend_url = opt("FRONTEND_URL").unwrap_or_else(|| app_url.clone());
 
         // ── Single-user password gate ────────────────────────────
-        // Priority: APP_PASSWORD env var > persisted ~/.social-forge/.env
+        // Priority: APP_PASSWORD env var > persisted ~/.switchpost/.env
         // > generate-and-persist a fresh random one (first run).
         let app_password = match opt("APP_PASSWORD") {
             Some(p) if !p.is_empty() => p,
@@ -278,7 +278,7 @@ impl Config {
                         format!("{:<48}", env_path.display().to_string()).trim_end()
                     );
                     tracing::warn!("│                                                          │");
-                    tracing::warn!("│ To view it:  cat ~/.social-forge/.env                    │");
+                    tracing::warn!("│ To view it:  cat ~/.switchpost/.env                    │");
                     tracing::warn!("│ To change it: edit that file or set APP_PASSWORD in env  │");
                     tracing::warn!("└──────────────────────────────────────────────────────────┘");
                     generated
@@ -489,7 +489,7 @@ pub(crate) fn generate_random_password(len: usize) -> String {
         .collect()
 }
 
-/// Persist `APP_PASSWORD=<pw>` to `~/.social-forge/.env`, creating
+/// Persist `APP_PASSWORD=<pw>` to `~/.switchpost/.env`, creating
 /// the directory if needed. Idempotent — replaces any existing line.
 ///
 /// Returns the write error instead of only warning so callers that
@@ -517,12 +517,12 @@ mod tests {
     #[test]
     fn accepts_sqlite_urls_and_bare_paths() {
         for ok in [
-            "sqlite://data/social-forge.db",
-            "sqlite://data/social-forge.db?mode=rwc",
+            "sqlite://data/switchpost.db",
+            "sqlite://data/switchpost.db?mode=rwc",
             "sqlite::memory:",
             // sqlx reads a scheme-less value as a filename — still valid.
-            "data/social-forge.db",
-            "/var/lib/social-forge.db",
+            "data/switchpost.db",
+            "/var/lib/switchpost.db",
         ] {
             assert!(
                 ensure_sqlite_url(ok).is_ok(),
@@ -534,15 +534,15 @@ mod tests {
     #[test]
     fn rejects_non_sqlite_schemes() {
         for bad in [
-            "postgres://social_forge:pw@localhost:5433/social_forge",
+            "postgres://switchpost:pw@localhost:5433/switchpost",
             "postgresql://localhost/db",
-            "mysql://root@localhost:3306/social_forge",
+            "mysql://root@localhost:3306/switchpost",
         ] {
             let err = ensure_sqlite_url(bad)
                 .expect_err(&format!("expected `{bad}` to be rejected"))
                 .to_string();
             assert!(err.contains("SQLite-only"), "unhelpful error: {err}");
-            assert!(err.contains("sqlite://data/social-forge.db"));
+            assert!(err.contains("sqlite://data/switchpost.db"));
         }
     }
 

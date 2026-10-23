@@ -1,7 +1,7 @@
 // ─── Research API Routes ───────────────────────────────────────
 // Read-only "what should I post next" surface for a solo founder.
 //
-// Everything here is derived from data Social Forge already holds — own
+// Everything here is derived from data Switchpost already holds — own
 // published-post engagement (`analytics_cache`), imported
 // external/competitor posts (`external_posts` + `post_engagement`), and
 // connected-feed titles (`rss_posts`). There are no external network

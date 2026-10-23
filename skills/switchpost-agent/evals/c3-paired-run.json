@@ -2,7 +2,7 @@
   "run": "C3 paired with/without-skill, 2026-10-19",
   "method": "Each eval answered by two planning-only subagents: with-skill (may read SKILL.md only) and baseline (no files, no tools). No commands were executed.",
   "scope": "The three evals the outline requires to fail without skill guidance (ids 41, 42, 43). The other 40 evals are not yet run.",
-  "grading": "pass = the answer uses the social-forge command the eval expects and invents no other tool or API. partial = right direction, wrong or guessed detail. fail = wrong tool or invented API.",
+  "grading": "pass = the answer uses the switchpost command the eval expects and invents no other tool or API. partial = right direction, wrong or guessed detail. fail = wrong tool or invented API.",
   "results": [
     {
       "id": 41,
@@ -12,7 +12,7 @@
       },
       "baseline": {
         "grade": "fail",
-        "note": "Invented a Postiz public API (curl api.postiz.com) instead of social-forge."
+        "note": "Invented a Postiz public API (curl api.postiz.com) instead of switchpost."
       }
     },
     {
@@ -34,7 +34,7 @@
       },
       "baseline": {
         "grade": "fail",
-        "note": "Answered no for X, which is wrong: social-forge carousel create supports it."
+        "note": "Answered no for X, which is wrong: switchpost carousel create supports it."
       }
     }
   ],
@@ -46,12 +46,12 @@
     "with_skill_fail": 1
   },
   "follow_up": [
-    "DONE: eval 42 follow-up. SKILL.md line 200 now names `social-forge x timeline --count 5` next to the toolset block (verified 2026-10-18 at 4dfa224).",
+    "DONE: eval 42 follow-up. SKILL.md line 200 now names `switchpost x timeline --count 5` next to the toolset block (verified 2026-10-18 at 4dfa224).",
     "NOT RUN, by decision (2026-10-18): the paired run for the remaining 40 evals was declined. Only the configuration check below was done; no subagent runs were made."
   ],
   "config_check": {
     "date": "2026-10-18",
-    "method": "Each social-forge command in evals.json expected_commands was checked against the debug binary built at HEAD 4dfa224 (leading subcommand words run with --help). Each mcp-call tool name was checked against `social-forge mcp-tools` (389 names). No eval content was changed.",
+    "method": "Each switchpost command in evals.json expected_commands was checked against the debug binary built at HEAD 4dfa224 (leading subcommand words run with --help). Each mcp-call tool name was checked against `switchpost mcp-tools` (389 names). No eval content was changed.",
     "expected_commands_checked": 90,
     "unparseable": 0,
     "mcp_calls_checked": 7,

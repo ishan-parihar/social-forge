@@ -16,8 +16,8 @@
 //
 // Run: cargo test --test html_to_text_test
 
-use social_forge::services::PostService;
-use social_forge::social::common::strip_html_tags;
+use switchpost::services::PostService;
+use switchpost::social::common::strip_html_tags;
 
 #[test]
 fn angle_brackets_that_are_not_tags_are_kept() {

@@ -1,6 +1,6 @@
 // ─── Auth Middleware (single-user password gate) ──────────────
 //
-// Social Forge is a local-deployment tool: one user, one password.
+// Switchpost is a local-deployment tool: one user, one password.
 // There is no user-registration, no user table lookups, no per-user
 // permissions. The WebUI is gated by a single password set via the
 // `APP_PASSWORD` env var. After a successful POST /api/auth/login,

@@ -26,8 +26,8 @@
 //     15s covers the longest single publish transaction with headroom.
 //
 // Because cross-process writers queue rather than fail, run ONE long-lived
-// process per database file. Two `social-forge serve` instances on the same
-// `DATABASE_URL` will both hold the scheduler and double-publish. `social-forge
+// process per database file. Two `switchpost serve` instances on the same
+// `DATABASE_URL` will both hold the scheduler and double-publish. `switchpost
 // audit` reports the live `journal_mode` / `busy_timeout` read back from the
 // open pool, and `WRITER_MODE` records which process owns the file.
 
@@ -124,7 +124,7 @@ pub async fn create_pool(database_url: &str) -> anyhow::Result<SqlitePool> {
 /// `SqliteConnectOptions::get_filename()` returns the real file path.
 ///
 /// ponytail: `O_EXCL` + PID in the file, released on process exit. If a stale
-/// lock survives a `kill -9`, delete `data/.social-forge-writer.lock` by hand.
+/// lock survives a `kill -9`, delete `data/.switchpost-writer.lock` by hand.
 /// A PID-liveness probe is the upgrade if stale locks actually show up.
 pub fn claim_writer_role(database_url: &str) -> anyhow::Result<File> {
     let options = sqlx::sqlite::SqliteConnectOptions::from_str(database_url)
@@ -162,7 +162,7 @@ pub fn claim_writer_role(database_url: &str) -> anyhow::Result<File> {
                 .unwrap_or(true);
             if owner_alive {
                 return Err(anyhow::anyhow!(
-                    "Another social-forge process already owns the writer lock for this database \
+                    "Another switchpost process already owns the writer lock for this database \
                      ({}). SQLite is single-writer: run ONE long-lived process per \
                      DATABASE_URL, or delete the lock if that process is gone.",
                     path.display()
@@ -189,7 +189,7 @@ pub fn claim_writer_role(database_url: &str) -> anyhow::Result<File> {
     }
 }
 
-/// Ensure the single local user row exists. Social Forge is a
+/// Ensure the single local user row exists. Switchpost is a
 /// single-user app — every post, integration, and notification is
 /// owned by `DEFAULT_USER_ID`. The `users` row is required only to
 /// satisfy foreign-key constraints; the `password` column is unused
@@ -213,7 +213,7 @@ pub async fn ensure_local_user(pool: &SqlitePool) -> anyhow::Result<()> {
              ON CONFLICT (id) DO NOTHING",
         )
         .bind(id)
-        .bind("local@socialforge")
+        .bind("local@switchpost")
         .bind(placeholder_hash)
         .bind("Local User")
         .execute(pool)

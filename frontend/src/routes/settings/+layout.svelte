@@ -16,7 +16,7 @@
   // than every other page and shifted its left edge out of alignment.
   //
   // Inspired by postiz-app's settings.component.tsx (2-column tab layout).
-  // Adapted for Social Forge's single-user model - no Teams, no Approved Apps.
+  // Adapted for Switchpost's single-user model - no Teams, no Approved Apps.
 
   import { page } from '$app/stores';
   import Icon from '$lib/ui/Icon.svelte';

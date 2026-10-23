@@ -1263,7 +1263,7 @@ mod tests {
     // byte-for-byte while only a bounded head stays in memory, and small
     // uploads resolve exactly as the buffered version resolved them.
 
-    const BOUNDARY: &str = "socialforge-test-boundary";
+    const BOUNDARY: &str = "switchpost-test-boundary";
     const CHUNK: usize = 1024 * 1024;
 
     use axum::body::Bytes;
@@ -1316,7 +1316,7 @@ mod tests {
 
     fn scratch_dir(tag: &str) -> PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("social-forge-upload-{tag}-{}", Uuid::new_v4()));
+            std::env::temp_dir().join(format!("switchpost-upload-{tag}-{}", Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }

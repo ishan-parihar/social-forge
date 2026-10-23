@@ -4,8 +4,8 @@ export type CalendarView = "month" | "week" | "day" | "list";
 // localStorage so the calendar remembers its state across reloads.
 // Default view is now 'week' (was 'month') - matches postiz-app and
 // gives an hourly time grid that's far better for scheduling decisions.
-const VIEW_KEY = 'social-forge-calendar-view';
-const DATE_KEY = 'social-forge-calendar-date';
+const VIEW_KEY = 'switchpost-calendar-view';
+const DATE_KEY = 'switchpost-calendar-date';
 
 function getInitialView(): CalendarView {
   if (typeof localStorage !== 'undefined') {

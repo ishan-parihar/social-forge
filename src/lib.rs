@@ -1,4 +1,4 @@
-// Social Forge library root
+// Switchpost library root
 // Re-exports modules for use from tests and integration.
 pub mod api;
 pub mod auth;

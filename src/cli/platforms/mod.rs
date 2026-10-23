@@ -50,7 +50,7 @@ pub fn emit_result<T: Serialize>(result: Result<T, String>) -> anyhow::Result<()
             Ok(())
         }
         Err(e) => {
-            let err = serde_json::json!({"error": e, "hint": "Run `social-forge doctor` to check provider health."});
+            let err = serde_json::json!({"error": e, "hint": "Run `switchpost doctor` to check provider health."});
             println!("{}", format_text(&err, "toon"));
             std::process::exit(2);
         }

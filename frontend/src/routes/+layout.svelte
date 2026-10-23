@@ -181,13 +181,13 @@
         title: 'Keyboard Shortcuts',
         size: 'max-w-md',
       }));
-      if (browser && !localStorage.getItem('social-forge-onboarded')) {
+      if (browser && !localStorage.getItem('switchpost-onboarded')) {
         showOnboarding = true;
       }
     }
     // v22 Phase 4: restore sidebar collapse preference.
     if (browser) {
-      sidebarCollapsed = localStorage.getItem('social-forge-sidebar-collapsed') === 'true';
+      sidebarCollapsed = localStorage.getItem('switchpost-sidebar-collapsed') === 'true';
     }
     // v22 Phase 4: Cmd+K / Ctrl+K opens the command palette.
     const onKey = (e: KeyboardEvent) => {
@@ -218,7 +218,7 @@
   function toggleSidebar() {
     sidebarCollapsed = !sidebarCollapsed;
     if (browser) {
-      localStorage.setItem('social-forge-sidebar-collapsed', String(sidebarCollapsed));
+      localStorage.setItem('switchpost-sidebar-collapsed', String(sidebarCollapsed));
     }
   }
 

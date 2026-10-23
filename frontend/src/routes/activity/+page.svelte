@@ -129,7 +129,7 @@
 </script>
 
 <svelte:head>
-  <title>Activity — Social Forge</title>
+  <title>Activity — Switchpost</title>
 </svelte:head>
 
 <div class="max-w-4xl">

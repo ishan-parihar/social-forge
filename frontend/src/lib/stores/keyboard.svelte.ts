@@ -1,4 +1,4 @@
-// Global keyboard shortcuts for social-forge.
+// Global keyboard shortcuts for switchpost.
 // Implements a simple sequence matcher for `g <key>` (go-to) shortcuts
 // and single-key shortcuts for common actions.
 //

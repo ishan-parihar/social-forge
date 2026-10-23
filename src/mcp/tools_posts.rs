@@ -1182,6 +1182,6 @@ pub async fn handle_posts_best_times(
 
     Ok(Json(serde_json::json!({
         "providers": providers,
-        "note": "Ranked weekday×hour histogram of engagement on IMPORTED posts with synced metrics (build history via `social-forge import <provider>`), bucketed by the platform post's UTC timestamp. Small samples are noisy — treat as a hint, not a law.",
+        "note": "Ranked weekday×hour histogram of engagement on IMPORTED posts with synced metrics (build history via `switchpost import <provider>`), bucketed by the platform post's UTC timestamp. Small samples are noisy — treat as a hint, not a law.",
     })))
 }

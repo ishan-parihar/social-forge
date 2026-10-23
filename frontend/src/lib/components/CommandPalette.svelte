@@ -70,7 +70,7 @@
   let recentIds: string[] = $state([]);
   if (browser) {
     try {
-      recentIds = JSON.parse(localStorage.getItem('social-forge-recent-commands') || '[]');
+      recentIds = JSON.parse(localStorage.getItem('switchpost-recent-commands') || '[]');
     } catch {
       recentIds = [];
     }
@@ -138,7 +138,7 @@
     // Record in recent (move to front, cap at 5).
     recentIds = [cmd.id, ...recentIds.filter((id) => id !== cmd.id)].slice(0, 5);
     if (browser) {
-      localStorage.setItem('social-forge-recent-commands', JSON.stringify(recentIds));
+      localStorage.setItem('switchpost-recent-commands', JSON.stringify(recentIds));
     }
     cmd.action();
     onClose();

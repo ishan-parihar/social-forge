@@ -4,7 +4,7 @@
 
 import { browser } from '$app/environment';
 
-const STORAGE_KEY = 'social-forge-timezone';
+const STORAGE_KEY = 'switchpost-timezone';
 
 function getInitial(): string {
   if (!browser) return 'UTC';

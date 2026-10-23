@@ -315,10 +315,10 @@ impl SocialProvider for MastodonProvider {
         // Step 1: Register an app on the instance
         let scope = self.scopes().join(" ");
         let app_body = serde_json::json!({
-            "client_name": "Social Forge",
+            "client_name": "Switchpost",
             "redirect_uris": redirect_uri,
             "scopes": scope,
-            "website": "https://social-forge.app",
+            "website": "https://switchpost.app",
         });
 
         let resp = self
@@ -449,7 +449,7 @@ impl SocialProvider for MastodonProvider {
         // (app registration returns client_id/secret needed for token refresh)
         let scope = self.scopes().join(" ");
         let app_body = serde_json::json!({
-            "client_name": "Social Forge",
+            "client_name": "Switchpost",
             "redirect_uris": "urn:ietf:wg:oauth:2.0:oob",
             "scopes": scope,
         });

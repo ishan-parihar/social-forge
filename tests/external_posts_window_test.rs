@@ -14,18 +14,18 @@
 // real query, so they fail against the old TEXT storage.
 //
 // Run: cargo test --test external_posts_window_test
-// Uses the isolated test DB from `load_dotenv_for_tests` (never data/social-forge.db).
+// Uses the isolated test DB from `load_dotenv_for_tests` (never data/switchpost.db).
 
 use chrono::{Duration, TimeZone, Utc};
-use social_forge::auth::middleware::DEFAULT_USER_ID;
-use social_forge::config::Config;
-use social_forge::db;
-use social_forge::db::queries::{insert_external_post, top_external_posts_by_engagement};
-use social_forge::db::SqlitePool;
+use switchpost::auth::middleware::DEFAULT_USER_ID;
+use switchpost::config::Config;
+use switchpost::db;
+use switchpost::db::queries::{insert_external_post, top_external_posts_by_engagement};
+use switchpost::db::SqlitePool;
 use uuid::Uuid;
 
 async fn pool() -> SqlitePool {
-    social_forge::config::load_dotenv_for_tests();
+    switchpost::config::load_dotenv_for_tests();
     let config = Config::from_env().expect("config");
     let pool = db::create_pool(&config.database_url).await.expect("pool");
     db::ensure_local_user(&pool).await.expect("local user");

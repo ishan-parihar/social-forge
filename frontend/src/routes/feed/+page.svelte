@@ -786,14 +786,14 @@
               <div class="flex items-center gap-3 whitespace-nowrap">
                 <!-- Phase v21: Repurpose - now calls the real backend
                      endpoint POST /api/feed/{id}/repurpose which creates
-                     a Social Forge post row with source_external_post_id
+                     a Switchpost post row with source_external_post_id
                      set for provenance. Previously this was a frontend-only
                      no-op that just opened the composer with prefilled text
                      and made zero backend calls. -->
                 <button
                   onclick={() => openRepurposeModal(post)}
                   class="text-xs text-accent hover:text-accent-strong transition-colors inline-flex items-center min-h-11 px-1"
-                  title="Create a new Social Forge post from this content"
+                  title="Create a new Switchpost post from this content"
                 >
                   ✏️ Repurpose
                 </button>
@@ -895,7 +895,7 @@
     >
       <h2 id="repurpose-title" class="text-lg font-semibold mb-1">Repurpose post</h2>
       <p class="text-xs text-muted mb-4">
-        Create a new Social Forge draft from this imported post. You can edit and schedule it after.
+        Create a new Switchpost draft from this imported post. You can edit and schedule it after.
       </p>
       <div class="bg-background-input border border-line rounded-lg p-3 mb-4 max-h-32 overflow-y-auto">
         <p class="text-xs text-content-secondary whitespace-pre-wrap line-clamp-4">{repurposePost.text}</p>

@@ -19,27 +19,27 @@
 //   3. the READER normalises anything that slipped through
 //
 // Run: cargo test --test posts_media_shape_test
-// Uses the isolated test DB from `load_dotenv_for_tests` (never data/social-forge.db).
+// Uses the isolated test DB from `load_dotenv_for_tests` (never data/switchpost.db).
 
-use social_forge::db;
-use social_forge::db::models::media_as_array;
+use switchpost::db;
+use switchpost::db::models::media_as_array;
 use uuid::Uuid;
 
-async fn pool() -> social_forge::db::SqlitePool {
-    social_forge::config::load_dotenv_for_tests();
+async fn pool() -> switchpost::db::SqlitePool {
+    switchpost::config::load_dotenv_for_tests();
     // This binary's own scratch file, not the shared one: the test
     // binaries run in PARALLEL, and two processes on one SQLite file
     // fight over the write lock.
-    let pool = db::create_pool(&social_forge::config::test_database_url())
+    let pool = db::create_pool(&switchpost::config::test_database_url())
         .await
         .expect("pool");
     db::ensure_local_user(&pool).await.expect("local user");
     pool
 }
 
-const USER: Uuid = social_forge::auth::middleware::DEFAULT_USER_ID;
+const USER: Uuid = switchpost::auth::middleware::DEFAULT_USER_ID;
 
-async fn seed_post(pool: &social_forge::db::SqlitePool, media: &str) -> Uuid {
+async fn seed_post(pool: &switchpost::db::SqlitePool, media: &str) -> Uuid {
     let integration_id = Uuid::new_v4();
     sqlx::query(
         "INSERT INTO integrations (id, user_id, provider_identifier, provider_name, internal_id)

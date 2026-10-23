@@ -4,19 +4,19 @@
 // on rows seeded to cover each section plus the empty-DB case.
 //
 // Run: cargo test --test research_aggregate_test
-// Uses the isolated test DB from `load_dotenv_for_tests` (never data/social-forge.db).
+// Uses the isolated test DB from `load_dotenv_for_tests` (never data/switchpost.db).
 
 use chrono::{DateTime, TimeZone, Utc};
-use social_forge::db;
-use social_forge::db::queries::{
+use switchpost::db;
+use switchpost::db::queries::{
     engagement_histogram_by_slot, top_external_posts_by_engagement, top_own_posts_by_engagement,
 };
-use social_forge::db::SqlitePool;
+use switchpost::db::SqlitePool;
 use uuid::Uuid;
 
 async fn pool() -> SqlitePool {
-    social_forge::config::load_dotenv_for_tests();
-    let config = social_forge::config::Config::from_env().expect("config");
+    switchpost::config::load_dotenv_for_tests();
+    let config = switchpost::config::Config::from_env().expect("config");
     let pool = db::create_pool(&config.database_url).await.expect("pool");
     db::ensure_local_user(&pool).await.expect("local user");
     pool

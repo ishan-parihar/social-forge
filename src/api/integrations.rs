@@ -979,7 +979,7 @@ pub async fn connect_reddit_cookie(
         .header("Cookie", &parsed.cookie_string)
         .header(
             "User-Agent",
-            "Mozilla/5.0 (X11; Linux x86_64) social-forge/0.1",
+            "Mozilla/5.0 (X11; Linux x86_64) switchpost/0.1",
         )
         .send()
         .await
@@ -1046,7 +1046,7 @@ pub async fn connect_github_pat(
         .get("https://api.github.com/user")
         .header("Authorization", format!("Bearer {}", body.pat.trim()))
         .header("Accept", "application/vnd.github.v3+json")
-        .header("User-Agent", "social-forge:v0.1.0")
+        .header("User-Agent", "switchpost:v0.1.0")
         .send()
         .await
         .map_err(|e| AppError::Provider(format!("GitHub API error: {e}")))?;

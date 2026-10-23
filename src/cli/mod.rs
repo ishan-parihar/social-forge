@@ -5,9 +5,9 @@ pub use run::run_cli;
 
 use clap::{Parser, Subcommand};
 
-/// Social Forge — Dual-Interface Social Media Scheduling Engine
+/// Switchpost — Dual-Interface Social Media Scheduling Engine
 #[derive(Parser, Debug)]
-#[command(name = "social-forge", version, about, long_about = None)]
+#[command(name = "switchpost", version, about, long_about = None)]
 pub struct Cli {
     /// Output as compact JSON (default: TOON, ~40% fewer tokens for agents)
     #[arg(long, global = true, default_value_t = false)]
@@ -46,20 +46,20 @@ pub enum Command {
     },
 
     /// List every MCP tool with its description — the documented shell
-    /// path for agents (`social-forge mcp-tools --pretty`).
+    /// path for agents (`switchpost mcp-tools --pretty`).
     McpTools {
         /// Aligned "name — description" table plus a count (plain lists names only)
         #[arg(long)]
         pretty: bool,
 
         /// Narrow to one toolset (e.g. `x`, `reddit`, `core`). Mirrors
-        /// SOCIAL_FORGE_TOOLSETS filtering so an agent can size a session
+        /// SWITCHPOST_TOOLSETS filtering so an agent can size a session
         /// before enabling it. Omit for the full catalog.
         #[arg(long)]
         toolset: Option<String>,
     },
 
-    /// Initialize ~/.social-forge/ config directory with default .env template
+    /// Initialize ~/.switchpost/ config directory with default .env template
     Init,
 
     /// List connected social providers
@@ -107,7 +107,7 @@ pub enum Command {
     /// Auto-import browser cookies for all cookie-based providers (X, Reddit)
     ConnectAll,
 
-    /// Manage configuration values in ~/.social-forge/.env
+    /// Manage configuration values in ~/.switchpost/.env
     Config {
         #[command(subcommand)]
         action: ConfigAction,
@@ -262,7 +262,7 @@ pub enum Command {
         /// and `linkedin` ONLY `linkedin` — the `-standalone` / `-page`
         /// variants are separate providers and are NOT swept in. Name them
         /// explicitly (`--platforms instagram,instagram-standalone`) or use
-        /// `--integrations` with the exact UUIDs. `social-forge audit` reports
+        /// `--integrations` with the exact UUIDs. `switchpost audit` reports
         /// which colliding pairs are currently connected.
         #[arg(long, conflicts_with = "integrations")]
         platforms: Option<String>,
@@ -678,7 +678,7 @@ pub enum ServiceAction {
 
 #[derive(Subcommand, Debug)]
 pub enum ConfigAction {
-    /// Set a configuration value in ~/.social-forge/.env
+    /// Set a configuration value in ~/.switchpost/.env
     Set {
         /// Environment variable name (e.g. BLUESKY_HANDLE, GITHUB_TOKEN)
         key: String,
@@ -692,7 +692,7 @@ pub enum ConfigAction {
     },
     /// List all configured values (redacts secrets)
     List,
-    /// Reset the single-user WebUI password (APP_PASSWORD in ~/.social-forge/.env)
+    /// Reset the single-user WebUI password (APP_PASSWORD in ~/.switchpost/.env)
     ResetPassword {
         /// New password. Omit to generate a strong random one (printed once).
         password: Option<String>,

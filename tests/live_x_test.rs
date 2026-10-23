@@ -6,14 +6,14 @@
 //
 // Requires: .env with X_AUTH_TOKEN, X_CT0 set, database running.
 
-use social_forge::config::Config;
-use social_forge::social::x::XProvider;
+use switchpost::config::Config;
+use switchpost::social::x::XProvider;
 
 mod common;
 use common::skip_on_environment_failure;
 
 fn setup_config() -> Config {
-    social_forge::config::load_dotenv_for_live_tests();
+    switchpost::config::load_dotenv_for_live_tests();
     Config::from_env().expect("Failed to load config from .env")
 }
 

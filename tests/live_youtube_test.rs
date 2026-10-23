@@ -4,11 +4,11 @@
 //
 // Run: cargo test --test live_youtube_test -- --nocapture
 
-use social_forge::config::Config;
-use social_forge::crypto;
-use social_forge::db;
-use social_forge::social::youtube::YoutubeProvider;
-use social_forge::social::SocialProvider;
+use switchpost::config::Config;
+use switchpost::crypto;
+use switchpost::db;
+use switchpost::social::youtube::YoutubeProvider;
+use switchpost::social::SocialProvider;
 
 /// Try to decrypt a token. If it's plaintext (not hex or decryption fails), return as-is.
 fn resolve_token(token: &str, key: Option<&[u8; 32]>) -> String {
@@ -34,7 +34,7 @@ fn resolve_token(token: &str, key: Option<&[u8; 32]>) -> String {
 
 #[tokio::test]
 async fn test_live_youtube_all_tools() {
-    social_forge::config::load_dotenv_for_live_tests();
+    switchpost::config::load_dotenv_for_live_tests();
     let config = Config::from_env().expect("Config");
 
     let token_key = config
@@ -51,7 +51,7 @@ async fn test_live_youtube_all_tools() {
         "SELECT i.id, i.access_token, i.refresh_token, i.internal_id, i.profile_name
          FROM integrations i
          JOIN users u ON i.user_id = u.id
-         WHERE u.email = 'dev@social-forge.dev' AND i.provider_identifier = 'youtube'
+         WHERE u.email = 'dev@switchpost.dev' AND i.provider_identifier = 'youtube'
          ORDER BY i.created_at",
     )
     .fetch_all(&pool)

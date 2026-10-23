@@ -13,7 +13,7 @@ fn get_bin_path() -> String {
                 s
             }
         })
-        .unwrap_or_else(|_| "social-forge".to_string())
+        .unwrap_or_else(|_| "switchpost".to_string())
 }
 
 /// AXI §8: Content-first home view — shows tool identity and command hints
@@ -60,10 +60,10 @@ pub fn handle_home() {
 
     // AXI §9: Contextual disclosure — suggest next steps
     println!("help[6]:");
-    println!("  Run `social-forge providers` to see connected accounts");
-    println!("  Run `social-forge setup` for guided onboarding");
-    println!("  Run `social-forge connect <provider>` to connect a platform");
-    println!("  Run `social-forge post \"text\" --platforms x,linkedin` to post");
-    println!("  Run `social-forge doctor` to check provider health");
-    println!("  Run `social-forge mcp` to start the MCP server for AI agents");
+    println!("  Run `switchpost providers` to see connected accounts");
+    println!("  Run `switchpost setup` for guided onboarding");
+    println!("  Run `switchpost connect <provider>` to connect a platform");
+    println!("  Run `switchpost post \"text\" --platforms x,linkedin` to post");
+    println!("  Run `switchpost doctor` to check provider health");
+    println!("  Run `switchpost mcp` to start the MCP server for AI agents");
 }

@@ -5,18 +5,18 @@
 
   const mcpConfig = JSON.stringify({
     mcpServers: {
-      "social-forge": {
-        command: "social-forge",
+      "switchpost": {
+        command: "switchpost",
         args: ["mcp"]
       }
     }
   }, null, 2);
 
-  const cliCommands = `social-forge init                    # Initialize config
-social-forge providers               # List connected accounts
-social-forge x post "Hello world"    # Post to X/Twitter
-social-forge reddit browse rust      # Browse subreddit
-social-forge linkedin profile        # View LinkedIn profile`;
+  const cliCommands = `switchpost init                    # Initialize config
+switchpost providers               # List connected accounts
+switchpost x post "Hello world"    # Post to X/Twitter
+switchpost reddit browse rust      # Browse subreddit
+switchpost linkedin profile        # View LinkedIn profile`;
 
   async function copy(text: string, which: 'mcp' | 'cli') {
     await navigator.clipboard.writeText(text);
@@ -63,9 +63,9 @@ social-forge linkedin profile        # View LinkedIn profile`;
   <!-- Configuration File -->
   <div class="bg-surface border border-line rounded-xl p-5 space-y-3">
     <h2 class="text-sm font-medium">Configuration File</h2>
-    <p class="text-xs text-muted">Social Forge stores user config at <code class="text-accent">~/.social-forge/.env</code></p>
-    <pre class="bg-background border border-line rounded-lg p-4 text-xs text-warning font-mono">Run: social-forge init
-Then edit: ~/.social-forge/.env</pre>
+    <p class="text-xs text-muted">Switchpost stores user config at <code class="text-accent">~/.switchpost/.env</code></p>
+    <pre class="bg-background border border-line rounded-lg p-4 text-xs text-warning font-mono">Run: switchpost init
+Then edit: ~/.switchpost/.env</pre>
     <p class="text-xs text-muted">Set <code class="text-accent">DATABASE_URL</code> and any platform credentials there. The CLI reads this file automatically from any directory.</p>
   </div>
 
@@ -75,7 +75,7 @@ Then edit: ~/.social-forge/.env</pre>
     <p class="text-xs text-muted">REST API base URL:</p>
     <pre class="bg-background border border-line rounded-lg p-4 text-xs text-accent-strong font-mono">{typeof window !== 'undefined' ? window.location.origin : 'https://your-host'}/api</pre>
     <p class="text-xs text-muted">The WebUI is protected by a password gate (<code class="text-accent">APP_PASSWORD</code> env var). After login, a signed <code class="text-accent">sf_session</code> cookie is set and sent automatically by the browser. For CLI/script access, use the MCP stdio server:</p>
-    <pre class="bg-background border border-line rounded-lg p-4 text-xs text-success font-mono overflow-x-auto">social-forge mcp</pre>
+    <pre class="bg-background border border-line rounded-lg p-4 text-xs text-success font-mono overflow-x-auto">switchpost mcp</pre>
     <p class="text-xs text-muted">AI agents connect to this stdio server directly - no HTTP auth needed (local shell access implies trust).</p>
   </div>
 </div>

@@ -4,7 +4,7 @@
 
 import { browser } from '$app/environment';
 
-const STORAGE_KEY = 'social-forge-theme';
+const STORAGE_KEY = 'switchpost-theme';
 
 type Theme = 'dark' | 'light';
 

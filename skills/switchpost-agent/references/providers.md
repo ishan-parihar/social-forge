@@ -1,4 +1,4 @@
-# Social Forge — Provider Reference
+# Switchpost — Provider Reference
 
 ## Contents
 
@@ -40,22 +40,22 @@ Complete CLI commands and MCP tools for every supported provider. Grouped by tas
 
 | Platform | CLI Command | Notes |
 |----------|-------------|-------|
-| **X/Twitter** | `social-forge x post "<text>"` | Cookie auth for full access |
-| **LinkedIn personal** | `social-forge linkedin post "<text>"` | OAuth |
-| **LinkedIn page** | `social-forge linkedin-page post <PAGE_ID> "<text>"` | OAuth |
-| **Reddit** | `social-forge reddit post --title "<t>" --text "<b>" --target <sub>` | Cookie auth |
+| **X/Twitter** | `switchpost x post "<text>"` | Cookie auth for full access |
+| **LinkedIn personal** | `switchpost linkedin post "<text>"` | OAuth |
+| **LinkedIn page** | `switchpost linkedin-page post <PAGE_ID> "<text>"` | OAuth |
+| **Reddit** | `switchpost reddit post --title "<t>" --text "<b>" --target <sub>` | Cookie auth |
 | **Facebook** | Use `mcp-call fb_create_post '{"page_id":"...","message":"..."}'` | No native CLI post command |
 | **Instagram** | Use `mcp-call ig_create_container` + `ig_poll_container` + `ig_publish_container` | 3-step flow (see below) |
 | **Bluesky** | Use `mcp-call bs_create_post '{"text":"..."}'` | App password auth |
 | **Mastodon** | Use `mcp-call ms_create_post '{"status":"..."}'` | Access token auth |
 | **WordPress** | Use `mcp-call wp_create_post '{"title":"...","content":"..."}'` | App password auth |
 | **Dev.to** | Use `mcp-call dv_create_post '{"title":"...","body_markdown":"..."}'` | API key auth |
-| **Hashnode** | `social-forge hashnode post <PUB_ID> "title" "content"` | PAT auth |
-| **Medium** | `social-forge medium-blog post "content"` | Token auth |
-| **TikTok** | `social-forge tiktok post "text"` | OAuth |
-| **Skool** | `social-forge skool post <GROUP_ID> "title" "content"` | API key auth |
+| **Hashnode** | `switchpost hashnode post <PUB_ID> "title" "content"` | PAT auth |
+| **Medium** | `switchpost medium-blog post "content"` | Token auth |
+| **TikTok** | `switchpost tiktok post "text"` | OAuth |
+| **Skool** | `switchpost skool post <GROUP_ID> "title" "content"` | API key auth |
 
-**Cross-platform**: `social-forge post "<text>" --platforms x,linkedin,bluesky` — auto-splits content.
+**Cross-platform**: `switchpost post "<text>" --platforms x,linkedin,bluesky` — auto-splits content.
 
 ---
 
@@ -63,19 +63,19 @@ Complete CLI commands and MCP tools for every supported provider. Grouped by tas
 
 | Platform | CLI Command | Notes |
 |----------|-------------|-------|
-| **X/Twitter** | `social-forge x timeline --count 5` | Home timeline |
-| **X search** | `social-forge x search "<query>"` | Search tweets |
-| **X user** | `social-forge x user <username>` | Profile by username |
-| **Reddit browse** | `social-forge reddit browse <subreddit> --sort hot` | Subreddit feed |
-| **Reddit search** | `social-forge reddit search "<query>"` | Search Reddit |
-| **Reddit user** | `social-forge reddit user <username>` | User profile |
-| **Reddit inbox** | `social-forge reddit inbox` | Read inbox |
-| **Instagram posts** | `social-forge instagram posts <ACCOUNT_ID>` | Recent media |
-| **LinkedIn personal** | `social-forge linkedin posts` | Your recent posts |
-| **LinkedIn profile** | `social-forge linkedin profile` | Your profile |
-| **LinkedIn page** | `social-forge linkedin-page feed <PAGE_ID>` | Page posts |
-| **Facebook page** | `social-forge facebook posts <PAGE_ID>` | Page feed |
-| **Import + feed** | `social-forge import x --count 20` then `social-forge feed` | Unified local feed |
+| **X/Twitter** | `switchpost x timeline --count 5` | Home timeline |
+| **X search** | `switchpost x search "<query>"` | Search tweets |
+| **X user** | `switchpost x user <username>` | Profile by username |
+| **Reddit browse** | `switchpost reddit browse <subreddit> --sort hot` | Subreddit feed |
+| **Reddit search** | `switchpost reddit search "<query>"` | Search Reddit |
+| **Reddit user** | `switchpost reddit user <username>` | User profile |
+| **Reddit inbox** | `switchpost reddit inbox` | Read inbox |
+| **Instagram posts** | `switchpost instagram posts <ACCOUNT_ID>` | Recent media |
+| **LinkedIn personal** | `switchpost linkedin posts` | Your recent posts |
+| **LinkedIn profile** | `switchpost linkedin profile` | Your profile |
+| **LinkedIn page** | `switchpost linkedin-page feed <PAGE_ID>` | Page posts |
+| **Facebook page** | `switchpost facebook posts <PAGE_ID>` | Page feed |
+| **Import + feed** | `switchpost import x --count 20` then `switchpost feed` | Unified local feed |
 
 ---
 
@@ -83,19 +83,19 @@ Complete CLI commands and MCP tools for every supported provider. Grouped by tas
 
 | Command | Description |
 |---------|-------------|
-| `social-forge posts create "<content>" --integrations <UUID>` | Create a queued post |
-| `social-forge posts create "<content>" --integrations <UUID> --schedule <ISO>` | Create + schedule |
-| `social-forge posts find-slot --integration <UUID>` | Find next available time slot |
-| `social-forge posts list --limit 10` | List scheduled/queued posts |
-| `social-forge posts get <POST_ID>` | Get post details |
-| `social-forge posts publish <POST_ID>` | Publish immediately |
-| `social-forge posts delete <POST_ID>` | Cancel/delete a post |
+| `switchpost posts create "<content>" --integrations <UUID>` | Create a queued post |
+| `switchpost posts create "<content>" --integrations <UUID> --schedule <ISO>` | Create + schedule |
+| `switchpost posts find-slot --integration <UUID>` | Find next available time slot |
+| `switchpost posts list --limit 10` | List scheduled/queued posts |
+| `switchpost posts get <POST_ID>` | Get post details |
+| `switchpost posts publish <POST_ID>` | Publish immediately |
+| `switchpost posts delete <POST_ID>` | Cancel/delete a post |
 
 **Staging** (multi-platform review before publish):
 | Command | Description |
 |---------|-------------|
-| `social-forge stage "<content>" --integrations <UUID1>,<UUID2>` | Stage across platforms |
-| `social-forge stage "<content>" --platforms x,linkedin --preview` | Preview splits only |
+| `switchpost stage "<content>" --integrations <UUID1>,<UUID2>` | Stage across platforms |
+| `switchpost stage "<content>" --platforms x,linkedin --preview` | Preview splits only |
 
 ---
 
@@ -103,11 +103,11 @@ Complete CLI commands and MCP tools for every supported provider. Grouped by tas
 
 | Command | Description |
 |---------|-------------|
-| `social-forge media upload <file>` | Upload a file |
-| `social-forge media upload <url>` | Upload from URL |
-| `social-forge media upload-batch <file1> <file2> ...` | Upload multiple files |
-| `social-forge media list --limit 10` | List uploaded media |
-| `social-forge media download <url> --output <path>` | Download a file |
+| `switchpost media upload <file>` | Upload a file |
+| `switchpost media upload <url>` | Upload from URL |
+| `switchpost media upload-batch <file1> <file2> ...` | Upload multiple files |
+| `switchpost media list --limit 10` | List uploaded media |
+| `switchpost media download <url> --output <path>` | Download a file |
 
 ---
 
@@ -115,7 +115,7 @@ Complete CLI commands and MCP tools for every supported provider. Grouped by tas
 
 | Command | Description |
 |---------|-------------|
-| `social-forge carousel "<text>" --integration <UUID> --media <url1>,<url2>` | Multi-image carousel |
+| `switchpost carousel "<text>" --integration <UUID> --media <url1>,<url2>` | Multi-image carousel |
 
 ---
 
@@ -123,16 +123,16 @@ Complete CLI commands and MCP tools for every supported provider. Grouped by tas
 
 | Command | Description |
 |---------|-------------|
-| `social-forge comment get <INTEGRATION_ID> <POST_ID>` | Get comments on a post |
-| `social-forge comment reply <INTEGRATION_ID> <COMMENT_ID> "<text>"` | Reply to a comment |
+| `switchpost comment get <INTEGRATION_ID> <POST_ID>` | Get comments on a post |
+| `switchpost comment reply <INTEGRATION_ID> <COMMENT_ID> "<text>"` | Reply to a comment |
 
 **Platform-specific comments via CLI**:
 | Platform | CLI Command |
 |----------|-------------|
-| **X** | `social-forge x post "<text>"` (replies are posts) |
-| **Reddit** | `social-forge reddit comment <THING_ID> "<text>"` |
-| **Facebook** | `social-forge facebook comment <POST_ID> "<text>"` |
-| **Instagram** | `social-forge instagram comment <MEDIA_ID> "<text>"` |
+| **X** | `switchpost x post "<text>"` (replies are posts) |
+| **Reddit** | `switchpost reddit comment <THING_ID> "<text>"` |
+| **Facebook** | `switchpost facebook comment <POST_ID> "<text>"` |
+| **Instagram** | `switchpost instagram comment <MEDIA_ID> "<text>"` |
 
 ---
 
@@ -140,9 +140,9 @@ Complete CLI commands and MCP tools for every supported provider. Grouped by tas
 
 | Command | Description |
 |---------|-------------|
-| `social-forge dm send <INTEGRATION_ID> <RECIPIENT_ID> "<text>"` | Send a message |
-| `social-forge dm list <INTEGRATION_ID>` | List conversations |
-| `social-forge dm messages <INTEGRATION_ID> <CONVERSATION_ID>` | Get messages in a conversation |
+| `switchpost dm send <INTEGRATION_ID> <RECIPIENT_ID> "<text>"` | Send a message |
+| `switchpost dm list <INTEGRATION_ID>` | List conversations |
+| `switchpost dm messages <INTEGRATION_ID> <CONVERSATION_ID>` | Get messages in a conversation |
 
 **Platform-specific DMs via MCP**:
 | Platform | MCP Tool |
@@ -163,33 +163,33 @@ Instagram requires a container → poll → publish flow. No single CLI command 
 
 **Step 1: Create container**
 ```bash
-social-forge mcp-call ig_create_container --args '{"ig_id":"<IG_ACCOUNT_ID>","image_url":"https://example.com/photo.jpg","caption":"Your caption here"}'
+switchpost mcp-call ig_create_container --args '{"ig_id":"<IG_ACCOUNT_ID>","image_url":"https://example.com/photo.jpg","caption":"Your caption here"}'
 # Returns: {"id":"CONTAINER_ID","status_code":"FINISHED"}
 ```
 
 **Step 2: Poll container** (if status_code is not FINISHED)
 ```bash
-social-forge mcp-call ig_poll_container --args '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID"}'
+switchpost mcp-call ig_poll_container --args '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID"}'
 # Returns: {"id":"CONTAINER_ID","status_code":"FINISHED"} when ready
 ```
 
 **Step 3: Publish**
 ```bash
-social-forge mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID"}'
+switchpost mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID"}'
 # Returns: {"id":"MEDIA_ID"} on success
 ```
 
 **Important**:
 - `image_url` must be a publicly accessible URL (not a local file path)
-- For local files, upload first: `social-forge media upload ./photo.jpg` then use the returned URL
+- For local files, upload first: `switchpost media upload ./photo.jpg` then use the returned URL
 - Poll until `status_code` is `FINISHED` before publishing
 - Video containers take longer; poll 2-3 times with 5-second delays
 
 **For Reels**:
 ```bash
-social-forge mcp-call ig_create_container --args '{"ig_id":"<IG_ACCOUNT_ID>","video_url":"https://example.com/video.mp4","caption":"Reel caption","media_type":"REELS"}'
-social-forge mcp-call ig_poll_container --args '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID"}'
-social-forge mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID","media_type":"REELS"}'
+switchpost mcp-call ig_create_container --args '{"ig_id":"<IG_ACCOUNT_ID>","video_url":"https://example.com/video.mp4","caption":"Reel caption","media_type":"REELS"}'
+switchpost mcp-call ig_poll_container --args '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID"}'
+switchpost mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID","media_type":"REELS"}'
 ```
 
 ---
@@ -198,11 +198,11 @@ social-forge mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","c
 
 | Platform | CLI Command | Notes |
 |----------|-------------|-------|
-| **Instagram** | `social-forge instagram insights <ACCOUNT_ID> --metric <metrics>` | Comma-separated metrics |
-| **LinkedIn page** | `social-forge linkedin-page analytics <PAGE_ID>` | Page analytics |
-| **LinkedIn followers** | `social-forge linkedin-page followers <PAGE_ID>` | Follower count |
-| **LinkedIn personal** | `social-forge linkedin analytics` | Profile analytics |
-| **Facebook** | `social-forge facebook insights <PAGE_ID> --metric <metrics>` | Page insights |
+| **Instagram** | `switchpost instagram insights <ACCOUNT_ID> --metric <metrics>` | Comma-separated metrics |
+| **LinkedIn page** | `switchpost linkedin-page analytics <PAGE_ID>` | Page analytics |
+| **LinkedIn followers** | `switchpost linkedin-page followers <PAGE_ID>` | Follower count |
+| **LinkedIn personal** | `switchpost linkedin analytics` | Profile analytics |
+| **Facebook** | `switchpost facebook insights <PAGE_ID> --metric <metrics>` | Page insights |
 
 **Instagram metrics** (comma-separated):
 - Day period: `reach`, `follower_count`, `online_followers`
@@ -214,14 +214,14 @@ social-forge mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","c
 
 | Platform | CLI Command |
 |----------|-------------|
-| **X like** | `social-forge x like <TWEET_ID>` |
-| **X retweet** | `social-forge x retweet <TWEET_ID>` |
-| **X bookmark** | `social-forge x bookmark <TWEET_ID>` |
-| **X delete** | `social-forge x delete <TWEET_ID>` |
-| **Reddit vote** | `social-forge reddit vote <THING_ID> up` or `down` |
-| **Reddit save** | `social-forge reddit save <THING_ID>` |
-| **Reddit unsave** | `social-forge reddit unsave <THING_ID>` |
-| **Reddit delete** | `social-forge reddit delete <THING_ID>` |
+| **X like** | `switchpost x like <TWEET_ID>` |
+| **X retweet** | `switchpost x retweet <TWEET_ID>` |
+| **X bookmark** | `switchpost x bookmark <TWEET_ID>` |
+| **X delete** | `switchpost x delete <TWEET_ID>` |
+| **Reddit vote** | `switchpost reddit vote <THING_ID> up` or `down` |
+| **Reddit save** | `switchpost reddit save <THING_ID>` |
+| **Reddit unsave** | `switchpost reddit unsave <THING_ID>` |
+| **Reddit delete** | `switchpost reddit delete <THING_ID>` |
 
 ---
 
@@ -229,11 +229,11 @@ social-forge mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","c
 
 | Command | Description |
 |---------|-------------|
-| `social-forge automation create <INTEGRATION_ID> "<name>" <TRIGGER_TYPE> "<response>" <RESPONSE_TYPE>` | Create rule (trigger: comment, dm, mention, follow; response: fixed, template, ai_generated) |
-| `social-forge automation list` | List all rules |
-| `social-forge automation update <RULE_ID> --name "<name>" --active true` | Update rule |
-| `social-forge automation delete <RULE_ID>` | Delete rule |
-| `social-forge automation logs <RULE_ID> --limit 50` | View execution logs |
+| `switchpost automation create <INTEGRATION_ID> "<name>" <TRIGGER_TYPE> "<response>" <RESPONSE_TYPE>` | Create rule (trigger: comment, dm, mention, follow; response: fixed, template, ai_generated) |
+| `switchpost automation list` | List all rules |
+| `switchpost automation update <RULE_ID> --name "<name>" --active true` | Update rule |
+| `switchpost automation delete <RULE_ID>` | Delete rule |
+| `switchpost automation logs <RULE_ID> --limit 50` | View execution logs |
 
 
 ---
@@ -242,28 +242,28 @@ social-forge mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","c
 
 | Platform | CLI Command | Subcommands |
 |----------|-------------|-------------|
-| **TikTok** | `social-forge tiktok <action>` | `profile`, `post`, `videos` |
-| **Threads** | `social-forge threads <action>` | `profile`, `list`, `post`, `reply`, `delete`, `insights` |
-| **Discord** | `social-forge discord <action>` | `channels`, `messages`, `send`, `server`, `forum` |
-| **Slack** | `social-forge slack <action>` | `channels`, `history`, `send`, `users` |
-| **Telegram Bot** | `social-forge telegram-bot <action>` | `send`, `photo`, `document`, `chat`, `updates` |
-| **Telegram User** | `social-forge telegram-user <action>` | `send`, `dialogs`, `contacts`, `search` |
-| **WhatsApp** | `social-forge whatsapp <action>` | `send`, `chats`, `contacts`, `groups`, `create-group`, `invite-link` |
-| **Pinterest** | `social-forge pinterest <action>` | `profile`, `board`, `pins`, `pin`, `search`, `board-analytics`, `pin-analytics` |
-| **GitHub** | `social-forge github <action>` | `me`, `my-repos`, `user`, `repos`, `issues`, `prs`, `create-issue`, `close-issue`, `commits`, `branches`, `search`, `releases` |
-| **WordPress** | `social-forge wordpress <action>` | `post`, `list`, `get`, `categories` |
-| **Hashnode** | `social-forge hashnode <action>` | `post`, `list`, `get` |
-| **Medium** | `social-forge medium-blog <action>` | `post`, `list`, `get` |
-| **Dev.to** | `social-forge devto <action>` | `post`, `list`, `get` |
-| **Skool** | `social-forge skool <action>` | `post`, `info`, `posts`, `comment` |
-| **Google (YouTube)** | `social-forge google <action>` | `youtube-search`, `video`, `playlists`, `channel-stats` |
-| **Google Drive** | `social-forge gdrive <action>` | `files`, `file`, `search`, `folders`, `metadata`, `export` |
-| **Google Calendar** | `social-forge gcal <action>` | `calendars`, `events`, `event`, `create`, `delete` |
-| **Gmail** | `social-forge gmail-ops <action>` | `profile`, `messages`, `message`, `send`, `labels`, `thread`, `search` |
-| **Webhooks** | `social-forge webhooks <action>` | `list`, `create`, `delete`, `get`, `update`, `test` |
-| **Notifications** | `social-forge notifications <action>` | `list`, `read`, `read-all`, `create` |
-| **Tags** | `social-forge tags <action>` | `list`, `create`, `delete`, `get`, `update` |
-| **Analytics** | `social-forge analytics <action>` | `get`, `post` |
+| **TikTok** | `switchpost tiktok <action>` | `profile`, `post`, `videos` |
+| **Threads** | `switchpost threads <action>` | `profile`, `list`, `post`, `reply`, `delete`, `insights` |
+| **Discord** | `switchpost discord <action>` | `channels`, `messages`, `send`, `server`, `forum` |
+| **Slack** | `switchpost slack <action>` | `channels`, `history`, `send`, `users` |
+| **Telegram Bot** | `switchpost telegram-bot <action>` | `send`, `photo`, `document`, `chat`, `updates` |
+| **Telegram User** | `switchpost telegram-user <action>` | `send`, `dialogs`, `contacts`, `search` |
+| **WhatsApp** | `switchpost whatsapp <action>` | `send`, `chats`, `contacts`, `groups`, `create-group`, `invite-link` |
+| **Pinterest** | `switchpost pinterest <action>` | `profile`, `board`, `pins`, `pin`, `search`, `board-analytics`, `pin-analytics` |
+| **GitHub** | `switchpost github <action>` | `me`, `my-repos`, `user`, `repos`, `issues`, `prs`, `create-issue`, `close-issue`, `commits`, `branches`, `search`, `releases` |
+| **WordPress** | `switchpost wordpress <action>` | `post`, `list`, `get`, `categories` |
+| **Hashnode** | `switchpost hashnode <action>` | `post`, `list`, `get` |
+| **Medium** | `switchpost medium-blog <action>` | `post`, `list`, `get` |
+| **Dev.to** | `switchpost devto <action>` | `post`, `list`, `get` |
+| **Skool** | `switchpost skool <action>` | `post`, `info`, `posts`, `comment` |
+| **Google (YouTube)** | `switchpost google <action>` | `youtube-search`, `video`, `playlists`, `channel-stats` |
+| **Google Drive** | `switchpost gdrive <action>` | `files`, `file`, `search`, `folders`, `metadata`, `export` |
+| **Google Calendar** | `switchpost gcal <action>` | `calendars`, `events`, `event`, `create`, `delete` |
+| **Gmail** | `switchpost gmail-ops <action>` | `profile`, `messages`, `message`, `send`, `labels`, `thread`, `search` |
+| **Webhooks** | `switchpost webhooks <action>` | `list`, `create`, `delete`, `get`, `update`, `test` |
+| **Notifications** | `switchpost notifications <action>` | `list`, `read`, `read-all`, `create` |
+| **Tags** | `switchpost tags <action>` | `list`, `create`, `delete`, `get`, `update` |
+| **Analytics** | `switchpost analytics <action>` | `get`, `post` |
 
 ---
 
@@ -272,9 +272,9 @@ social-forge mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","c
 When CLI doesn't have a command for what you need, use `mcp-call`:
 
 ```bash
-social-forge mcp-tools --pretty                    # List all 389 tools (bridge-accessible)
-social-forge mcp-tools --toolset x --pretty         # Only the X toolset (session-sizing; mirrors SOCIAL_FORGE_TOOLSETS filtering)
-social-forge mcp-call <tool_name> --args '{"key":"value"}' # Call any tool
+switchpost mcp-tools --pretty                    # List all 389 tools (bridge-accessible)
+switchpost mcp-tools --toolset x --pretty         # Only the X toolset (session-sizing; mirrors SWITCHPOST_TOOLSETS filtering)
+switchpost mcp-call <tool_name> --args '{"key":"value"}' # Call any tool
 ```
 
 | Category | Key MCP Tools |

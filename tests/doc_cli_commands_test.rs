@@ -1,5 +1,5 @@
 // ─── Doc-to-CLI guard ───────────────────────────────────────────────────
-// Every `social-forge …` command the agent skill, its references and the
+// Every `switchpost …` command the agent skill, its references and the
 // README show must parse under the real clap definitions. Agents copy these
 // lines verbatim, so a documented flag the CLI rejects is a silent failure
 // for every agent that reads the doc.
@@ -10,7 +10,7 @@
 // command substitution) are skipped rather than guessed at.
 
 use clap::Parser;
-use social_forge::cli::Cli;
+use switchpost::cli::Cli;
 use std::path::PathBuf;
 
 const PLACEHOLDER: &str = "00000000-0000-0000-0000-000000000001";
@@ -23,9 +23,9 @@ fn repo_path(rel: &str) -> PathBuf {
 fn docs() -> Vec<String> {
     let mut out = vec![
         "README.md".to_string(),
-        "skills/social-forge-agent/SKILL.md".to_string(),
+        "skills/switchpost-agent/SKILL.md".to_string(),
     ];
-    for entry in std::fs::read_dir(repo_path("skills/social-forge-agent/references"))
+    for entry in std::fs::read_dir(repo_path("skills/switchpost-agent/references"))
         .expect("read references")
     {
         let path = entry.expect("dir entry").path();
@@ -42,7 +42,7 @@ fn docs() -> Vec<String> {
     out
 }
 
-/// (1-based line, command text after `social-forge `) for each documented command.
+/// (1-based line, command text after `switchpost `) for each documented command.
 fn doc_commands(rel: &str) -> Vec<(usize, String)> {
     let text = std::fs::read_to_string(repo_path(rel)).expect("read doc");
     let mut out = Vec::new();
@@ -54,13 +54,13 @@ fn doc_commands(rel: &str) -> Vec<(usize, String)> {
             continue;
         }
         if in_fence {
-            if let Some(rest) = t.strip_prefix("social-forge ") {
+            if let Some(rest) = t.strip_prefix("switchpost ") {
                 out.push((idx + 1, rest.to_string()));
             }
         } else {
             // Inline code: odd-indexed segments between backticks.
             for span in t.split('`').skip(1).step_by(2) {
-                if let Some(rest) = span.strip_prefix("social-forge ") {
+                if let Some(rest) = span.strip_prefix("switchpost ") {
                     out.push((idx + 1, rest.to_string()));
                 }
             }
@@ -87,7 +87,12 @@ fn trim_shell(cmd: &str) -> Option<String> {
                 cut = i;
                 break;
             }
-            None if c == '&' && bytes.get(i + 1) == Some(&'&') => {
+            // `&&` is logical-and; a bare `&` backgrounds the command
+            // (`switchpost connect linkedin --wait --json &   # ...`).
+            // Both end the argv the test can parse. Only the double was
+            // modelled, so a backgrounded example reached the parser as
+            // `... --json &` and failed with "unexpected argument '&'".
+            None if c == '&' => {
                 cut = i;
                 break;
             }
@@ -166,7 +171,7 @@ fn fill_placeholders(cmd: &str) -> String {
 }
 
 #[test]
-fn every_documented_social_forge_command_parses() {
+fn every_documented_switchpost_command_parses() {
     let mut checked = 0usize;
     let mut failures = Vec::new();
     for doc in docs() {
@@ -184,7 +189,7 @@ fn every_documented_social_forge_command_parses() {
             if trimmed.is_empty() {
                 continue;
             }
-            let argv = std::iter::once("social-forge".to_string()).chain(tokenize(&trimmed));
+            let argv = std::iter::once("switchpost".to_string()).chain(tokenize(&trimmed));
             checked += 1;
             if let Err(e) = Cli::try_parse_from(argv) {
                 use clap::error::ErrorKind;
@@ -192,7 +197,7 @@ fn every_documented_social_forge_command_parses() {
                     continue;
                 }
                 let why = e.to_string().lines().next().unwrap_or_default().to_string();
-                failures.push(format!("{doc}:{line}: `social-forge {raw}` -> {why}"));
+                failures.push(format!("{doc}:{line}: `switchpost {raw}` -> {why}"));
             }
         }
     }

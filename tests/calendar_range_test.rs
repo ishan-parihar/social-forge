@@ -6,27 +6,27 @@
 // These tests seed rows directly and read them back through the query.
 //
 // Run: cargo test --test calendar_range_test
-// Uses the isolated test DB from `load_dotenv_for_tests` (never data/social-forge.db).
+// Uses the isolated test DB from `load_dotenv_for_tests` (never data/switchpost.db).
 
 use axum::body::Body;
 use axum::http::{header, Method, Request, StatusCode};
 use chrono::{DateTime, TimeZone, Utc};
 use serde_json::Value;
-use social_forge::api::{build_router, AppState};
-use social_forge::auth::jwt::create_token;
-use social_forge::auth::middleware::{DEFAULT_USER_ID, SESSION_COOKIE};
-use social_forge::config::Config;
-use social_forge::db;
-use social_forge::db::queries::get_calendar_posts_with_metrics;
-use social_forge::db::SqlitePool;
-use social_forge::realtime::Broadcaster;
-use social_forge::social::registry::ProviderRegistry;
+use switchpost::api::{build_router, AppState};
+use switchpost::auth::jwt::create_token;
+use switchpost::auth::middleware::{DEFAULT_USER_ID, SESSION_COOKIE};
+use switchpost::config::Config;
+use switchpost::db;
+use switchpost::db::queries::get_calendar_posts_with_metrics;
+use switchpost::db::SqlitePool;
+use switchpost::realtime::Broadcaster;
+use switchpost::social::registry::ProviderRegistry;
 use tower::ServiceExt;
 use uuid::Uuid;
 
 /// A full app state, for the tests that drive the real router.
 async fn router_state() -> AppState {
-    social_forge::config::load_dotenv_for_tests();
+    switchpost::config::load_dotenv_for_tests();
     let config = Config::from_env().expect("config");
     let db = db::create_pool(&config.database_url).await.expect("pool");
     db::ensure_local_user(&db).await.expect("local user");
@@ -45,7 +45,7 @@ async fn router_state() -> AppState {
 }
 
 async fn pool() -> SqlitePool {
-    social_forge::config::load_dotenv_for_tests();
+    switchpost::config::load_dotenv_for_tests();
     let config = Config::from_env().expect("config");
     let pool = db::create_pool(&config.database_url).await.expect("pool");
     db::ensure_local_user(&pool).await.expect("local user");
@@ -253,7 +253,7 @@ async fn the_last_day_of_the_range_is_included() {
 // per-post, and a garbage offset was swallowed by the day-key helper's
 // internal bound.
 
-use social_forge::mcp::tools_calendar::{CalendarInput, get_calendar};
+use switchpost::mcp::tools_calendar::{CalendarInput, get_calendar};
 
 #[tokio::test]
 async fn the_mcp_calendar_tool_refuses_an_unknown_zone_even_on_an_empty_range() {

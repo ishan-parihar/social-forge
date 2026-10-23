@@ -21,7 +21,7 @@
 //
 // Run: cargo test --test counting_rule_test
 
-use social_forge::social::{weighted_length, CountingRule};
+use switchpost::social::{weighted_length, CountingRule};
 
 /// The composer's `countFor` for the plain rule, transcribed.
 ///

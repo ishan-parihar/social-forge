@@ -112,7 +112,7 @@ fn d1_documented_tool_counts_match_registry() {
         "AGENTS.md must state the true MCP tool count ({count} MCP tools)"
     );
     let providers = std::fs::read_to_string(repo_path(
-        "skills/social-forge-agent/references/providers.md",
+        "skills/switchpost-agent/references/providers.md",
     ))
     .unwrap();
     assert!(
@@ -133,7 +133,7 @@ fn d1_documented_tool_counts_match_registry() {
 #[test]
 fn d1_documented_cli_command_count_matches_clap() {
     use clap::CommandFactory;
-    let commands = social_forge::cli::Cli::command()
+    let commands = switchpost::cli::Cli::command()
         .get_subcommands()
         .filter(|c| c.get_name() != "help")
         .count();
@@ -186,7 +186,7 @@ fn d2_tool_schema_shape() {
 #[test]
 fn d3_documented_per_platform_counts_match_registry() {
     let providers = std::fs::read_to_string(repo_path(
-        "skills/social-forge-agent/references/providers.md",
+        "skills/switchpost-agent/references/providers.md",
     ))
     .expect("read providers.md");
 

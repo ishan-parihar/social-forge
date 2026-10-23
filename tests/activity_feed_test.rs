@@ -9,25 +9,25 @@
 //      and a hole in that join leaks another user's rows.
 //
 // Run: cargo test --test activity_feed_test
-// Uses the isolated test DB from `load_dotenv_for_tests` (never data/social-forge.db).
+// Uses the isolated test DB from `load_dotenv_for_tests` (never data/switchpost.db).
 
 use axum::body::Body;
 use axum::http::header;
 use axum::http::{Method, Request, StatusCode};
 use serde_json::Value;
-use social_forge::api::{activity, build_router, AppState};
-use social_forge::auth::jwt::create_token;
-use social_forge::auth::middleware::{DEFAULT_USER_ID, SESSION_COOKIE};
-use social_forge::config::Config;
-use social_forge::db;
-use social_forge::db::SqlitePool;
-use social_forge::realtime::Broadcaster;
-use social_forge::social::registry::ProviderRegistry;
+use switchpost::api::{activity, build_router, AppState};
+use switchpost::auth::jwt::create_token;
+use switchpost::auth::middleware::{DEFAULT_USER_ID, SESSION_COOKIE};
+use switchpost::config::Config;
+use switchpost::db;
+use switchpost::db::SqlitePool;
+use switchpost::realtime::Broadcaster;
+use switchpost::social::registry::ProviderRegistry;
 use tower::ServiceExt;
 use uuid::Uuid;
 
 async fn state() -> AppState {
-    social_forge::config::load_dotenv_for_tests();
+    switchpost::config::load_dotenv_for_tests();
     let config = Config::from_env().expect("config");
     let pool = db::create_pool(&config.database_url).await.expect("pool");
     db::ensure_local_user(&pool).await.expect("local user");
@@ -200,7 +200,7 @@ async fn feed_rows(state: &AppState, user_id: Uuid) -> Vec<Value> {
         provider: None,
         before: None,
     };
-    let auth = social_forge::auth::middleware::AuthenticatedUser { user_id };
+    let auth = switchpost::auth::middleware::AuthenticatedUser { user_id };
     let res = activity::list(
         axum::extract::State(state.clone()),
         auth,
