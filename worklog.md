@@ -2150,3 +2150,46 @@ Verification:
 
 Not done (operator's to do, named in §9 step 1): claim switchpost.com/.dev and rename
 the GitHub repo; crates.io was HTTP 403 throughout (UNKNOWN, not free).
+
+---
+Task ID: N-1-post-rename-audit
+Agent: jcode
+Task: Re-verify the executed rename against the evidence; correct anything stale or
+overstated; continue the work.
+
+Verification of state (all confirmed by measurement, not memory):
+- git local HEAD == github/master == af53a7e, 0 ahead / 0 behind. Nothing uncommitted.
+- ./target/release/switchpost 0.3.0 running on 127.0.0.1:6544 against
+  data/switchpost.db. Health 200, unauth /api/providers 401. integrity ok, 3 integrations.
+- ~/.switchpost/.env live, ~/.social-forge retired. .env (gitignored) on data/switchpost.db.
+- cargo test --lib 496/496; docs_lint 0 hard / 0 advisory.
+
+Corrections made to overstated/stale claims:
+- The decision doc's status key still said "execution is in progress" and §9 still said
+  "(deliberately not applied)" in spirit. Both now read EXECUTED, with the commit list.
+- The intro said "the rename is executing"; now records the five commits.
+
+Two NEW defects found in the LOCAL INSTALL (which no git ls-files sweep can see, §9.3):
+1. `make install-skill` copied four reference docs while the skill ships five.
+   `quick-reference.md` was never installed, yet SKILL.md and docs/PAGE-INDEX.md both
+   point at it. Pre-dates the rename (the Oct 21 install had the same gap); the rename
+   just forced the target to be re-run and re-read. Fixed by copying `references/*.md`
+   rather than a hardcoded list.
+2. A stale `~/.agents/skills/social-forge-agent` (Oct 21, 143 bytes smaller, missing the
+   same reference). Archived to ~/.agents/skills-archive-switchpost-2026-10-23/ and the
+   live install re-run, so ~/.agents/skills/ holds exactly one skill dir.
+
+New test tests/skill_install_test.rs (2 tests), and both MUTATION-VERIFIED rather than
+merely passing:
+- Mutation 1: restored the hardcoded 4-file list -> install_skill_copies_every_reference
+  FAILED naming exactly ["quick-reference.md"].
+- Mutation 2: renamed a link in SKILL.md -> every_reference_doc_links_to_exists FAILED.
+- Both restored -> 2/2 pass. A test that has never been seen to fail proves nothing.
+
+Also fixed three bugs in my own test before it could be believed: recipe lines are
+`@`-silenced so `strip_prefix("cp ")` never matched; the join needed `references/`
+re-attached after strip_prefix; and clippy denies `&PathBuf` for a parameter.
+
+Left for the operator (unchanged, named in §9 step 1): claim switchpost.com/.dev and
+rename the GitHub repo ishan-parihar/social-forge -> switchpost; crates.io returned 403
+throughout, so crate-name availability remains UNKNOWN rather than free.

@@ -1,13 +1,14 @@
 # Decision: project name — N-1
 
-Status key: **APPROVED** = the user has accepted the recommendation and the execution is in
-progress; sections below are updated to match the approved plan rather than the original
-recommendation.
+Status key: **EXECUTED** = the rename has been carried out and is live; the analysis below is
+kept intact, and §9 is the record of what actually ran, including the two things it got wrong
+and the three things it could not predict.
 
 Companion analysis to the competitor red-team below. **The user approved `switchpost` on
-2026-10-23 and the rename is executing**, so this file is now both the analysis and the
-running record. One change was made to the original recommendation on approval: **no
-compatibility shim.** See §9.1 for what that costs and why the trade is right at 0 stars.
+2026-10-23 and the rename ran to completion the same day** (`e2c0fd1` plan, `4c6a6eb`
+code+tests+skill, `54ecd28` docs+ops, `f757a5e` fence fix, `af53a7e` leftovers). One change was
+made to the original recommendation on approval: **no compatibility shim.** See §9.1 for what
+that costs and why the trade is right at 0 stars.
 
 ---
 
@@ -307,7 +308,7 @@ Atlas discipline: the falsifier that would prove the selection wrong.
 
 ---
 
-## 9. The execution sequence (APPROVED: direct rename, no shim)
+## 9. The execution sequence (EXECUTED 2026-10-23: direct rename, no shim)
 
 Ordered so that nothing irreversible happens before the reversible work is verified. Each step
 is a separate commit, per AGENTS.md §4.1. The user approved this sequence on 2026-10-23 with
@@ -415,6 +416,29 @@ path was the only one being written (the old file's mtime stopped advancing).
 Retired old paths, each with a dated backup beside it: `data/social-forge.db{,-wal,-shm}`,
 `social-forge.writer.lock`, `social-forge.migrate.lock`, `social-forge.db.audit-backup`, and
 `~/.social-forge/.env`.
+
+### 9.3 What the rename found in the local install (not the repo)
+
+The repo tracks the skill source; `make install-skill` copies it into `~/.agents/skills/`. Two
+things lived only on the deployment side, so no `git ls-files` sweep could see them:
+
+1. **`install-skill` copied four files while the skill ships five.** `SKILL.md` plus four
+   reference docs are in `skills/switchpost-agent/references/`, and the target named each
+   reference individually — omitting `quick-reference.md`, which `SKILL.md` itself and
+   `docs/PAGE-INDEX.md` both point at. So the installed skill referenced a document the agent
+   could not open. This predates the rename (the pre-rename install had the same gap); the
+   rename merely forced the target to be re-run and re-read. Fixed by copying
+   `references/*.md` instead of a hardcoded list, so a new reference can never be silently
+   dropped again — the same "one implementation per rule" discipline AGENTS.md §9.18 asks for,
+   applied to a Makefile.
+2. **A stale install at `~/.agents/skills/social-forge-agent`** from before the rename, 143
+   bytes smaller and missing the same reference doc. Archived to
+   `~/.agents/skills-archive-switchpost-2026-10-23/` rather than deleted, and the live install
+   re-run so `~/.agents/skills/` now holds exactly one skill directory.
+
+A rename that sweeps tracked files renames the repository. The deployment is the repository
+plus whatever is already on the operator's disk, and that half is what both §9.2 (`.env`) and
+§9.3 (installed skill) are about.
 
 ### The rename cost, stated plainly
 

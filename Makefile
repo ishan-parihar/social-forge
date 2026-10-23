@@ -162,12 +162,15 @@ logs:
 	journalctl -u $(APP_NAME) -n 50 --no-pager -f
 
 # ── Install AI Agent Skill ──────────────────────────────────────
+# Copy every reference, not a hardcoded list: adding a reference doc without
+# touching this target used to leave it silently uninstalled, and the docs that
+# point at it (SKILL.md, PAGE-INDEX) then referenced a file the agent could not read.
 install-skill:
 	@mkdir -p $(SKILL_DEST)/references
 	@cp $(SKILL_SRC)/SKILL.md $(SKILL_DEST)/SKILL.md
-	@cp $(SKILL_SRC)/references/providers.md $(SKILL_DEST)/references/providers.md
-	@cp $(SKILL_SRC)/references/platform-matrices.md $(SKILL_DEST)/references/platform-matrices.md
-	@cp $(SKILL_SRC)/references/recipes-extended.md $(SKILL_DEST)/references/recipes-extended.md
+	@cp $(SKILL_SRC)/references/*.md $(SKILL_DEST)/references/
+	@for f in $(SKILL_SRC)/references/*.md; do \
+	   printf '  → %s\n' "$$(basename $$f)"; done
 	@echo "✓ Installed skill to $(SKILL_DEST)"
 
 # ── Auto-watch (requires cargo-watch) ──────────────────────────
