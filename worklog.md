@@ -2253,3 +2253,19 @@ Stage Summary:
   here with `repo`/`workflow` scopes, so the rename is available but not authorised.
 - Method note carried forward: an availability claim is worthless without its
   control, and UNKNOWN is the honest value for a probe that returned an error.
+
+Feasibility of the one remaining operator action, measured (not assumed) 2026-10-23:
+  gh repo view ishan-parihar/social-forge  -> PUBLIC, isFork=false, stars=0, forks=0
+  gh repo view ishan-parihar/switchpost    -> does not exist (name is free)
+  gh auth status                            -> account ishan-parihar, scopes repo+workflow
+So the rename is available to this environment and costs nothing to reverse (GitHub
+permanently redirects the old owner/name path). It was NOT executed: renaming a
+public repo changes the user's online identity and outbound URL, which is the user's
+call, not an agent's.
+
+One-command handoff for the user, when ready:
+  gh repo rename switchpost --repo ishan-parihar/social-forge --yes
+
+That completes the rename end to end. Every badge, image and CI badge URL in the
+README already points at ishan-parihar/switchpost, so they resolve the moment the
+rename lands; until then they 404, and that is the ONLY outstanding breakage.
