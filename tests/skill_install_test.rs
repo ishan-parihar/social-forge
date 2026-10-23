@@ -109,6 +109,28 @@ fn install_skill_copies_every_reference_the_skill_ships() {
         skill_copied,
         "make install-skill does not copy SKILL.md; the installed skill would have no entrypoint"
     );
+
+    // And the reference copy must land in the installed skill's references/
+    // dir. A typo (`refernces/`) installs nothing an agent can reach, and every
+    // check above still passes, because they read the SOURCE side of the cp.
+    let ref_lines: Vec<&String> = lines.iter().filter(|l| l.contains("references")).collect();
+    assert!(
+        !ref_lines.is_empty(),
+        "make install-skill never copies references/ at all"
+    );
+    for l in ref_lines.iter().copied() {
+        let dest = l.split_whitespace().last().unwrap_or("");
+        let leaf = std::path::Path::new(dest.trim_end_matches('/'))
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        assert!(
+            leaf == "references",
+            "make install-skill copies references into {dest:?}, whose final path element is \
+             {leaf:?} rather than `references`. The installed skill would still copy files, but \
+             not to the directory SKILL.md's links resolve against."
+        );
+    }
 }
 
 /// The docs that describe the skill must point at files that exist in it, so a

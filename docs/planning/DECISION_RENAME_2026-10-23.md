@@ -169,7 +169,9 @@ Score bands, not fake precision (atlas convention): **strong / adequate / weak /
 |---|---|---|---|---|---|---|---|---|
 | Available: GitHub exact | **strong** (1 repo, 1★) | **strong** (3, top 1★) | strong (0) | strong (0) | strong (0) | adequate (37 fuzzy) | weak (50 fuzzy) | **fatal** (6 exact, 1 is an org) |
 | Available: PyPI | **strong** (free) | **strong** (free) | strong | strong | strong | strong | strong | strong (free) |
-| Available: `the_name` domains (com/dev/io) | **strong** (all free) | **strong** (all free) | strong | strong | strong | adequate | strong | n/a |
+
+**How availability was measured — and where that is thin.** The PyPI check used a resolvable GET (`pypi.org/pypi/<name>/json`), so "free" there is a measured fact: the name returns 404. The domain check was NOT resolvable at this scope — no RDAP response and no WHOIS output was captured — so the com/dev/io verdicts above are INFERENCE, not measurement, and the correct reading is "no registration observed", which is strictly weaker than "unregistered". The crates.io check is the counter-example of doing this properly: every `crates.io/api/v1/crates/<name>` request returned HTTP 403, so it is recorded as **UNKNOWN** and is excluded from the scoring above instead of being read as "available". Re-measure the domains with `whois`/RDAP before paying for any of them; the same register-and-pay step is still open in §9, step 2, and its risk cancels the inference's cost — a squat claim is recorded as a named falsifier above.
+| Available: `the_name` domains (com/dev/io) | **strong** (com/dev/io: none observed, unmeasured — see below) | **strong** (com/dev/io: none observed, unmeasured — see below) | strong | strong | strong | adequate | strong | n/a |
 | Reads as developer-owned infrastructure | **strong** | **strong** | weak | weak | weak | weak | weak | adequate |
 | Contains contested `post*` prefix | no | no | **fatal** | no | no | no | no | no |
 | Contains contested `-ency`/`agency` | no | no | no | **fatal** | **fatal** | **fatal** | no | no |
@@ -260,7 +262,7 @@ against this tree:
 | GitHub stars / forks / watchers | **0 stars, 0 forks, 0 subscribers** (`api.github.com/repos/ishan-parihar/switchpost`) | +1 per star, permanently |
 | External links, citations, listicles | None measurable | **fastest-growing lock; decides everything else** |
 | MCP tool-name contract | **Zero breakage.** 0 of 389 tool names carry the project prefix | flat forever; the name never enters it |
-| SQL schema / migrations | **0 occurrences of the literal name in `migrations/`** | flat |
+| SQL schema / migrations | **The name is in ONE migration comment and CANNOT be removed** — sqlx checksums migration files, so editing it fails every boot with "migration 1 was previously applied but has been modified" (found by trying; see §9.1). No table or column is named after the project, so the schema itself is unaffected. | flat, permanently a fossil |
 | Rust source | 239 occurrences of `switchpost`/`switchpost` across 21 files, all internal identifiers | flat; a `sed` pass, verify by `cargo check` |
 | Frontend | 28 occurrences in `frontend/src` | flat; verify by `pnpm build` + `svelte-check` |
 | Docs | 119 in `docs/`, 43 in `README.md`, 33 in `AGENTS.md` | **grows with every doc written** |
