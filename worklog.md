@@ -2034,3 +2034,45 @@ Stage Summary:
 - Full make audit on the clean DB: FAIL 0 everywhere (probe 216 visits, targets, contrast x2 themes, dialogs, analytics 0 failures, e2e drag 0 failures, state-hunt, Month/List/Day/login probes). Only pre-existing 44px tap-target WARNs on filter chips.
 - Live proofs: connect x -> _ishanparihar; connect reddit -> d3vilzwrld; x timeline 113 entries; posts publish authenticated to X's API (X answered quota-344, a real-account-only response). connect linkedin --wait detected a credential landing at 8s end-to-end.
 - Known issues: X account is at its daily tweet limit (publish auth proven, live tweet deferred); LinkedIn OAuth app redirect_uri registered for a different port (6543 vs 6544) — fix in the LinkedIn developer console or run on the registered port; reddit browse hits Reddit's www-edge bot policy (User-Agent policy, credential itself valid).
+
+---
+Task ID: N-1-project-rename
+Agent: jcode
+Task: Red-team the four candidate project names (sophp/sofo, sogency/sociagency, pogency, frogso)
+against active competitors; propose the optimal name; blueprint the README/docs restructure for
+maximum go-to-market impact. Applied the mental-model-atlas frameworks to the decision.
+
+Frameworks applied (selection protocol, layer-to-family map, no playbook matched):
+- time-and-dynamics/**Path dependence** — what does the past lock in, and which locks are worth breaking.
+- strategy-and-organization/**Strategy kernel** — diagnosis, one guiding policy with an exclusion, coherent actions.
+- language-and-measure/**Prototype theory** + **conceptual blending** — categorization by central example.
+Reconcile rule: path-dependence dominance. It decides *when* the move is cheap (now, at 0 stars);
+strategy and language decide *which* move inside that window.
+
+Measurements (all re-runnable; see the decision doc):
+- gitroomhq/postiz-app = **37,594 stars**, repo description literally "the ultimate agentic social
+  media scheduling tool". It has shipped an MCP server + CLI + ClawHub skill. postmcp.dev is a
+  second MCP-native entrant. Our headline differentiator (CLI+REST+MCP) is now table stakes.
+- THIS REPO = **0 stars, 0 forks, 0 subscribers**. The rename lock is at its cheapest.
+- 0 of 389 MCP tool names carry the project prefix (all provider-scoped `x_*`, `posts_*`, ...),
+  so a rename cannot break a single agent integration. 0 occurrences in migrations/.
+- Literal-name blast radius: 239 Rust (21 files), 28 frontend, 413 skills/, 119 docs/, 43 README,
+  33 AGENTS.md, 81 scripts/systemd/Makefile, 26 .env/config defaults.
+- Exact-name GitHub collisions: social-forge 6, herald 53, towncrier 38, dispatch 37, outpost 62,
+  kestrel 55, imprint 71, pigeonpost 10, majordomo 3, ringmaster 4, signalbox 70, troupe 6.
+- switchpost: 1 exact repo at 1 star, PyPI free, {com,dev,io}.com all unregistered.
+- forgeway: 3 exact repos top 1 star, PyPI free, all three domains unregistered.
+- UNKNOWN (recorded, not assumed): crates.io returned HTTP 403 on every query from this
+  environment; USPTO TESS needs a key. npm returned 200 (taken) for every dictionary word.
+
+Decision doc written: **docs/planning/DECISION_RENAME_2026-10-23.md** — the red-team of all four
+candidates, the scored field, the two finalists, the falsifier, the priced rename ledger, the
+execution sequence, and the README restructure blueprint keyed to four user archetypes.
+
+Stage Summary:
+- All four of the user's candidates are rejected, each for a distinct structural reason
+  (post* warzone / social* SaaS saturation / -ency agency-stem anti-team / meaningless scramble).
+- Recommended **switchpost**; alternative **forgeway**; method given to generate `switchbay`,
+  `relaypost`, `carrierpost` as backups.
+- NOTHING has been renamed. This is a decision doc awaiting the user's explicit go-ahead (the
+  AGENTS.md DECISIONS precedent). No code, config, or doc has been modified.
