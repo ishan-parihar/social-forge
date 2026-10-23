@@ -2351,3 +2351,47 @@ Stage Summary:
   keyed per binary is not isolated per run; the served page beats the source;
   and a grep that reports many hits is worth re-checking before believing any
   of them.
+
+---
+Task ID: validation-closure-2026-10-23
+Agent: Jcode
+Task: Close the validation pass. Every gate, then the served page.
+
+Work Log:
+1. Full suite, second time, after the four fixes: 854 passed, 0 failed, EXIT=0,
+   across 50 test binaries. surface_docs_audit 4/4 EXIT=0. svelte-check 0
+   errors, 0 warnings, EXIT=0.
+
+2. Rebuilt the release binary and restarted the server, then measured the
+   SERVED page rather than the source, because that is the check that was
+   missing:
+   - `curl -k https://127.0.0.1:6544/` -> <title>Switchpost</title>
+   - 0 occurrences of "Social Forge" in the served HTML
+   - the served preview chunk (0.7lAk4s3p.js) carries r/switchpost once and
+     socialforge zero times, counted directly rather than through a shell
+     conditional that inverted
+   - /health 200, /ready 200 with database:true, /api/posts 401
+
+3. Committed as 101b7f3 and pushed to github/master.
+
+A note on my own measurement errors in this pass, because each one nearly
+produced a false conclusion:
+- I reported the installed skill as DRIFTED when the compared path was a
+  literal unexpanded `references/*.md`, not a file.
+- I reported 16 planning docs as missing their PAGE-INDEX row on a grep
+  pattern that could not match rows carrying a directory prefix.
+- I reported `r/socialforge` as still live in the served chunk, from a
+  `grep && echo STALE || echo clean` where the first grep had already
+  succeeded, so the failure branch printed. Counted directly: zero.
+Each was corrected by re-measuring, and each correction is in the worklog
+rather than quietly dropped.
+
+Stage Summary:
+- 4 defects fixed (1 test fixture, 2 doc/count strings, 1 over-length tool
+  description) plus the 2 rename-at-runtime misses (served title, demo
+  subreddit). All 6 verified closed on the gates that exposed them.
+- Pitfalls 9.52 and 9.53 added to AGENTS.md with the evidence and the commands.
+- Committed 101b7f3, pushed; local and remote match; tree clean.
+- Still the operator's: `gh repo rename switchpost --repo
+  ishan-parihar/social-forge --yes` (measured available, deliberately not run
+  by me), after which the README badges resolve.
