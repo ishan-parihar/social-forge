@@ -1586,8 +1586,14 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 })
                 .collect();
             let app_url = &state.config.app_url;
+            // An auth_url without configured client credentials 400s on
+            // /api/public/connect — an agent following it hits a dead end.
+            // Report the missing env vars instead, like the other OAuth arms.
+            let configured = state.config.provider_credentials("linkedin").is_some();
             output_json(&serde_json::json!({
-                "status": if connected.is_empty() { "not_connected" } else { "already_connected" },
+                "status": if !connected.is_empty() { "already_connected" }
+                    else if configured { "not_connected" }
+                    else { "not_configured" },
                 "provider": provider,
                 "count": connected.len(),
                 "accounts": connected.iter().map(|i| serde_json::json!({
@@ -1596,8 +1602,15 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                     "type": i.provider_identifier,
                 })).collect::<Vec<_>>(),
                 "method": "oauth",
-                "auth_url": format!("{}/api/public/connect/{}", app_url, provider),
-                "hint": "Open the auth_url in a browser to complete OAuth authorization.",
+                "auth_url": if configured { serde_json::Value::from(format!("{}/api/public/connect/{}", app_url, provider)) } else { serde_json::Value::Null },
+                "requires": if configured { serde_json::Value::Null } else { serde_json::json!(["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"]) },
+                "hint": if connected.is_empty() && configured {
+                    "Open the auth_url in a browser to complete OAuth authorization."
+                } else if connected.is_empty() {
+                    "Set LINKEDIN_CLIENT_ID + LINKEDIN_CLIENT_SECRET in ~/.social-forge/.env, restart the server, then connect again."
+                } else {
+                    "Already connected."
+                },
             }));
         }
         "facebook" | "instagram" | "instagram-standalone" => {
@@ -1607,8 +1620,12 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 .filter(|i| i.provider_identifier == provider && is_credential_row(i))
                 .collect();
             let app_url = &state.config.app_url;
+            // Same gate as linkedin: no client creds, no auth_url.
+            let configured = state.config.provider_credentials(provider).is_some();
             output_json(&serde_json::json!({
-                "status": if connected.is_empty() { "not_connected" } else { "already_connected" },
+                "status": if !connected.is_empty() { "already_connected" }
+                    else if configured { "not_connected" }
+                    else { "not_configured" },
                 "provider": provider,
                 "count": connected.len(),
                 "accounts": connected.iter().map(|i| serde_json::json!({
@@ -1616,8 +1633,15 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                     "internal_id": i.internal_id,
                 })).collect::<Vec<_>>(),
                 "method": "oauth",
-                "auth_url": format!("{}/api/public/connect/{}", app_url, provider),
-                "hint": "Open the auth_url in a browser to complete OAuth authorization.",
+                "auth_url": if configured { serde_json::Value::from(format!("{}/api/public/connect/{}", app_url, provider)) } else { serde_json::Value::Null },
+                "requires": if configured { serde_json::Value::Null } else { serde_json::json!(["FACEBOOK_CLIENT_ID", "FACEBOOK_CLIENT_SECRET"]) },
+                "hint": if connected.is_empty() && configured {
+                    "Open the auth_url in a browser to complete OAuth authorization."
+                } else if connected.is_empty() {
+                    "Set FACEBOOK_CLIENT_ID + FACEBOOK_CLIENT_SECRET in ~/.social-forge/.env, restart, then connect again."
+                } else {
+                    "Already connected."
+                },
             }));
         }
 
@@ -1636,12 +1660,111 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 output_json(
                     &serde_json::json!({"status": "already_connected", "provider": "bluesky", "count": existing.len()}),
                 );
-            } else if state.config.bluesky_handle.is_some()
-                && state.config.bluesky_app_password.is_some()
-            {
-                output_json(
-                    &serde_json::json!({"status": "configured", "provider": "bluesky", "method": "env_vars", "hint": "BLUESKY_HANDLE + BLUESKY_APP_PASSWORD are set. The provider will connect automatically on first use."}),
-                );
+            } else if let (Some(handle), Some(app_pw)) = (
+                state.config.bluesky_handle.as_deref().filter(|h| !h.is_empty()),
+                state
+                    .config
+                    .bluesky_app_password
+                    .as_deref()
+                    .filter(|p| !p.is_empty()),
+            ) {
+                // Eager connect: create a session with the app password and
+                // store the accessJwt + did as the integration row — the
+                // MCP/CLI tools read the row's access_token as the SESSION
+                // JWT (they do not fall back to env config), so a real
+                // session is what makes them work.
+                let client = reqwest::Client::new();
+                let resp = client
+                    .post("https://bsky.social/xrpc/com.atproto.server.createSession")
+                    .json(&serde_json::json!({
+                        "identifier": handle,
+                        "password": app_pw,
+                    }))
+                    .send()
+                    .await;
+                match resp {
+                    Ok(r) if r.status().as_u16() == 200 => {
+                        match r.json::<serde_json::Value>().await {
+                            Ok(session) => {
+                                let jwt = session["accessJwt"].as_str().unwrap_or("");
+                                let did = session["did"].as_str().unwrap_or("").to_string();
+                                let handle_owned = session["handle"].as_str().unwrap_or(handle).to_string();
+                                let display = session["email"]
+                                    .as_str()
+                                    .or(session["handle"].as_str())
+                                    .unwrap_or(handle);
+                                if jwt.is_empty() || did.is_empty() {
+                                    output_json(&serde_json::json!({
+                                        "status": "error",
+                                        "provider": "bluesky",
+                                        "error": "createSession returned no accessJwt/did",
+                                        "hint": "Check BLUESKY_HANDLE + BLUESKY_APP_PASSWORD in ~/.social-forge/.env",
+                                    }));
+                                } else {
+                                    crate::db::queries::create_integration(
+                                        &state.db,
+                                        user_id,
+                                        "bluesky",
+                                        "Bluesky",
+                                        &did,
+                                        jwt,
+                                        None,
+                                        None,
+                                        Some(display),
+                                        None,
+                                        None,
+                                        None,
+                                        Some("app_password"), // §6: explicit auth_mode
+                                    )
+                                    .await?;
+                                    // Bluesky sessions are short-lived;
+                                    // refresh_token re-creates one from the
+                                    // env BLUESKY_HANDLE/APP_PASSWORD, so no
+                                    // extra meta is stored here.
+                                    let seeds = crate::db::queries::delete_seed_integrations(
+                                        &state.db, user_id, "bluesky",
+                                    )
+                                    .await
+                                    .unwrap_or(0);
+                                    output_json(&serde_json::json!({
+                                        "status": "connected",
+                                        "provider": "bluesky",
+                                        "method": "env-app-password",
+                                        "source": "BLUESKY_HANDLE+BLUESKY_APP_PASSWORD",
+                                        "name": display,
+                                        "handle": handle_owned,
+                                        "id": did,
+                                        "seed_rows_replaced": seeds,
+                                    }));
+                                }
+                            }
+                            Err(e) => {
+                                output_json(&serde_json::json!({
+                                    "status": "error",
+                                    "provider": "bluesky",
+                                    "error": format!("createSession response unreadable: {e}"),
+                                }));
+                            }
+                        }
+                    }
+                    Ok(r) => {
+                        let status = r.status().as_u16();
+                        let body = r.text().await.unwrap_or_default();
+                        output_json(&serde_json::json!({
+                            "status": "error",
+                            "provider": "bluesky",
+                            "error": format!("createSession HTTP {status}: {}", body.chars().take(200).collect::<String>()),
+                            "hint": "Check BLUESKY_HANDLE + BLUESKY_APP_PASSWORD (an app password, not the account password) in ~/.social-forge/.env",
+                        }));
+                    }
+                    Err(e) => {
+                        output_json(&serde_json::json!({
+                            "status": "error",
+                            "provider": "bluesky",
+                            "error": format!("createSession request failed: {e}"),
+                        }));
+                    }
+                }
             } else {
                 output_json(
                     &serde_json::json!({"status": "not_configured", "provider": "bluesky", "requires": ["BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"], "hint": "Set these in ~/.social-forge/.env. Get an app password at Bluesky Settings > Advanced > App Passwords."}),
@@ -1657,10 +1780,63 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 output_json(
                     &serde_json::json!({"status": "already_connected", "provider": "github"}),
                 );
-            } else if state.config.github_token.is_some() {
-                output_json(
-                    &serde_json::json!({"status": "configured", "provider": "github", "method": "env_vars", "hint": "GITHUB_TOKEN is set. The provider will connect automatically on first use."}),
-                );
+            } else if let Some(token) = state
+                .config
+                .github_token
+                .as_deref()
+                .filter(|t| !t.is_empty())
+            {
+                // Eager connect: validate the PAT against the live API and
+                // create the row NOW, so 'connect github' is a complete
+                // step for an agent (not a promise that something will
+                // happen "on first use").
+                let provider_obj = crate::social::github::GithubProvider::new(&state.config);
+                match provider_obj.get_authenticated_user(token).await {
+                    Ok(user) => {
+                        let login = user["login"].as_str().unwrap_or("github-user");
+                        let id = user["id"].as_i64().map(|v| v.to_string()).unwrap_or_default();
+                        let avatar = user["avatar_url"].as_str();
+                        let name = user["name"].as_str().unwrap_or(login);
+                        crate::db::queries::create_integration(
+                            &state.db,
+                            user_id,
+                            "github",
+                            "GitHub",
+                            &id,
+                            token,
+                            None,
+                            None,
+                            Some(name),
+                            None,
+                            avatar,
+                            None,
+                            Some("token"), // §6: explicit auth_mode
+                        )
+                        .await?;
+                        let seeds =
+                            crate::db::queries::delete_seed_integrations(&state.db, user_id, "github")
+                                .await
+                                .unwrap_or(0);
+                        output_json(&serde_json::json!({
+                            "status": "connected",
+                            "provider": "github",
+                            "method": "env-token",
+                            "source": "GITHUB_TOKEN",
+                            "name": name,
+                            "username": login,
+                            "id": id,
+                            "seed_rows_replaced": seeds,
+                        }));
+                    }
+                    Err(e) => {
+                        output_json(&serde_json::json!({
+                            "status": "error",
+                            "provider": "github",
+                            "error": format!("GITHUB_TOKEN validation failed: {e}"),
+                            "hint": "Check the PAT at https://github.com/settings/tokens and refresh GITHUB_TOKEN in ~/.social-forge/.env",
+                        }));
+                    }
+                }
             } else {
                 output_json(
                     &serde_json::json!({"status": "not_configured", "provider": "github", "requires": ["GITHUB_TOKEN"], "hint": "Create a PAT at https://github.com/settings/tokens and set GITHUB_TOKEN in ~/.social-forge/.env"}),
@@ -1676,10 +1852,84 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 output_json(
                     &serde_json::json!({"status": "already_connected", "provider": "telegram-bot"}),
                 );
-            } else if state.config.telegram_bot_tokens.is_some() {
-                output_json(
-                    &serde_json::json!({"status": "configured", "provider": "telegram-bot", "method": "env_vars", "hint": "TELEGRAM_BOT_TOKENS is set. The provider will connect automatically on first use."}),
-                );
+            } else if let Some(tokens) = state
+                .config
+                .telegram_bot_tokens
+                .as_deref()
+                .filter(|t| !t.is_empty())
+            {
+                // Eager connect: validate the FIRST bot token via getMe and
+                // create the row now (the multi-bot registry still reads
+                // TELEGRAM_BOT_TOKENS; the row makes the dashboard show it).
+                let first = tokens.split(',').next().unwrap_or("").trim();
+                let client = reqwest::Client::new();
+                match client
+                    .get(format!("https://api.telegram.org/bot{first}/getMe"))
+                    .send()
+                    .await
+                {
+                    Ok(r) => {
+                        let status = r.status().as_u16();
+                        let body = r.text().await.unwrap_or_default();
+                        let ok = status == 200
+                            && serde_json::from_str::<serde_json::Value>(&body)
+                                .ok()
+                                .and_then(|v| v["ok"].as_bool())
+                                .unwrap_or(false);
+                        if ok {
+                            let me = serde_json::from_str::<serde_json::Value>(&body)
+                                .ok()
+                                .and_then(|v| v["result"].clone().into())
+                                .unwrap_or_default();
+                            let username = me["username"].as_str().unwrap_or("telegram-bot");
+                            let id = me["id"].as_i64().map(|v| v.to_string()).unwrap_or_default();
+                            crate::db::queries::create_integration(
+                                &state.db,
+                                user_id,
+                                "telegram-bot",
+                                "Telegram",
+                                &id,
+                                first,
+                                None,
+                                None,
+                                Some(username),
+                                None,
+                                None,
+                                None,
+                                Some("bot_token"), // §6: explicit auth_mode
+                            )
+                            .await?;
+                            let seeds = crate::db::queries::delete_seed_integrations(
+                                &state.db, user_id, "telegram-bot",
+                            )
+                            .await
+                            .unwrap_or(0);
+                            output_json(&serde_json::json!({
+                                "status": "connected",
+                                "provider": "telegram-bot",
+                                "method": "env-token",
+                                "source": "TELEGRAM_BOT_TOKENS",
+                                "name": username,
+                                "id": id,
+                                "seed_rows_replaced": seeds,
+                            }));
+                        } else {
+                            output_json(&serde_json::json!({
+                                "status": "error",
+                                "provider": "telegram-bot",
+                                "error": format!("getMe HTTP {status}: {}", body.chars().take(200).collect::<String>()),
+                                "hint": "Check the bot token from @BotFather and refresh TELEGRAM_BOT_TOKENS in ~/.social-forge/.env",
+                            }));
+                        }
+                    }
+                    Err(e) => {
+                        output_json(&serde_json::json!({
+                            "status": "error",
+                            "provider": "telegram-bot",
+                            "error": format!("getMe request failed: {e}"),
+                        }));
+                    }
+                }
             } else {
                 output_json(
                     &serde_json::json!({"status": "not_configured", "provider": "telegram-bot", "requires": ["TELEGRAM_BOT_TOKENS"], "hint": "Message @BotFather on Telegram to create a bot, get the token, and set TELEGRAM_BOT_TOKENS in ~/.social-forge/.env"}),
@@ -1699,7 +1949,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 && state.config.discord_client_secret.is_some()
             {
                 output_json(
-                    &serde_json::json!({"status": "configured", "provider": "discord", "method": "oauth", "hint": "DISCORD_CLIENT_ID + DISCORD_CLIENT_SECRET are set. Authorize via the web UI."}),
+                    &serde_json::json!({"status": "not_connected", "provider": "discord", "method": "oauth", "auth_url": format!("{}/api/public/connect/discord", state.config.app_url), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
                 );
             } else {
                 output_json(
@@ -1720,7 +1970,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 && state.config.slack_client_secret.is_some()
             {
                 output_json(
-                    &serde_json::json!({"status": "configured", "provider": "slack", "method": "oauth", "hint": "SLACK_CLIENT_ID + SLACK_CLIENT_SECRET are set. Authorize via the web UI."}),
+                     &serde_json::json!({"status": "not_connected", "provider": "slack", "method": "oauth", "auth_url": format!("{}/api/public/connect/slack", state.config.app_url), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
                 );
             } else {
                 output_json(
@@ -1741,7 +1991,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 && state.config.pinterest_client_secret.is_some()
             {
                 output_json(
-                    &serde_json::json!({"status": "configured", "provider": "pinterest", "method": "oauth"}),
+                    &serde_json::json!({"status": "not_connected", "provider": "pinterest", "method": "oauth", "auth_url": format!("{}/api/public/connect/pinterest", state.config.app_url), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
                 );
             } else {
                 output_json(
@@ -1762,7 +2012,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 && state.config.tiktok_client_secret.is_some()
             {
                 output_json(
-                    &serde_json::json!({"status": "configured", "provider": "tiktok", "method": "oauth"}),
+                    &serde_json::json!({"status": "not_connected", "provider": "tiktok", "method": "oauth", "auth_url": format!("{}/api/public/connect/tiktok", state.config.app_url), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
                 );
             } else {
                 output_json(
@@ -1784,7 +2034,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 && state.config.mastodon_instance_url.is_some()
             {
                 output_json(
-                    &serde_json::json!({"status": "configured", "provider": "mastodon", "method": "oauth"}),
+                    &serde_json::json!({"status": "not_connected", "provider": "mastodon", "method": "oauth", "auth_url": format!("{}/api/public/connect/mastodon", state.config.app_url), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
                 );
             } else {
                 output_json(
@@ -1806,7 +2056,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 && state.config.youtube_client_secret.is_some()
             {
                 output_json(
-                    &serde_json::json!({"status": "configured", "provider": "youtube", "method": "oauth", "hint": "YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET are set. Authorize via the web UI."}),
+                     &serde_json::json!({"status": "not_connected", "provider": "youtube", "method": "oauth", "auth_url": format!("{}/api/public/connect/youtube", state.config.app_url), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
                 );
             } else {
                 output_json(
@@ -1870,7 +2120,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         "threads" => {
             if state.config.threads_app_id.is_some() && state.config.threads_app_secret.is_some() {
                 output_json(
-                    &serde_json::json!({"status": "configured", "provider": "threads", "method": "oauth"}),
+                    &serde_json::json!({"status": "not_connected", "provider": "threads", "method": "oauth", "auth_url": format!("{}/api/public/connect/threads", state.config.app_url), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
                 );
             } else {
                 output_json(

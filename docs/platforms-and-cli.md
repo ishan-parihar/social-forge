@@ -45,8 +45,11 @@ Full detail: [`docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md`](docs/planning/
 |Provider kind|What `connect` does|What the agent does next|
 |---|---|---|
 |Cookie (x, reddit)|Imports browser cookies, then falls back to `X_AUTH_TOKEN`+`X_CT0` / `REDDIT_COOKIE_TOKEN` env; validates against the live API; writes the row|Nothing — it either prints `connected` or names what is missing|
-|OAuth (linkedin, facebook, instagram, …)|Prints an `auth_url`|Opens the URL in a browser, completes the platform login; the callback writes the row|
-|One-time-token (telegram-bot)|Prints the code + instructions|Sends the code to the bot|
+|Token env (github, telegram-bot)|Validates the env token against the live API (`GET /user`, `getMe`) and writes the row NOW|Nothing — `connected`, or the exact validation error|
+|Session env (bluesky)|Creates a real session with the app password (`createSession`), stores the accessJwt + did|Nothing — `connected`, or the exact error|
+|OAuth (linkedin, facebook, instagram, threads, discord, slack, pinterest, tiktok, mastodon, youtube)|Emits an `auth_url` when the client credentials are configured; `not_configured` + `requires` when they are not|Opens the URL in a browser, completes the platform login; the callback writes the row|
+|One-time-token (telegram user)|Prints the code + instructions|Sends the code to the bot|
+|Per-site / QR / extension (wordpress, whatsapp, skool)|Names the exact web-UI path|Follows it in the dashboard|
 
 **The wait loop.** `connect <provider> --wait [--timeout-secs N]` (default
 300) turns the OAuth/OTT shapes into a single blocking command: it prints
