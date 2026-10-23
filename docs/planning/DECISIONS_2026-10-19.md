@@ -123,7 +123,7 @@ Once decisions are made, the work order is:
 
 - Outline (queue): `docs/archive/OUTLINE-2026-10-19-v3.md`
 - What landed: `docs/planning/EXECUTION_2026-10-19.md`
-- C3 paired evals (3 of 43): `skills/social-forge-agent/evals/c3-paired-run.json`
+- C3 paired evals (3 of 43): `skills/switchpost-agent/evals/c3-paired-run.json`
 - Smoke harness and logs: session scratchpad (`smoke.cjs`, `diag.cjs`,
   `shots-after/`); not in the repo.
 - Full test log (run not yet complete at time of writing): session scratchpad

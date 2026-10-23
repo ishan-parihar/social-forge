@@ -1,4 +1,4 @@
-# Vendor Pins — social-forge
+# Vendor Pins — switchpost
 
 Phase **B0** of [`PLAN_PARITY_DEPTH_SINGLEUSER_v25.md`](./PLAN_PARITY_DEPTH_SINGLEUSER_v25.md) §9.
 

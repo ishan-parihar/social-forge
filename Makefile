@@ -1,4 +1,4 @@
-# ─── Social Forge Makefile ─────────────────────────────────────
+# ─── Switchpost Makefile ─────────────────────────────────────
 # Development targets for fast iteration.
 #
 # Quick redeploy after code changes:
@@ -6,11 +6,11 @@
 #
 # That's it. One command builds + copies + restarts.
 
-APP_NAME    = social-forge
+APP_NAME    = switchpost
 APP_DIR     = $(shell pwd)
 BINARY_PATH = /usr/local/bin/$(APP_NAME)
-SKILL_SRC   = $(APP_DIR)/skills/social-forge-agent
-SKILL_DEST  = $(HOME)/.agents/skills/social-forge-agent
+SKILL_SRC   = $(APP_DIR)/skills/switchpost-agent
+SKILL_DEST  = $(HOME)/.agents/skills/switchpost-agent
 
 # zigbuild target — glibc 2.36 matches Debian 12 (bookworm) VPS
 TARGET      = x86_64-unknown-linux-gnu.2.36
@@ -51,7 +51,7 @@ vendor-pins:
 #                               error, not a type error and not a
 #                               svelte-check warning.
 check: vendor-pins
-	SQLX_OFFLINE=true cargo check --lib --bin social-forge
+	SQLX_OFFLINE=true cargo check --lib --bin switchpost
 	cd frontend && node scripts/check-hex-tokens.mjs
 	cd frontend && node scripts/check-tailwind-classes.mjs
 	python3 scripts/check_status_contrast.py
@@ -156,7 +156,7 @@ status:
 	systemctl status $(APP_NAME) --no-pager || true
 	@echo ""
 	@echo "=== database ==="
-	@echo "$(APP_DIR)/data/social-forge.db"
+	@echo "$(APP_DIR)/data/switchpost.db"
 
 logs:
 	journalctl -u $(APP_NAME) -n 50 --no-pager -f

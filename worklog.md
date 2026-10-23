@@ -1,4 +1,4 @@
-# Worklog — social-forge multi-agent log (§8 protocol)
+# Worklog — switchpost multi-agent log (§8 protocol)
 
 ## Contents
 
@@ -19,7 +19,7 @@ also be appended via `scripts/genome log "<title>" --body-file <file>`.
 ---
 Task ID: kb-adoption-2026-10-17
 Agent: omp (memory-wire session)
-Task: Adopt the project-kb documentation genome (map-in-place, wiring social-forge's existing conventions to the tooling).
+Task: Adopt the project-kb documentation genome (map-in-place, wiring switchpost's existing conventions to the tooling).
 
 Work Log:
 - Surveyed the doc tree: the dated outline succession (OUTLINE-2026-10-16 → -17) already implements dated-frozen + supersede informally; AGENTS.md §9 is the regression ledger; the outline's standing notes are the closed list.
@@ -31,13 +31,13 @@ Work Log:
 
 Stage Summary:
 - Artifacts: kb.toml, TODO.md, worklog.md, docs/decisions/README.md, docs/archive/INDEX.md, scripts/kb, AGENTS.md §0.6+§8 edits, .gitignore.
-- Verification: `cargo check --lib --bin social-forge` 0 errors (docs-only diff; clippy/tests unaffected); `scripts/kb lint` clean; `scripts/kb doctor` healthy.
+- Verification: `cargo check --lib --bin switchpost` 0 errors (docs-only diff; clippy/tests unaffected); `scripts/kb lint` clean; `scripts/kb doctor` healthy.
 - Known follow-ups: §9.4 still references the old machine's `scripts/cargo-env.sh` (left as-is — outside this task's scope); AGENTS.md tool-count assert sites (×3) unchanged — no tool surface touched.
 
 ---
 Task ID: genome-migration-2026-10-19
 Agent: omp (genome migration session)
-Task: Migrate social-forge from the pre-genome kb.toml to the genome's own config, and retire the legacy project-kb CLI.
+Task: Migrate switchpost from the pre-genome kb.toml to the genome's own config, and retire the legacy project-kb CLI.
 
 Work Log:
 - Read the legacy kb.toml and mapped every role it declared. The role→path map moves to genome.toml unchanged, except the retired `closed` role (same standing-notes list as `ledger`, so `ledger` already carries its meaning) and `dated_pattern`, which moves from [paths] to [core] where the genome reads it.
@@ -143,7 +143,7 @@ Stage Summary:
 ---
 Task ID: red-team-iteration-3-5
 Agent: omp
-Task: Exhaustive red-teaming of the social-forge web dashboard in recursive
+Task: Exhaustive red-teaming of the switchpost web dashboard in recursive
 iterations. Iteration 3 started from a static probe that covered 13 of the
 app's 29 routes against an EMPTY seeded database; iterations 4 and 5 went
 after the interaction the probe cannot see.
@@ -235,7 +235,7 @@ Stage Summary:
 
 Task ID: v12-red-team-iterations-6-7
 Agent: omp
-Task: Continue the exhaustive red-teaming of the social-forge web
+Task: Continue the exhaustive red-teaming of the switchpost web
 dashboard. Iterations 3-5 fixed what the static probe and a read-only
 flow audit found. Iterations 6-7 went after what neither could see:
 the pages in their non-default states, the empty instance, the
@@ -382,7 +382,7 @@ Work Log:
   `#[tool(` attributes across `src/mcp/`; it parses exactly 389, which is the
   string the edited AGENTS.md carries, so `d1_documented_tool_counts_match_registry`
   still passes. `cargo test --lib`: 481 passed. `cargo check --lib --bin
-  social-forge`: 0 errors.
+  switchpost`: 0 errors.
 - Checked the odd `git` behaviour mid-session: HEAD advanced from 006aed5 to
   73d0394 and my diff disappeared. A parallel agent had committed and pushed the
   preview/tag colour work in the same tree. Nothing of mine was lost; the re-run
@@ -393,7 +393,7 @@ Stage Summary:
 - Artifacts: AGENTS.md (§0.6 doc map, key numbers, §2 layout tree, two dead
   pointers), worklog.md (table of contents + this entry).
 - Verification: `genome lint` 0 errors 0 warnings; `genome doctor` healthy;
-  `cargo check --lib --bin social-forge` 0 errors; `cargo test --lib` 481 passed;
+  `cargo check --lib --bin switchpost` 0 errors; `cargo test --lib` 481 passed;
   `cargo test --test surface_docs_audit` 3 passed.
 - Known issues / follow-ups:
   - `docs/decisions/` holds zero AD records and `docs/archive/records/` does not
@@ -779,7 +779,7 @@ Work Log:
   bad grep — the exact failure mode this entire doc pass has been auditing. A
   verification that cannot fail is worse than none, because it looks like evidence.
 - Final sweep, done correctly: all 43 evals' `mcp-call` targets are registered
-  tools, and every `social-forge <subcommand>` resolves against the binary's
+  tools, and every `switchpost <subcommand>` resolves against the binary's
   `--help`. Only the one defect above was real.
 
 Stage Summary:
@@ -800,7 +800,7 @@ Stage Summary:
 
 Task ID: iteration-6..12-red-team
 Agent: omp
-Task: Exhaustive red-teaming of the social-forge web dashboard in recursive
+Task: Exhaustive red-teaming of the switchpost web dashboard in recursive
       iterations, with visual testing via the browseros-neo MCP and the
       website-design skill's probe. Fix every defect found.
 
@@ -892,7 +892,7 @@ Stage Summary:
 Known issues / follow-ups:
   - OPEN: the day bucket in the analytics day series is a UTC day. The
     founder's zone is an IANA name in a FRONTEND localStorage store
-    (`social-forge-timezone`), and `users.timezone` is a column the server
+    (`switchpost-timezone`), and `users.timezone` is a column the server
     NEVER writes - the -300 in the seed is of unknown unit. So the server has
     no usable per-user zone, and the posting-volume chart's day buckets
     cannot yet follow the founder's day. The two sources are named here. The
@@ -906,7 +906,7 @@ Known issues / follow-ups:
 ---
 Task ID: v12-iterations-3-8
 Agent: omp (merry-tamarin)
-Task: Exhaustive recursive red-teaming of the social-forge web dashboard, with
+Task: Exhaustive recursive red-teaming of the switchpost web dashboard, with
 visual verification through the browseros-neo MCP and the rendered-page probe.
 
 Work Log:
@@ -995,7 +995,7 @@ Stage Summary:
 Known issues / follow-ups:
   - OPEN: the day bucket in the analytics day series is a UTC day. The
     founder's zone is an IANA name in a FRONTEND localStorage store
-    (`social-forge-timezone`), and `users.timezone` is a column the server
+    (`switchpost-timezone`), and `users.timezone` is a column the server
     NEVER writes - the -300 in the seed is of unknown unit. So the server has
     no usable per-user zone, and the posting-volume chart's day buckets
     cannot yet follow the founder's day. The two sources are named here. The
@@ -2007,7 +2007,7 @@ Work Log:
 - Added the BLOCKED login guard to every gate script (state-hunt, audit-dialogs, audit-targets, audit-contrast, audit-analytics, e2e-calendar-drag): waitForSelector on the client-rendered password field, exit 3 instead of a 30s fill() timeout.
 - audit-dialogs: empty-list SKIP for row-scoped triggers (the /comments reply modal); a fresh install has no comment to open (AGENTS.md 9.38 precedent, probe's unreachable-route).
 - Diagnosed a suite-wide 403: the hand-started 6544 instance had been relaunched without APP_URL/FRONTEND_URL, so CSRF reverted to port 6543. Relaunch now pins both to 6544.
-- Re-seeded the demo DB (backup at /tmp/social-forge.db.bak-214031) after a feed refresh emptied the comments list and left the posting-volume series non-dense.
+- Re-seeded the demo DB (backup at /tmp/switchpost.db.bak-214031) after a feed refresh emptied the comments list and left the posting-volume series non-dense.
 
 Known issues / follow-ups:
 - The 51 controls in the 24-44 warning band (audit-targets) are reported, not gating - the dense calendar grid is the bulk; per WCAG 2.5.8 they pass.
@@ -2027,7 +2027,7 @@ Work Log:
 - Calendar (c7797ec): WeekView/DayView hour grids scroll INSIDE a viewport-height card (.calendar-view-shell, calc(100dvh-168px)); sticky weekday header; auto-scroll to first slot with a post; MonthView cells render ALL posts with per-cell scroll stacks; sticky weekday row; removed '+N more' cap.
 - Calendar (bd2dd03): week is the DEFAULT view at every breakpoint (mobile day-fallback removed); emoji removed from view switch + Generate Posts.
 - Credentials (278e742): is_credential_row treats seed tokens as non-credentials, so 'connect' can replace seed_demo.py rows; connect x/reddit purge the seed row on success; Reddit gains REDDIT_COOKIE_TOKEN env fallback (config.reddit_cookie_token); delete_seed_integrations query + .sqlx cache regen (sqlite3-applied migrations; 'cargo sqlx run' prints help and does nothing).
-- Operator DB surgery: X -> real _ishanparihar cookies (env), Reddit -> real d3vilzwrld session (env); 4 stub rows (bluesky/linkedin/threads/mastodon) + 50 seeded posts + empty analytics purged per operator decision (backup at /tmp/social-forge-backup-*.db). Killed the leftover /tmp/supervise-seed.sh supervisor that kept respawning the server against /tmp/sf-seed DB; server now runs on the repo DB.
+- Operator DB surgery: X -> real _ishanparihar cookies (env), Reddit -> real d3vilzwrld session (env); 4 stub rows (bluesky/linkedin/threads/mastodon) + 50 seeded posts + empty analytics purged per operator decision (backup at /tmp/switchpost-backup-*.db). Killed the leftover /tmp/supervise-seed.sh supervisor that kept respawning the server against /tmp/sf-seed DB; server now runs on the repo DB.
 - CLI (fec5314): connect --wait [--timeout-secs N] — blocking agent login loop; emits auth_url/OTT code then polls every 2s until the real credential row lands. docs/platforms-and-cli.md documents the three provider shapes and the loop.
 
 Stage Summary:
@@ -2058,7 +2058,7 @@ Measurements (all re-runnable; see the decision doc):
   so a rename cannot break a single agent integration. 0 occurrences in migrations/.
 - Literal-name blast radius: 239 Rust (21 files), 28 frontend, 413 skills/, 119 docs/, 43 README,
   33 AGENTS.md, 81 scripts/systemd/Makefile, 26 .env/config defaults.
-- Exact-name GitHub collisions: social-forge 6, herald 53, towncrier 38, dispatch 37, outpost 62,
+- Exact-name GitHub collisions: switchpost 6, herald 53, towncrier 38, dispatch 37, outpost 62,
   kestrel 55, imprint 71, pigeonpost 10, majordomo 3, ringmaster 4, signalbox 70, troupe 6.
 - switchpost: 1 exact repo at 1 star, PyPI free, {com,dev,io}.com all unregistered.
 - forgeway: 3 exact repos top 1 star, PyPI free, all three domains unregistered.

@@ -1,6 +1,6 @@
 [Unit]
-Description=Social-Forge API Server
-Documentation=https://github.com/ishan-parihar/social-forge
+Description=Switchpost API Server
+Documentation=https://github.com/ishan-parihar/switchpost
 # No external services: storage is a local SQLite file, migrated on startup.
 Wants=network-online.target
 After=network-online.target
@@ -10,8 +10,8 @@ Type=simple
 # User/Group/Environment are written dynamically by install.sh — do not edit here
 User=%%USER%%
 Group=%%GROUP%%
-Environment=SOCIAL_FORGE_DIR=%%INSTALL_DIR%%
-ExecStart=/usr/local/bin/social-forge-start.sh
+Environment=SWITCHPOST_DIR=%%INSTALL_DIR%%
+ExecStart=/usr/local/bin/switchpost-start.sh
 WorkingDirectory=%%INSTALL_DIR%%
 Restart=on-failure
 RestartSec=10s

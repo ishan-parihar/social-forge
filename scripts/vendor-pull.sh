@@ -30,7 +30,7 @@ GEN_END='<!-- vendor-pull:end -->'
 
 OFFLINE="${VENDOR_PULL_OFFLINE:-0}"
 STRICT="${VENDOR_PULL_STRICT:-0}"
-CRATES_IO_UA="social-forge-vendor-pull/1.0 (build-time pin verification)"
+CRATES_IO_UA="switchpost-vendor-pull/1.0 (build-time pin verification)"
 
 FAILURES=0
 FINDINGS=0

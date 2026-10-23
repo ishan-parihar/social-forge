@@ -2,8 +2,8 @@
 # Use this to compile from source inside Docker for reproducible builds.
 # NOTE: For release binaries, prefer cargo-zigbuild locally (see Makefile).
 #
-#   docker build -f Dockerfile.build -t social-forge-bin .
-#   docker run --rm social-forge-bin cat /usr/local/bin/social-forge > social-forge-linux-x64
+#   docker build -f Dockerfile.build -t switchpost-bin .
+#   docker run --rm switchpost-bin cat /usr/local/bin/switchpost > switchpost-linux-x64
 # ──────────────────────────────────────────────────────────────────────────────
 
 FROM rust:1.85-slim-bookworm AS builder
@@ -43,7 +43,7 @@ COPY frontend/build/ ./frontend/build/
 
 ENV SQLX_OFFLINE=true
 RUN cargo zigbuild --release --target ${TARGET} && \
-    strip target/x86_64-unknown-linux-gnu/release/social-forge
+    strip target/x86_64-unknown-linux-gnu/release/switchpost
 
 # ── Minimal runtime image ─────────────────────────────────────────────────────
 FROM debian:bookworm-slim
@@ -52,7 +52,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates curl && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/x86_64-unknown-linux-gnu/release/social-forge /usr/local/bin/social-forge
+COPY --from=builder /app/target/x86_64-unknown-linux-gnu/release/switchpost /usr/local/bin/switchpost
 COPY migrations/ /app/migrations/
 
 WORKDIR /app
@@ -62,4 +62,4 @@ EXPOSE 6543
 HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -sf https://localhost:6543/health -k || exit 1
 
-CMD ["social-forge", "serve"]
+CMD ["switchpost", "serve"]

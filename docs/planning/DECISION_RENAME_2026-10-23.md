@@ -48,7 +48,7 @@ the vocabulary of competitive position:
 | Postiz's strategy | Shipped `postiz-agent` CLI + MCP server + a published skill on ClawHub; programmatic landing pages for every agent×platform pair | superframeworks.com case study ($145K MRR) |
 | `postmcp.dev` | "MCP-native publishing" for AI agents, public beta | web |
 
-**Consequence.** The three-way interface (CLI + REST + MCP) was social-forge's
+**Consequence.** The three-way interface (CLI + REST + MCP) was switchpost's
 differentiation, and it is now table stakes in the category's marketing. "Agentic social
 media" is claimed, owned, and funded. A name that competes inside that phrase loses, because
 the incumbent's version of the phrase is already the prototype a stranger compares against.
@@ -164,7 +164,7 @@ gets which content.
 
 Score bands, not fake precision (atlas convention): **strong / adequate / weak / fatal**.
 
-| | **`switchpost`** | `forgeway` | `pogency` | `sogency` | `sociagency` | `sofo`/`sophp` | `frogso` | `social-forge` |
+| | **`switchpost`** | `forgeway` | `pogency` | `sogency` | `sociagency` | `sofo`/`sophp` | `frogso` | `switchpost` |
 |---|---|---|---|---|---|---|---|---|
 | Available: GitHub exact | **strong** (1 repo, 1★) | **strong** (3, top 1★) | strong (0) | strong (0) | strong (0) | adequate (37 fuzzy) | weak (50 fuzzy) | **fatal** (6 exact, 1 is an org) |
 | Available: PyPI | **strong** (free) | **strong** (free) | strong | strong | strong | strong | strong | strong (free) |
@@ -256,23 +256,23 @@ against this tree:
 
 | Lock | Cost to unwind **today** | Growth rate |
 |---|---|---|
-| GitHub stars / forks / watchers | **0 stars, 0 forks, 0 subscribers** (`api.github.com/repos/ishan-parihar/social-forge`) | +1 per star, permanently |
+| GitHub stars / forks / watchers | **0 stars, 0 forks, 0 subscribers** (`api.github.com/repos/ishan-parihar/switchpost`) | +1 per star, permanently |
 | External links, citations, listicles | None measurable | **fastest-growing lock; decides everything else** |
 | MCP tool-name contract | **Zero breakage.** 0 of 389 tool names carry the project prefix | flat forever; the name never enters it |
 | SQL schema / migrations | **0 occurrences of the literal name in `migrations/`** | flat |
-| Rust source | 239 occurrences of `social-forge`/`social_forge` across 21 files, all internal identifiers | flat; a `sed` pass, verify by `cargo check` |
+| Rust source | 239 occurrences of `switchpost`/`switchpost` across 21 files, all internal identifiers | flat; a `sed` pass, verify by `cargo check` |
 | Frontend | 28 occurrences in `frontend/src` | flat; verify by `pnpm build` + `svelte-check` |
 | Docs | 119 in `docs/`, 43 in `README.md`, 33 in `AGENTS.md` | **grows with every doc written** |
 | Scripts / systemd / Makefile / service | 81 occurrences | flat |
-| Installed skill directory | 413 occurrences in `skills/`, and the directory name `skills/social-forge-agent/` | **grows with every skill revision** |
-| `.env.example` / config defaults / DB path / config dir | 26 occurrences; `~/.social-forge/.env` and `data/social-forge.db` are **operator-visible paths that a live install has on disk** | **the one lock that silently breaks a live deployment** — resolved by the direct rename plus the ordered data move in §9.2 |
+| Installed skill directory | 413 occurrences in `skills/`, and the directory name `skills/switchpost-agent/` | **grows with every skill revision** |
+| `.env.example` / config defaults / DB path / config dir | 26 occurrences of the old name; `~/.social-forge/.env` and `data/social-forge.db` are **operator-visible paths that a live install has on disk** | **the one lock that silently breaks a live deployment** — resolved by the direct rename plus the ordered data move in §9.2 |
 | Crates.io package name | UNKNOWN (403) | grows only once published |
 | npm name | 200 for every dictionary word tested (i.e. taken); irrelevant unless we publish JS | flat |
 | Trademark | Unmeasured: USPTO TESS needs a key. Both finalists are unregistered on GitHub/PyPI/domains, which is the observable proxy | **the cheapest moment to file is before launch** |
 
 **The verdict the card produces.** Two locks are zero-cost now and grow forever: adoption
 links, and the installed-skill surface. Two locks are permanent costs that exist no matter
-when we act: the `~/.social-forge/` config path, and any operator's existing SQLite file. The
+when we act: the `~/.switchpost/` config path, and any operator's existing SQLite file. The
 permanent ones are **migration costs, not blocking costs** (§9.2): a WAL checkpoint, a move of
 the `.db` / `-wal` / `-shm` trio together, and a re-run of `init` convert an irreversible break
 into a supported upgrade path. The user chose the direct rename over the shim (§9.1); the data
@@ -317,14 +317,14 @@ one deviation from the original recommendation, recorded in §9.1.
    repo rename, and confirm crates.io now that the 403 has cleared. *Nothing in the tree yet.*
 2. **Code + config pass** in one commit, and the config paths move **directly, with no legacy
    fallback**: `Cargo.toml` (crate name, `[[bin]]`, description, repository, homepage,
-   keywords), the `social_forge` crate identifier across `src/`, `SocialForgeMcpServer`, clap's
-   `#[command(name = "social-forge")]`, the tracing target string, `UNIT_NAME`,
+   keywords), the `switchpost` crate identifier across `src/`, `SwitchpostMcpServer`, clap's
+   `#[command(name = "switchpost")]`, the tracing target string, `UNIT_NAME`,
    `.env.example`, and every `~/.social-forge/` and `data/social-forge.db` reference in
    `src/config.rs` — `DEFAULT_DATABASE_URL`, `TEST_DATABASE_URL`, the SQLite-guard error text
-   and its `postgres://social_forge:...` example, and the operator-facing help strings.
+   and its `postgres://switchpost:...` example, and the operator-facing help strings.
 3. **Tests + skill pass:** 32 files under `tests/` reference the command name, and
-   `doc_cli_commands_test.rs` *walks* `skills/social-forge-agent/`, so the skill directory
-   rename (`social-forge-agent` → `switchpost-agent`) must land in the same commit or the suite
+   `doc_cli_commands_test.rs` *walks* `skills/switchpost-agent/`, so the skill directory
+   rename (`switchpost-agent` → `switchpost-agent`) must land in the same commit or the suite
    cannot find its own fixtures.
 4. **Verification gate before the docs pass:** `cargo check --lib --bin switchpost` (0
    errors), `cargo test --lib` (all pass), `cd frontend && pnpm build`, `pnpm exec svelte-check
@@ -355,8 +355,19 @@ included.** Recorded so the omission is deliberate rather than an oversight.
 **What it costs.** An install that has already run keeps a `~/.social-forge/.env` and a
 `data/social-forge.db` that the renamed binary will not read. The operator re-runs the
 init/config command, re-points `DATABASE_URL`, and reconnects the channels whose OAuth rows
-lived in the old file. **`migrations/` contains 0 occurrences of the name**, so the schema is
-unaffected and the old database is not corrupt — it is a file the new binary is not looking at.
+lived in the old file. The schema is unaffected by the rename: no migration defines, alters, or
+references a table or column whose name contains the old project name. The old database is not
+corrupt, it is a file the new binary is not looking at.
+
+**The one thing that cannot be renamed:** `migrations/0001_init.sql` carries the old name in a
+**header comment**, and sqlx checksums every migration file. Editing that comment made every
+test boot fail with *"pool: migration 1 was previously applied but has been modified"*, because
+the recorded checksum no longer matches. It is not a cosmetic choice — a modified migration is
+sqlx's guard against an operator running a changed schema against a database that already took
+the old one. The migration file is therefore reverted to its original bytes and **keeps the old
+name in the comment**. Correcting the earlier measurement in this section: the name *does*
+appear in `migrations/`, but only in a comment, and that comment is now a permanent fossil. The
+rename cannot reach it, and trying to is what proved the rule.
 
 **Why the trade is right.** A shim protects accumulated adoption, and accumulated adoption is
 0 stars, 0 forks, 0 subscribers. It would have spent permanent complexity in the config loader
@@ -399,7 +410,7 @@ worklog 16, Cargo 5, Makefile 5, Dockerfile 4, Dockerfile.build 8, .env.example 
 TODO 2, workspace-lint 1), and 1 in `.sqlx/` — which is a redacted email inside a cached query
 payload, **not** the project name, so the offline cache needs no regeneration.
 
-The mechanical part is one `sed` pass per variant plus a review of the `~/.social-forge/` path,
+The mechanical part is one `sed` pass per variant plus a review of the `~/.switchpost/` path,
 the skill directory, and the three hook registrations. The expensive part is not code: it is
 that **every external reference has to be re-earned**, which is the argument for doing it at 0
 stars.
@@ -472,7 +483,7 @@ makes the stranger work before they can categorize. Restructure for the archetyp
 
 `AGENTS.md` (105 occurrences of the old name across 33 in the file itself plus the §0.6 doc
 map), `docs/agent-integration.md` (the MCP config block, the session hooks), the skill at
-`skills/social-forge-agent/` (413 occurrences and the directory name itself), and the three
+`skills/switchpost-agent/` (413 occurrences and the directory name itself), and the three
 installer/hook files. Each gets the rename in the same commit as its content pass, not after,
 so no doc is ever left describing a project that no longer exists.
 

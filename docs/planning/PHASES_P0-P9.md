@@ -9,7 +9,7 @@ one owner per question — a plan and a register are different questions).
 
 ## What the objective actually demands
 
-> Make the social-forge web dashboard a single-user manual suite for solo founders covering
+> Make the switchpost web dashboard a single-user manual suite for solo founders covering
 > composer, calendar and scheduling, campaign planning, analytics, research, and a read-only
 > agent-activity log, matching postiz-app's manual features without its team, billing, admin,
 > agent-chat, or video bloat.

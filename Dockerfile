@@ -1,7 +1,7 @@
-# ─── Social Forge Docker Image ───────────────────────────────
+# ─── Switchpost Docker Image ───────────────────────────────
 # Multi-stage build: Rust binary from local source + frontend.
 #
-# Build: docker build -t social-forge .
+# Build: docker build -t switchpost .
 
 # ─── Rust Build ─────────────────────────────────────────────
 # Slim base keeps the build layer small while still providing
@@ -59,7 +59,7 @@ RUN apt-get update && \
     # collide with anything on the host.
     useradd --system --uid 10001 --gid 0 --home-dir /app --shell /usr/sbin/nologin sf
 
-COPY --from=backend /app/target/release/social-forge /usr/local/bin/social-forge
+COPY --from=backend /app/target/release/switchpost /usr/local/bin/switchpost
 # NOTE: frontend/build is already embedded in the binary via rust-embed
 # (src/api/mod.rs:15-18). We no longer COPY it into the runtime image —
 # saves ~5-10 MB and avoids any drift between the embedded and on-disk
@@ -78,4 +78,4 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
 
 VOLUME ["/app/uploads", "/app/data"]
 
-CMD ["social-forge", "serve"]
+CMD ["switchpost", "serve"]

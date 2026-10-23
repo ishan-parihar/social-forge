@@ -10,13 +10,13 @@ Covers three failure modes that are invisible from the happy path:
 - **Draft scope — `disabled=1` integrations.** A draft can be staged against an
   integration that can never publish it.
 
-Run `social-forge audit` to see all three against live state.
+Run `switchpost audit` to see all three against live state.
 
 ---
 
 ## 1. Single-writer discipline (G-08)
 
-SQLite admits **one writer at a time** per database file. Social Forge layers
+SQLite admits **one writer at a time** per database file. Switchpost layers
 two guards on top of that.
 
 ### In-process: `max_connections(1)`
@@ -46,15 +46,15 @@ Both now claim an exclusive lock file next to the database before opening the
 pool:
 
 ```
-<db-dir>/.social-forge-writer.lock   # contains the owning PID
+<db-dir>/.switchpost-writer.lock   # contains the owning PID
 ```
 
 The second process fails at boot with a clear message instead of silently
 double-publishing:
 
 ```
-Another social-forge process already owns the writer lock for this database
-(data/.social-forge-writer.lock). SQLite is single-writer: run ONE long-lived
+Another switchpost process already owns the writer lock for this database
+(data/.switchpost-writer.lock). SQLite is single-writer: run ONE long-lived
 process per DATABASE_URL, or delete the lock if that process is gone.
 ```
 
@@ -69,7 +69,7 @@ run a scheduler.
 ### Checking it
 
 ```bash
-social-forge audit
+switchpost audit
 ```
 
 reports `writer_discipline` with `journal_mode` and `busy_timeout_ms` read back
@@ -97,13 +97,13 @@ with no exact match, which keeps `telegram` → `telegram-bot` /
 
 ```bash
 # ONLY the `instagram` integration — one draft
-social-forge post "hello" --platforms instagram
+switchpost post "hello" --platforms instagram
 
 # Explicitly BOTH, two drafts — as intended
-social-forge post "hello" --platforms instagram,instagram-standalone
+switchpost post "hello" --platforms instagram,instagram-standalone
 
 # No such connected integration → the base name is a no-op, not a wildcard
-social-forge post "hello" --platforms linkedin
+switchpost post "hello" --platforms linkedin
 ```
 
 ### Precise targeting: `--integrations`
@@ -113,14 +113,14 @@ When a name is ambiguous or you want one specific account, use integration UUIDs
 exclusive with `--platforms`:
 
 ```bash
-social-forge providers          # list connected integrations + internal_ids
-social-forge stage "hello" --integrations 6f1c...-...,9a02...-...
+switchpost providers          # list connected integrations + internal_ids
+switchpost stage "hello" --integrations 6f1c...-...,9a02...-...
 ```
 
 ### Checking it
 
 ```bash
-social-forge audit
+switchpost audit
 ```
 
 `platform_collisions` lists each pair with which side is connected, and
@@ -137,7 +137,7 @@ the failure is silent from the CLI's point of view, because staging only
 validates that the integration *exists*.
 
 ```bash
-social-forge audit
+switchpost audit
 ```
 
 `disabled_integrations` lists each one with its UUID and the impact. When the
@@ -151,14 +151,14 @@ will not publish
 Re-enable or remove them before staging, or target enabled accounts explicitly
 via `--integrations`.
 
-`social-forge providers` still reports the `active` / `disabled` counts; `audit`
+`switchpost providers` still reports the `active` / `disabled` counts; `audit`
 is the command that names the rows and explains the consequence.
 
 ---
 
 ## 4. Audit output shape
 
-`social-forge audit` is read-only and prints JSON (AXI conventions: pre-computed
+`switchpost audit` is read-only and prints JSON (AXI conventions: pre-computed
 aggregates, definitive empty states, no interactive prompts).
 
 ```jsonc

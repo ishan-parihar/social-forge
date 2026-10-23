@@ -1,30 +1,30 @@
 #!/bin/bash
-# ─── social-forge-start.sh ─────────────────────────────────────────────────
-# Start script for the social-forge systemd service.
+# ─── switchpost-start.sh ─────────────────────────────────────────────────
+# Start script for the switchpost systemd service.
 # Fully path-agnostic — works on any system regardless of username or install dir.
 #
 # Path resolution order for INSTALL_DIR:
-#   1. SOCIAL_FORGE_DIR env var (set in the systemd service's Environment= line)
-#   2. ~/.social-forge/ (XDG-style user config)
-#   3. ~/social-forge/  (install.sh default)
-#   4. /opt/social-forge/ (system-wide install)
+#   1. SWITCHPOST_DIR env var (set in the systemd service's Environment= line)
+#   2. ~/.switchpost/ (XDG-style user config)
+#   3. ~/switchpost/  (install.sh default)
+#   4. /opt/switchpost/ (system-wide install)
 #
-# This script does NOT build from source — the binary at /usr/local/bin/social-forge
+# This script does NOT build from source — the binary at /usr/local/bin/switchpost
 # must be pre-installed (e.g. via install.sh or a GitHub Releases download).
 # ───────────────────────────────────────────────────────────────────────────────
 set -e
 
-TAG="[social-forge]"
+TAG="[switchpost]"
 
 # ── 1. Resolve INSTALL_DIR ──────────────────────────────────────────────────
-INSTALL_DIR="${SOCIAL_FORGE_DIR:-}"
+INSTALL_DIR="${SWITCHPOST_DIR:-}"
 
 if [ -z "$INSTALL_DIR" ]; then
     # Try common locations in priority order
     for candidate in \
-        "${HOME}/.social-forge" \
-        "${HOME}/social-forge" \
-        "/opt/social-forge"; do
+        "${HOME}/.switchpost" \
+        "${HOME}/switchpost" \
+        "/opt/switchpost"; do
         if [ -f "${candidate}/.env" ]; then
             INSTALL_DIR="$candidate"
             break
@@ -33,8 +33,8 @@ if [ -z "$INSTALL_DIR" ]; then
 fi
 
 if [ -z "$INSTALL_DIR" ]; then
-    echo "$TAG ERROR: Could not find .env in any of: ~/.social-forge, ~/social-forge, /opt/social-forge"
-    echo "$TAG Set SOCIAL_FORGE_DIR=/path/to/install in the systemd service Environment= or export it."
+    echo "$TAG ERROR: Could not find .env in any of: ~/.switchpost, ~/switchpost, /opt/switchpost"
+    echo "$TAG Set SWITCHPOST_DIR=/path/to/install in the systemd service Environment= or export it."
     exit 1
 fi
 
@@ -54,8 +54,8 @@ source "$ENV_FILE"
 set +a
 
 # ── 3. Install AI Agent Skill (optional, best-effort) ──────────────────────
-SKILL_SRC="${INSTALL_DIR}/skills/social-forge-agent"
-SKILL_DEST="${HOME}/.agents/skills/social-forge-agent"
+SKILL_SRC="${INSTALL_DIR}/skills/switchpost-agent"
+SKILL_DEST="${HOME}/.agents/skills/switchpost-agent"
 if [ -d "$SKILL_SRC" ]; then
     mkdir -p "${SKILL_DEST}/references"
     cp "${SKILL_SRC}/SKILL.md" "${SKILL_DEST}/SKILL.md" 2>/dev/null || true
@@ -69,20 +69,20 @@ fi
 # Note: migrations are embedded in the binary at compile time via
 # sqlx::migrate!("./migrations") and applied automatically on startup.
 # No manual SQL tooling or migration scripting is needed.
-echo "$TAG Starting social-forge serve..."
+echo "$TAG Starting switchpost serve..."
 cd "$INSTALL_DIR"
 
 # Priority: ~/.local/bin → /usr/local/bin → PATH
-if [ -x "$HOME/.local/bin/social-forge" ]; then
-    BINARY="$HOME/.local/bin/social-forge"
-elif [ -x "/usr/local/bin/social-forge" ]; then
-    BINARY="/usr/local/bin/social-forge"
+if [ -x "$HOME/.local/bin/switchpost" ]; then
+    BINARY="$HOME/.local/bin/switchpost"
+elif [ -x "/usr/local/bin/switchpost" ]; then
+    BINARY="/usr/local/bin/switchpost"
 else
-    BINARY=$(command -v social-forge 2>/dev/null || true)
+    BINARY=$(command -v switchpost 2>/dev/null || true)
 fi
 
 if [ -z "$BINARY" ] || [ ! -x "$BINARY" ]; then
-    echo "$TAG ERROR: social-forge binary not found. Install it to ~/.local/bin or /usr/local/bin."
+    echo "$TAG ERROR: switchpost binary not found. Install it to ~/.local/bin or /usr/local/bin."
     exit 1
 fi
 

@@ -3,7 +3,7 @@
 # Tests all 58 MCP tools (7 Reddit + 20 X + 15 Facebook + 16 Instagram) via the running server.
 #
 # Usage:
-#   1. Start server: ./target/releassocial-forge mcp
+#   1. Start server: ./target/releasswitchpost mcp
 #   2. Run tests:    bash scripts/test-mcp-tools.sh
 #
 # This test validates:
@@ -31,12 +31,12 @@ NC='\033[0m'
 echo "=== Registering test user ==="
 REG=$(curl -s -X POST "$BASE/api/auth/register" \
   -H "Content-Type: application/json" \
-  -d '{"email":"test-e2e@social-forge.dev","password":"testpass123","name":"E2E Tester"}' 2>&1)
+  -d '{"email":"test-e2e@switchpost.dev","password":"testpass123","name":"E2E Tester"}' 2>&1)
 TOKEN=$(echo "$REG" | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null)
 if [ -z "$TOKEN" ]; then
     REG=$(curl -s -X POST "$BASE/api/auth/login" \
       -H "Content-Type: application/json" \
-      -d '{"email":"test-e2e@social-forge.dev","password":"testpass123"}' 2>&1)
+      -d '{"email":"test-e2e@switchpost.dev","password":"testpass123"}' 2>&1)
     TOKEN=$(echo "$REG" | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])" 2>/dev/null || echo "")
 fi
 echo "Token: ${TOKEN:0:20}..."
@@ -182,7 +182,7 @@ fi
 echo "--- Multi-Account Support ---"
 
 # Check available-pages for a multi-step provider that has integrations
-# (dev@social-forge.dev has Facebook pages, but our test user doesn't)
+# (dev@switchpost.dev has Facebook pages, but our test user doesn't)
 # Instead verify the API contract
 run_test "Multi-account: available-pages API" "curl -s \"$BASE/api/providers\" -H \"$AUTH\""
 

@@ -66,16 +66,16 @@ jobs:
         include:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
-            artifact: social-forge-linux-x64
+            artifact: switchpost-linux-x64
           - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
-            artifact: social-forge-linux-arm64
+            artifact: switchpost-linux-arm64
           - target: x86_64-apple-darwin
             os: macos-13
-            artifact: social-forge-macos-x64
+            artifact: switchpost-macos-x64
           - target: aarch64-apple-darwin
             os: macos-14
-            artifact: social-forge-macos-arm64
+            artifact: switchpost-macos-arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -114,7 +114,7 @@ jobs:
       - name: Strip binary (Linux)
         if: contains(matrix.target, 'linux')
         run: |
-          BIN="target/${{ matrix.target }}/release/social-forge"
+          BIN="target/${{ matrix.target }}/release/switchpost"
           if [[ "${{ matrix.target }}" == "aarch64"* ]]; then
             aarch64-linux-gnu-strip "$BIN" || true
           else
@@ -123,12 +123,12 @@ jobs:
 
       - name: Strip binary (macOS)
         if: contains(matrix.target, 'darwin')
-        run: strip "target/${{ matrix.target }}/release/social-forge" || true
+        run: strip "target/${{ matrix.target }}/release/switchpost" || true
 
       - name: Package
         run: |
           mkdir -p dist
-          cp "target/${{ matrix.target }}/release/social-forge" "dist/${{ matrix.artifact }}"
+          cp "target/${{ matrix.target }}/release/switchpost" "dist/${{ matrix.artifact }}"
           chmod +x "dist/${{ matrix.artifact }}"
 
       - uses: actions/upload-artifact@v4

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed a social-forge instance with a realistic solo-founder dataset.
+"""Seed a switchpost instance with a realistic solo-founder dataset.
 
 An empty-state instance hides every populated-state defect, so this seeds:
   users, integrations (6 providers), posts (draft/queued/published/error/idea),
@@ -492,7 +492,7 @@ def main() -> int:
 
     # ── webhooks ──
     hooks = [
-        ("Postiz bridge", "https://hooks.example.com/social-forge", "whsec_abc123", 1,
+        ("Postiz bridge", "https://hooks.example.com/switchpost", "whsec_abc123", 1,
          2 * 3600),
         ("Zapier catch", "https://hooks.zapier.com/hooks/catch/1234/xyz", None, 1, None),
         ("Old webhook", "https://legacy.example.com/hook", None, 0, 40 * DAY),

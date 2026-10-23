@@ -1,4 +1,4 @@
-# Social Forge — Single-User Depth Parity Plan (v25)
+# Switchpost — Single-User Depth Parity Plan (v25)
 
 > Date: 2026-09-30
 > Supersedes: v22 audit, v24 upgrade guide (background reading, not re-litigated here)
@@ -98,7 +98,7 @@ Design constraints: SvelteKit + Svelte 5 runes stay; no UI framework migration; 
 B0 vendor pins → F1 tokens+shell → B1 tiers (incl. kick/vk/whop/lemmy deletion) → B2 analytics/engagement → F2 composer → B3 comments/mentions/targets → F3 calendar/kanban → B4 refresh/errors/recent → F4 channels/analytics/media → F5 a11y/responsive
 ```
 
-- Each phase: implement → `cargo check --lib --bin social-forge` → `cargo test --lib` (if Rust touched) → `cd frontend && pnpm build` → commit + push per AGENTS.md golden rule.
+- Each phase: implement → `cargo check --lib --bin switchpost` → `cargo test --lib` (if Rust touched) → `cd frontend && pnpm build` → commit + push per AGENTS.md golden rule.
 - No phase starts if prior gate is red.
 - MCP/CLI parity: any new REST capability gets MCP tool + CLI wiring in the same phase (triple-interface rule).
 
@@ -112,7 +112,7 @@ B0 vendor pins → F1 tokens+shell → B1 tiers (incl. kick/vk/whop/lemmy deleti
 
 ## 8. Product alignment: Postiz-human vs Forge-agent UX
 
-Per user direction (2026-09-30): Postiz is the human-facing reference; Social Forge is the AI-agentic surface. This changes how parity is judged:
+Per user direction (2026-09-30): Postiz is the human-facing reference; Switchpost is the AI-agentic surface. This changes how parity is judged:
 
 - Human UI (Postiz parity) covers: composer readability, calendar legibility, channel connect flow, analytics glanceability, settings discoverability (phases F1–F5). No human team workflows are ported (AGENTS.md §0.5).
 - Agent surface (Forge lead, must not regress): every REST capability added in B-phases ships with MCP tool + CLI wiring in the same phase (triple-interface rule); MCP tool descriptions carry Tier-1 limits (char caps, media caps, thread support) so agents plan correctly; `integrations targets`, mentions search, and validation endpoints stay agent-callable with JSON-first errors; SSE event names remain stable for agent watchers.

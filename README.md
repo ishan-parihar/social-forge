@@ -1,32 +1,78 @@
-<!-- T2I HERO SPEC — Subject: a social media forge — a single anvil-like server core (Rust) with three spokes: CLI terminal, REST dashboard, and MCP protocol link — radiating post-flows to a ring of 25 platform logos (X, Reddit, LinkedIn, Instagram, Threads, YouTube, TikTok, Discord, Slack, Telegram, WhatsApp, Bluesky…). Composition: hub-and-spoke, concentric pulse rings. Palette: forge-fire orange #f97316 → deep charcoal #1c1917, ember gold #fbbf24 sparks, clean UI white text. Style: dark industrial flat vector, glowing embers, no readable logos, no text. 16:9. -->
+<!-- T2I HERO SPEC — Subject: a switch — a waystation that sits on its own land, taking one thing in and routing it out to a ring of 26 platform destinations. Composition: a single sturdy relay core in the centre (Rust), three labeled portals at the base (CLI terminal, REST dashboard, MCP protocol), and radiating lanes that fork and re-merge toward a ring of 26 destination glyphs (X, Reddit, LinkedIn, Instagram, Threads, YouTube, TikTok, Discord, Slack, Telegram, WhatsApp, Bluesky…). Palette: signal-blue #2563eb → slate night #0f172a, accent amber #f59e0b on the active lane, clean off-white labels. Style: flat technical vector, calm and infrastructure-like, no readable logos, no readable text, no fire, no anvil. 16:9. -->
 
 Every document in `docs/` is listed with the question it answers in [docs/PAGE-INDEX.md](docs/PAGE-INDEX.md).
 
-# Social-Forge
+# Switchpost
 
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="Social Forge: one Rust binary, 26 social platforms, three interfaces — CLI, REST, MCP">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Switchpost: one Rust binary, 26 social platforms, three interfaces — CLI, REST, MCP">
 </p>
 
-**A high-performance social media orchestration engine with a triple-interface architecture: CLI, REST API, and MCP protocol.**
+**Social posting infrastructure that runs on your own hardware. One Rust binary, 26 platforms, and your AI agent can drive it.**
+
+Not a SaaS you rent — a service you own. No Docker required, no Redis, no Postgres, no per-seat pricing. One ~15MB binary, one SQLite file, and three interfaces into the same engine: a CLI for shell and agent use, a REST API with a real-time dashboard, and an MCP server with 389 tools for Claude, Cursor, Codex and friends.
+
+**Pick your path:**
+
+| You are… | Start here |
+|---|---|
+| An **AI agent** (Claude, Cursor, Codex) or its human | [Agent path (MCP)](#agent-path-mcp-for-ai-agents) — 389 tools, one command |
+| A **solo founder / indie operator** | [Quick start](#quick-start) — build, connect, post in three commands |
+| **Self-hosting** on a VPS or a spare box | [Deployment](docs/deployment.md) — systemd unit, one SQLite file |
+| Weighing it against Postiz / Buffer / n8n | [How it compares](#how-it-compares) |
+
+---
 
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-dea584?logo=rust)](https://www.rust-lang.org/)
 <img src="https://img.shields.io/badge/Status-Active-brightgreen" alt="Status">
-[![CI](https://github.com/ishan-parihar/social-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/ishan-parihar/social-forge/actions/workflows/ci.yml)
+[![CI](https://github.com/ishan-parihar/switchpost/actions/workflows/ci.yml/badge.svg)](https://github.com/ishan-parihar/switchpost/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/Protocol-MCP-purple.svg)](https://modelcontextprotocol.io/)
-[![Platforms](https://img.shields.io/badge/platforms-26-orange)](https://github.com/ishan-parihar/social-forge)
-[![Tests](https://img.shields.io/badge/tests-lib%20+%20mcp--audit-green)](https://github.com/ishan-parihar/social-forge)
+[![Platforms](https://img.shields.io/badge/platforms-26-orange)](https://github.com/ishan-parihar/switchpost)
+[![Tests](https://img.shields.io/badge/tests-lib%20+%20mcp--audit-green)](https://github.com/ishan-parihar/switchpost)
 
 ---
 
 ## What it is
 
-Social Forge is a single Rust binary that manages **26 social platforms** (12 Tier-1 + 14 Tier-2, verified: `src/social/tier.rs`) through three interfaces:
+Switchpost is a single Rust binary that manages **26 social platforms** (12 Tier-1 + 14 Tier-2, verified: `src/social/tier.rs`) through three interfaces into one shared engine:
 
 1. **CLI** — 100+ commands for AI agents and terminal power users
 2. **REST API** — SvelteKit dashboard for human operators
 3. **MCP Server** — 389 tools across 44 modules for Claude/Cursor-style AI integrations
+
+Three interfaces, one engine. Anything the dashboard can do, the CLI can do, and the MCP server can do — there is no second implementation to keep in sync.
+
+No MCP tool name carries the project name: they are prefixed by provider (`x_*`, `posts_*`, `di_*`), so renaming or relocating this project cannot break your agent's integration.
+
+---
+
+## Agent path (MCP for AI agents)
+
+If you drive your accounts from an AI agent, this is the fastest start in the file.
+
+```bash
+switchpost mcp          # stdio MCP server, 389 tools
+```
+
+```json
+{
+  "mcpServers": {
+    "switchpost": {
+      "command": "switchpost",
+      "args": ["mcp"]
+    }
+  }
+}
+
+Then ask your agent: *"post this to X and Bluesky, and schedule the same for LinkedIn tomorrow at 9am."*
+Full tool reference and session-start hooks are in [docs/agent-integration.md](docs/agent-integration.md).
+
+```bash
+switchpost mcp-tools --toolset x --pretty   # size a session before enabling a toolset
+switchpost post "shipping this today" --platforms x,bluesky
+switchpost posts list --state queued        # JSON by default, ready for an agent to parse
+```
 
 ---
 
@@ -36,44 +82,24 @@ Social Forge is a single Rust binary that manages **26 social platforms** (12 Ti
 # Build (Rust 1.85+)
 cargo build --release
 
-# Configure (writes ~/.social-forge/.env)
-./target/release/social-forge init
+# Configure (writes ~/.switchpost/.env)
+./target/release/switchpost init
 
 # Post now to X + Bluesky
-social-forge post "Hello from Social-Forge!" --platforms x,bluesky
+switchpost post "Hello from Switchpost!" --platforms x,bluesky
 
 # Schedule for later (ISO8601)
-social-forge post "Morning post" --platforms linkedin --schedule "2026-10-01T09:00:00Z"
+switchpost post "Morning post" --platforms linkedin --schedule "2026-10-01T09:00:00Z"
 ```
+
+Connect an account first with `switchpost connect <provider>`, or open `/setup` in the dashboard.
+The CLI self-documents: every command takes `--help`.
 
 ---
 
-## MCP Server (for agents)
+## MCP tool reference
 
-```bash
-social-forge mcp
-```
-
-**389 MCP tools** across 44 modules, all defined in `src/mcp/mod.rs` and dispatched to per-provider handler modules in `src/mcp/tools_*.rs`. Names are namespaced by platform:
-
-| Namespace | Tools | Namespace | Tools |
-|-----------|------:|-----------|------:|
-| `goog_*` (Gmail/Calendar/Drive/YouTube data) | 28 | `tb_*` (Telegram Bot) | 10 |
-| `x_*` | 27 | `di_*` (Discord) | 10 |
-| `reddit_*` | 23 | `li_*` (LinkedIn) | 15 |
-| `ig_*` (Instagram) | 21 | `lip_*` (LinkedIn Page) | 11 |
-| `gh_*` (GitHub) | 18 | `fb_*` (Facebook) | 15 |
-| `posts_*` (cross-platform) | 17 | `th_*` (Threads) | 9 |
-| `wa_*` (WhatsApp) | 9 | `pi_*` (Pinterest) | 8 |
-| `ias_*` (Instagram standalone) | 7 | `tu_*` (Telegram User) | 7 |
-| `bs_*` (Bluesky) | 7 | `ms_*` (Mastodon) | 6 |
-| `sk_*` (Skool) | 5 | `tt_*` (TikTok) | 4 |
-| `sl_*` (Slack) | 4 | `wp_*` (WordPress) | 4 |
-| `yt_*` (YouTube) | 2 | `md_*` / `dv_*` / `hn_*` (Medium / Dev.to / Hashnode) | 3 each |
-
-The remaining 68 are cross-platform: `posts_*`, `analytics_*`, `feed_*`, `integrations_*`, `media_*`, `tag_*`, `notif_*`, `wh_*` (webhooks), `calendar_get`, `auth_status`, `setup_*`, and the automation rule tools.
-
-`social-forge mcp` enumerates the live set; 389 is the number of `#[tool(…)]` definitions in `src/mcp/`.
+The full tool list and namespaces are in the [agent path](#agent-path-mcp-for-ai-agents) above; tool descriptions ship inside the server, so `switchpost mcp-tools --pretty` enumerates the live set from your installed binary rather than from this page.
 
 ---
 
@@ -90,14 +116,26 @@ The remaining 68 are cross-platform: `posts_*`, `analytics_*`, `feed_*`, `integr
 
 ---
 
+## ☕ Support & Sponsorship
+
+Switchpost is built and maintained by one person, self-hosted by default, and free forever under MIT.
+If it saves you a subscription or an afternoon of plumbing, sponsorship keeps the platform list growing.
+
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?style=flat-square&logo=github)](https://github.com/sponsors/ishan-parihar)
+[![Donate](https://img.shields.io/badge/Donate-Razorpay-3395FF?style=flat-square)](https://rzp.io/rzp/ishan-parihar)
+
+Your support funds new features, releases, and infrastructure for the whole ecosystem.
+
+---
+
 ## Configuration
 
-All config lives in `~/.social-forge/.env` (created by `social-forge init`).
+All config lives in `~/.switchpost/.env` (created by `switchpost init`).
 See `.env.example` for the full documented list. Nothing is required — every
 value has a default:
 
 ```bash
-DATABASE_URL=sqlite://data/social-forge.db?mode=rwc
+DATABASE_URL=sqlite://data/switchpost.db?mode=rwc
 APP_PASSWORD=choose-a-strong-password   # single-user gate for the WebUI
 APP_URL=http://localhost:6543           # public URL (OAuth redirects)
 TOKEN_ENCRYPTION_KEY=<64 hex chars>     # AES-256-GCM for tokens at rest
@@ -109,12 +147,12 @@ TOKEN_ENCRYPTION_KEY=<64 hex chars>     # AES-256-GCM for tokens at rest
 
 | Command | Description |
 |---------|-------------|
-| `social-forge post "text" --platforms x,bluesky` | Create (or schedule via `--schedule`) post |
-| `social-forge posts schedule <id> <at>` | Schedule an existing draft |
-| `social-forge analytics get <PROVIDER>` | Get analytics |
-| `social-forge mcp` | Start MCP server (stdio) |
-| `social-forge config set KEY VALUE` | Manage config |
-| `social-forge audit` | Disabled integrations, `--platforms` prefix collisions, writer-lock posture |
+| `switchpost post "text" --platforms x,bluesky` | Create (or schedule via `--schedule`) post |
+| `switchpost posts schedule <id> <at>` | Schedule an existing draft |
+| `switchpost analytics get <PROVIDER>` | Get analytics |
+| `switchpost mcp` | Start MCP server (stdio) |
+| `switchpost config set KEY VALUE` | Manage config |
+| `switchpost audit` | Disabled integrations, `--platforms` prefix collisions, writer-lock posture |
 
 Targeting, the single-writer rule, platform tiers, and the repository layout are in [docs/platforms-and-cli.md](docs/platforms-and-cli.md). Planning, audit, and decision records are indexed in [`docs/planning/README.md`](docs/planning/README.md); the full 2026-10-14 audit is [`docs/audit/AUDIT_2026-10-14.md`](docs/audit/AUDIT_2026-10-14.md) and the 2026-10-19 session self-reflection is [`docs/planning/SESSION_2026-10-19.md`](docs/planning/SESSION_2026-10-19.md).
 
@@ -122,17 +160,17 @@ Targeting, the single-writer rule, platform tiers, and the repository layout are
 
 | CLI dashboard | REST API docs | MCP tools |
 |:---:|:---:|:---:|
-| ![CLI](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/cli.png) | ![API](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/api.png) | ![MCP](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/mcp.png) |
+| ![CLI](https://github.com/ishan-parihar/switchpost/raw/main/assets/readme/cli.png) | ![API](https://github.com/ishan-parihar/switchpost/raw/main/assets/readme/api.png) | ![MCP](https://github.com/ishan-parihar/switchpost/raw/main/assets/readme/mcp.png) |
 
 | Content calendar | Analytics | Multi-platform |
 |:---:|:---:|:---:|
-| ![Calendar](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/calendar.png) | ![Analytics](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/analytics.png) | ![Multi](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/multi.png) |
+| ![Calendar](https://github.com/ishan-parihar/switchpost/raw/main/assets/readme/calendar.png) | ![Analytics](https://github.com/ishan-parihar/switchpost/raw/main/assets/readme/analytics.png) | ![Multi](https://github.com/ishan-parihar/switchpost/raw/main/assets/readme/multi.png) |
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Social Forge Binary                        │
+│                        Switchpost Binary                        │
 ├──────────────┬──────────────────┬───────────────────────────────┤
 │   CLI Mode   │   REST API Mode  │        MCP Stdio Mode         │
 │   (clap)      │  (axum :6543)    │   (rmcp, 389 tools)           │
@@ -151,18 +189,24 @@ Targeting, the single-writer rule, platform tiers, and the repository layout are
 
 ## How it compares
 
-| Capability | **Social Forge** | Buffer / Hootsuite | n8n / Make | Postiz |
+| Capability | **Switchpost** | Buffer / Hootsuite | n8n / Make | Postiz |
 |---|---|---|---|---|
-| **AI-agent native** | ✅ CLI + MCP + REST all same engine | ❌ human dashboards | ⚠️ workflow only | ⚠️ some API |
+| **Runs on your machine, no Docker** | ✅ single ~15MB binary, one SQLite file | ❌ SaaS | ⚠️ needs nodes + infra | ❌ Next.js + Postgres + containers |
+| **Token encryption at rest** | ✅ AES-256-GCM | ❌ | ❌ | ❌ (plaintext) |
+| **Agent-native, all three ways** | ✅ CLI + REST + MCP, one engine | ❌ human dashboards | ⚠️ workflow only | ✅ CLI + MCP |
+| **Tool names independent of the project name** | ✅ provider-prefixed (`x_*`, `posts_*`) — a rename breaks nothing | ❌ | ❌ | ❌ |
 | **Platforms** | 26, trait-based registry, tiered depth | ~6–10 | via nodes | ~10 |
 | **Dual-path auth** | ✅ OAuth2 + browser-cookie extraction | ❌ | ❌ | ❌ |
-| **Self-hosted** | ✅ single ~15MB musl binary | ❌ SaaS | ✅ | ✅ |
+| **Self-hosted** | ✅ one binary, no orchestrator | ❌ SaaS | ✅ | ✅ |
 | **Scheduler w/ retry** | ✅ in-process Tokio, exp-backoff, per-provider concurrency | ✅ | ✅ | ✅ |
 | **Realtime SSE** | ✅ broadcast | ⚠️ | ✅ | ❌ |
 | **Stage→review→publish** | ✅ | ✅ | ✅ | ✅ |
 | **Installs as agent skill (AXI)** | ✅ session-start ambient context | ❌ | ❌ | ❌ |
 
-Buffer manages your *calendar*; Social Forge runs your *entire social operation* as an agent-accessible service — schedule, publish, moderate, monitor, and recover — from one self-hosted binary.
+Buffer manages your *calendar*. Postiz runs a hosted, agent-friendly scheduler at scale. Switchpost is the one
+that runs **your** social operation as an agent-accessible service on **your own hardware** — schedule,
+publish, moderate, monitor, and recover — from a single binary you can audit in an afternoon, with your
+tokens encrypted at rest and your data in a file you control.
 
 ---
 
@@ -171,32 +215,32 @@ Buffer manages your *calendar*; Social Forge runs your *entire social operation*
 The CLI is self-documenting. Run any command with `--help`:
 
 ```bash
-social-forge --help                      # All commands
-social-forge x --help                    # X/Twitter operations
-social-forge reddit --help               # Reddit operations
-social-forge reddit mod --help           # Reddit moderation
+switchpost --help                      # All commands
+switchpost x --help                    # X/Twitter operations
+switchpost reddit --help               # Reddit operations
+switchpost reddit mod --help           # Reddit moderation
 ```
 
 ### Examples
 
 ```bash
 # Post to X/Twitter
-social-forge x post "Shipping new features 🚀"
+switchpost x post "Shipping new features 🚀"
 
 # Browse Reddit
-social-forge reddit browse programming --sort hot --limit 10
+switchpost reddit browse programming --sort hot --limit 10
 
 # Vote on Reddit (requires cookie auth)
-social-forge reddit vote t3_abc123 up
+switchpost reddit vote t3_abc123 up
 
 # Get LinkedIn analytics
-social-forge linkedin analytics
+switchpost linkedin analytics
 
 # List all connected providers
-social-forge providers
+switchpost providers
 
 # Discover available targets for an integration (channels, groups, subreddits)
-social-forge integrations targets <integration-id>
+switchpost integrations targets <integration-id>
 ```
 
 All output is JSON by default — designed for AI agent consumption.
@@ -210,21 +254,21 @@ For AI agents that speak MCP (Claude Desktop, Cursor, etc.):
 ```json
 {
   "mcpServers": {
-    "social-forge": {
-      "command": "social-forge",
+    "switchpost": {
+      "command": "switchpost",
       "args": ["mcp"]
     }
   }
 }
 ```
 
-This exposes 389 tools with full JSON Schema descriptions.
+This exposes 389 tools with full JSON Schema descriptions. Point the command at the binary you installed; with a cargo build that is ./target/release/switchpost.
 
 ---
 
 ## Dual-Path Authentication
 
-Social Forge implements a unique **dual-path auth** system (inspired by how browsers work):
+Switchpost implements a unique **dual-path auth** system (inspired by how browsers work):
 
 ### Cookie Auth (X, Reddit)
 - Extracts session cookies directly from your browser (Chrome, Brave, Firefox, Zen)
@@ -280,12 +324,3 @@ MIT — [Ishan Parihar](https://github.com/ishan-parihar)
 ---
 
 Skill install and the Claude Code, Codex and OpenCode session hooks are in [docs/agent-integration.md](docs/agent-integration.md).
-
-## ☕ Support & Sponsorship
-
-If you find this project useful, consider supporting ongoing development:
-
-[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?style=flat-square&logo=github)](https://github.com/sponsors/ishan-parihar)
-[![Donate](https://img.shields.io/badge/Donate-Razorpay-3395FF?style=flat-square)](https://rzp.io/rzp/ishan-parihar)
-
-Your support funds new features, releases, and infrastructure for the whole ecosystem.

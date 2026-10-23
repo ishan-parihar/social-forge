@@ -21,7 +21,7 @@ Add to `~/.claude/settings.json` (global) or `.claude/settings.json` (project):
         "hooks": [
           {
             "type": "command",
-            "command": "social-forge"
+            "command": "switchpost"
           }
         ]
       }
@@ -37,7 +37,7 @@ Add to `~/.codex/hooks.json`:
 ```json
 {
   "SessionStart": {
-    "command": "social-forge"
+    "command": "switchpost"
   }
 }
 ```
@@ -46,15 +46,15 @@ Ensure `[features].hooks = true` in `~/.codex/config.toml`.
 
 ### OpenCode
 
-Create `~/.config/opencode/plugins/social-forge.ts`:
+Create `~/.config/opencode/plugins/switchpost.ts`:
 
 ```typescript
 export default {
-  name: "social-forge",
+  name: "switchpost",
   description: "Social media management ambient context",
   sessionStart: async () => {
     const { execSync } = await import("child_process");
-    return execSync("social-forge", { encoding: "utf-8" });
+    return execSync("switchpost", { encoding: "utf-8" });
   },
 };
 ```
@@ -62,12 +62,12 @@ export default {
 ## How it works
 
 1. Agent session starts → hook fires
-2. Hook runs `social-forge` (no args = content-first home view)
+2. Hook runs `switchpost` (no args = content-first home view)
 3. Agent sees connected accounts, open items, tool count
 4. Agent can act immediately without a discovery call
 
 ## Rules
 
-- **Portable**: hooks use the binary name (`social-forge`). If the binary isn't on PATH, use the full absolute path.
+- **Portable**: hooks use the binary name (`switchpost`). If the binary isn't on PATH, use the full absolute path.
 - **Idempotent**: repeated installs with the same path are silent no-ops.
 - **Token-budget-aware**: the home view is already optimized for minimal token cost.

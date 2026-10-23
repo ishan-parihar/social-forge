@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# build-tg.sh — Build vysheng/telegram-cli for social-forge
+# build-tg.sh — Build vysheng/telegram-cli for switchpost
 # Produces binary at: tg/bin/telegram-cli
 #
 

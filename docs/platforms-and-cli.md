@@ -153,7 +153,7 @@ Providers are tiered: **Tier-1** gets full depth (analytics, engagement, comment
 ## Project Structure
 
 ```
-social-forge/
+switchpost/
 ├── src/
 │   ├── main.rs              # Entry point, CLI dispatch
 │   ├── cli/                 # CLI subcommands (clap, 56 commands)

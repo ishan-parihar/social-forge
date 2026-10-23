@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-labelledby="title desc">
-  <title id="title">Social Forge — one Rust binary, 30 social platforms, three interfaces</title>
+  <title id="title">Switchpost — one Rust binary, 26 social platforms, three interfaces</title>
   <desc id="desc">A dark forge hub with CLI, REST, and MCP spokes radiating posts to a ring of 30 platform nodes</desc>
   <defs>
     <radialGradient id="core" cx="50%" cy="50%" r="60%">

@@ -1,4 +1,4 @@
-# genome.toml — social-forge's role→path map and genome modules.
+# genome.toml — switchpost's role→path map and genome modules.
 # Converted from kb.toml (2026-10-19): the same role→path map, with the
 # retired `closed` role dropped (it named the same standing-notes list as
 # `ledger`) and `dated_pattern` moved from [paths] to [core], where the
@@ -9,7 +9,7 @@
 # as legitimately-elsewhere, never as missing. `overlay:` would mark an
 # operator-overlay role (none here — single-user repo).
 #
-# social-forge already runs the genome's conventions informally: the dated
+# switchpost already runs the genome's conventions informally: the dated
 # outline succession in docs/planning/ is the dated-frozen + supersede pattern,
 # OUTLINE standing notes are the closed list, AGENTS.md §9 is the regression
 # ledger. This map wires those mechanisms to the tooling instead of
@@ -48,7 +48,7 @@ gate = "cargo test --lib"
 # The judgement the golden rules make non-negotiable, in their own order
 checklist = [
   "the commit is pushed (or the reason it could not is written down)",
-  "the build was verified: cargo check --lib --bin social-forge, and the frontend build",
+  "the build was verified: cargo check --lib --bin switchpost, and the frontend build",
   "a change touching HTML interpolation, file upload, auth or SQL was reviewed against the security rules",
   "no new sqlx::query! macros without a regenerated .sqlx/ cache",
   "no secret is in the commit",

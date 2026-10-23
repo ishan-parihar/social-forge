@@ -1,4 +1,4 @@
-# AGENTS.md — Social Forge Development Protocol
+# AGENTS.md — Switchpost Development Protocol
 
 ## Contents
 
@@ -71,7 +71,7 @@
 1. **ALWAYS PUSH COMMITS AFTER EACH ITERATION.** After every meaningful unit of work — a bug fix, a feature, a refactor phase — you MUST `git commit` AND `git push github master`. The user tests locally on their machine by pulling from `github/master`. If you don't push, your work doesn't exist as far as the user is concerned. Do not batch 5 phases of work into one giant commit; commit each phase as you complete it.
 
 2. **NEVER break the build.** Before committing, verify:
-   - `cargo check --lib --bin social-forge` → 0 errors (warnings are OK)
+   - `cargo check --lib --bin switchpost` → 0 errors (warnings are OK)
    - `cd frontend && pnpm build` → succeeds
    - If you added Rust unit tests: `cargo test --lib` → all pass
    - If you can't verify (e.g. missing `cmake` for boringssl), say so explicitly in the commit message and explain what the user needs to verify locally.
@@ -88,11 +88,11 @@
 
 ## 0.5. DESIGN PREFERENCES (non-negotiable — do NOT violate these)
 
-These are the core design decisions that define social-forge's identity. They were established by the user and must not be changed, even when adding features inspired by competitors like postiz-app. If a feature addition conflicts with any of these, skip the feature rather than violate the preference.
+These are the core design decisions that define switchpost's identity. They were established by the user and must not be changed, even when adding features inspired by competitors like postiz-app. If a feature addition conflicts with any of these, skip the feature rather than violate the preference.
 
 ### 1. Single-user, solo-founder social-media management
 - **NO multi-user auth.** There is no user-registration, no user table lookups, no per-user permissions, no team roles, no team collaboration features. The WebUI is gated by a single `APP_PASSWORD` env var.
-- **NO team collaboration features.** No "invite team member", no per-user roles (USER/ADMIN/SUPERADMIN), no slot-level comments, no approval queues, no impersonation. If postiz-app has a team feature, social-forge does NOT copy it.
+- **NO team collaboration features.** No "invite team member", no per-user roles (USER/ADMIN/SUPERADMIN), no slot-level comments, no approval queues, no impersonation. If postiz-app has a team feature, switchpost does NOT copy it.
 - The `users` table exists only to satisfy FK constraints. The `password` column is unused (a random invalid hash is stored). All data is owned by `DEFAULT_USER_ID`.
 - If a competitor analysis suggests adding "team collaboration" or "multi-tenant" features, SKIP that suggestion. It violates this preference.
 
@@ -116,7 +116,7 @@ These are the core design decisions that define social-forge's identity. They we
 - OAuth tokens are **encrypted at rest** with AES-256-GCM when `TOKEN_ENCRYPTION_KEY` is set. This is non-negotiable. Do NOT add code paths that store tokens in plaintext.
 - The server binds to `127.0.0.1` by default. LAN exposure is opt-in via `BIND_HOST=0.0.0.0`.
 - HTML interpolation always uses `html_escape()`. File uploads always validate MIME + magic bytes. CSRF defense-in-depth on all state-changing routes.
-- If a competitor stores tokens in plaintext (postiz-app does), social-forge does NOT copy that pattern. Social-forge's encryption-at-rest is a security advantage, not a drawback.
+- If a competitor stores tokens in plaintext (postiz-app does), switchpost does NOT copy that pattern. Its encryption-at-rest is a security advantage, not a drawback.
 
 ### 6. Realtime-first frontend
 - The frontend uses SSE (`/api/events`) for live updates. 9 routes subscribe to realtime events. This is a UX advantage over polling-based competitors (postiz-app uses SWR polling).
@@ -174,11 +174,11 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `worklog.md` | The multi-agent worklog — this protocol, §8 | Before starting work; after finishing |
 | `docs/decisions/` | AD-NNN decision records, immutable once numbered (`scripts/genome rec new ad` mints them) | When a direction change is ratified |
 | `docs/SESSION_HOOKS.md` | Session-start ambient-context setup (AXI) | When wiring agent hooks |
-| `skills/social-forge-agent/SKILL.md` | Installed agent skill (via `make install-skill`) | When editing the skill |
-| `skills/social-forge-agent/references/providers.md` | Per-platform provider reference | When editing provider docs |
+| `skills/switchpost-agent/SKILL.md` | Installed agent skill (via `make install-skill`) | When editing the skill |
+| `skills/switchpost-agent/references/providers.md` | Per-platform provider reference | When editing provider docs |
 | `docs/planning/PHASES_P0-P9.md` | The P0–P9 phase plan the objective names: each phase's acceptance criteria and its register-row mapping | Before parity or phase work; when claiming a phase is done |
 | `docs/planning/SESSION_2026-10-19.md` | Session self-reflection: what worked, every failure with its evidence, and the carry-forward checklist | Before a delegated or browser-driven session |
-| `skills/social-forge-agent/references/quick-reference.md` | Routing rules, ID-discovery chains, error recovery and the v11 MCP contracts (NOT auto-installed); per-platform listings live in `skills/social-forge-agent/references/providers.md` and `--help` | Reference only; install manually if needed |
+| `skills/switchpost-agent/references/quick-reference.md` | Routing rules, ID-discovery chains, error recovery and the v11 MCP contracts (NOT auto-installed); per-platform listings live in `skills/switchpost-agent/references/providers.md` and `--help` | Reference only; install manually if needed |
 
 Superseded docs move to `docs/archive/` with a tombstone at the original path — nothing is deleted. (2026-09-30 saw the last deletion of 14 stale docs; that practice is retired.) If a doc isn't in this table and has no tombstone, it doesn't exist — don't go looking for it.
 
@@ -186,12 +186,12 @@ Superseded docs move to `docs/archive/` with a tombstone at the original path �
 
 Load the `rust-best-practices` skill (the Apollo handbook, 10 chapters) before writing or reviewing Rust: `&T` over `.clone()`, `Result` + `?` over `unwrap` (never `unwrap`/`expect` outside tests), `thiserror` for libs / `anyhow` for the binary, `cargo clippy --all-targets --all-features --locked -- -D warnings` clean, descriptive test names with one assertion each.
 
-Social Forge is a **single-user, self-hosted social media management platform** designed for AI agents. It provides a triple interface — CLI, REST API, and MCP server — over 26 social platforms (X, Reddit, LinkedIn, Facebook, Instagram, YouTube, Threads, TikTok, Bluesky, Pinterest, Discord, Slack, Telegram, WhatsApp, WordPress, Medium, Dev.to, Hashnode, GitHub, etc.).
+Switchpost is a **single-user, self-hosted social media management platform** designed for AI agents. It provides a triple interface — CLI, REST API, and MCP server — over 26 social platforms (X, Reddit, LinkedIn, Facebook, Instagram, YouTube, Threads, TikTok, Bluesky, Pinterest, Discord, Slack, Telegram, WhatsApp, WordPress, Medium, Dev.to, Hashnode, GitHub, etc.).
 
-**Architecture in one paragraph:** A single Rust binary (`social-forge`) runs an axum HTTP server (REST API + embedded SvelteKit frontend), an rmcp MCP server (stdio, for AI agents like Claude/Cursor), an in-process scheduler (polls for due posts every 30s), an SSE broadcaster (realtime updates to the frontend), and background tasks (RSS poller, feed refresher, analytics cache refresher). All state lives in a local SQLite file. OAuth tokens are AES-256-GCM encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set.
+**Architecture in one paragraph:** A single Rust binary (`switchpost`) runs an axum HTTP server (REST API + embedded SvelteKit frontend), an rmcp MCP server (stdio, for AI agents like Claude/Cursor), an in-process scheduler (polls for due posts every 30s), an SSE broadcaster (realtime updates to the frontend), and background tasks (RSS poller, feed refresher, analytics cache refresher). All state lives in a local SQLite file. OAuth tokens are AES-256-GCM encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set.
 
 **Key numbers (measured 2026-10-20 against this commit; each line names where to re-measure it):**
-- **389 MCP tools** (`grep -rh --include='*.rs' 'tool(' src/mcp/ | wc -l` = 389), all declared in the one `SocialForgeMcpServer` impl in `src/mcp/mod.rs`; the 44 sibling `src/mcp/tools_*.rs` files plus `src/mcp/auth.rs` and `src/mcp/rest_bridge.rs` are handler modules with no `tool(` attributes of their own — do not grep them for the tool count. That is 47 Rust files under `src/mcp/` in total.
+- **389 MCP tools** (`grep -rh --include='*.rs' 'tool(' src/mcp/ | wc -l` = 389), all declared in the one `SwitchpostMcpServer` impl in `src/mcp/mod.rs`; the 44 sibling `src/mcp/tools_*.rs` files plus `src/mcp/auth.rs` and `src/mcp/rest_bridge.rs` are handler modules with no `tool(` attributes of their own — do not grep them for the tool count. That is 47 Rust files under `src/mcp/` in total.
 - **26 providers registered by default** in `src/social/registry.rs` — 12 Tier-1 (depth) + 14 Tier-2 (publish-maintained). `linkedin-page` and `instagram-standalone` are Tier-1 members in their own right, not extras bolted onto a parent count. One more, Farcaster, is registered only when `ENABLE_ARCHIVE_PROVIDERS` is set (Tier-3, code in `src/social/archive/`). Tier membership lives in `src/social/tier.rs` (plan §1); the counts are asserted there and in `registry.rs`'s own tests, so a drift breaks the build rather than the doc. `kick`/`vk`/`whop`/`lemmy` were removed outright.
 - **8 SQL migrations** in `migrations/` (`0001_init` … `0008_posts_media_array`), additive-only, no destructive ops.
 - **~94,200 LOC of Rust** (`find src -name '*.rs' | xargs wc -l`) + **~29,200 LOC of Svelte/TS frontend** (`find frontend/src`).
@@ -201,7 +201,7 @@ Social Forge is a **single-user, self-hosted social media management platform** 
 ## 2. Repository Layout
 
 ```
-social-forge/
+switchpost/
 ├── src/
 │   ├── main.rs              # Entry point: arg parsing, server startup, graceful shutdown
 │   ├── config.rs            # Config::from_env() — all env var loading
@@ -224,7 +224,7 @@ social-forge/
 │   │   ├── run.rs           # Main CLI dispatcher (~4059 LOC)
 │   │   └── platforms/       # 32 platform shims (thin wrappers around unified commands)
 │   ├── mcp/                 # MCP server (389 tools, all #[tool] methods in mod.rs below)
-│   │   ├── mod.rs           # SocialForgeMcpServer impl + all #[tool] method registration (~4114 LOC)
+│   │   ├── mod.rs           # SwitchpostMcpServer impl + all #[tool] method registration (~4114 LOC)
 │   │   ├── tools_posts.rs   # Post CRUD MCP tools
 │   │   ├── tools_admin.rs   # v9 parity wrappers (posts_repeat, posts_set_tags, media_delete, etc.)
 │   │   ├── tools_x.rs       # X-specific tools (create_tweet, reply, like, retweet, search, timeline)
@@ -269,8 +269,8 @@ social-forge/
 ├── migrations/              # 8 SQL migrations (0001-0008, additive-only, no destructive ops)
 ├── scripts/
 │   ├── install.sh           # One-line installer (downloads pre-built binary, sets up systemd)
-│   ├── social-forge.service # systemd unit
-│   ├── social-forge-start.sh
+│   ├── switchpost.service # systemd unit
+│   ├── switchpost-start.sh
 │   ├── genome               # The vendored project-genome CLI (wake / ask / close / lint / doctor). See genome.toml for the role→path map
 │   └── vendor-pull.sh       # Verifies the pinned transitive deps in docs/planning/VENDOR_PINS.md (`--check` is a CI gate)
 ├── Dockerfile               # OPTIONAL container build (downloads a pre-built binary). SQLite-in-container is not a supported deploy path — §0.5.3 rules out Docker as a runtime dependency.
@@ -301,7 +301,7 @@ cd frontend && pnpm install
 
 ```bash
 # Fast check (no codegen) — use this during development:
-cargo check --lib --bin social-forge
+cargo check --lib --bin switchpost
 
 # Full release build:
 cargo build --release
@@ -365,7 +365,7 @@ cargo run -- x timeline
 ```bash
 # 1. Make your changes
 # 2. Verify the build (see §3.2 + §3.3)
-cargo check --lib --bin social-forge   # must be 0 errors
+cargo check --lib --bin switchpost   # must be 0 errors
 cd frontend && pnpm build              # must succeed
 cargo test --lib                       # must pass
 
@@ -1258,8 +1258,8 @@ See `.env.example` for the full list. Critical ones:
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
-| `DATABASE_URL` | No | `sqlite://data/social-forge.db` | SQLite file URL (SQLite-only; non-sqlite schemes are rejected at startup) |
-| `APP_PASSWORD` | No | auto-generated | Single-user password gate (persisted to `~/.social-forge/.env`) |
+| `DATABASE_URL` | No | `sqlite://data/switchpost.db` | SQLite file URL (SQLite-only; non-sqlite schemes are rejected at startup) |
+| `APP_PASSWORD` | No | auto-generated | Single-user password gate (persisted to `~/.switchpost/.env`) |
 | `APP_URL` | No | `https://localhost:6543` | Public URL (used for OAuth redirect URIs + TLS decision) |
 | `BIND_HOST` | No | `127.0.0.1` | Network interface to bind (`0.0.0.0` for LAN) |
 | `FRONTEND_URL` | No | = `APP_URL` | CORS allow-list + CSRF origin. Must match the browser origin including port; a `--port` other than the `APP_URL` port fails `csrf_origin_mismatch` on state-changing routes |
@@ -1276,23 +1276,23 @@ See `.env.example` for the full list. Critical ones:
 
 ### CLI (preferred for shell-based AI agents)
 ```bash
-social-forge --help
-social-forge providers               # List connected accounts
-social-forge post "hello" --platforms x,linkedin
-social-forge posts list
-social-forge posts publish <id>
-social-forge media upload ./photo.jpg
-social-forge x timeline
-social-forge reddit browse rust
-social-forge automation list
+switchpost --help
+switchpost providers               # List connected accounts
+switchpost post "hello" --platforms x,linkedin
+switchpost posts list
+switchpost posts publish <id>
+switchpost media upload ./photo.jpg
+switchpost x timeline
+switchpost reddit browse rust
+switchpost automation list
 ```
 
 ### MCP (for Claude Desktop / Cursor)
 ```json
 {
   "mcpServers": {
-    "social-forge": {
-      "command": "social-forge",
+    "switchpost": {
+      "command": "switchpost",
       "args": ["mcp"]
     }
   }
@@ -1306,7 +1306,7 @@ Boot default is `core` — the cross-platform lifecycle tools
 plus the two meta tools. A session that only touches X does not pay
 389-schema context tax.
 
-- `SOCIAL_FORGE_TOOLSETS=x,reddit` (comma-separated, or `all`) — boot-time
+- `SWITCHPOST_TOOLSETS=x,reddit` (comma-separated, or `all`) — boot-time
   selection; `tools_enable` adds sets at runtime.
 - `tools_search` searches ALL tools including disabled ones — use it
   before `tools_enable` to discover the set names (provider prefixes:
@@ -1315,7 +1315,7 @@ plus the two meta tools. A session that only touches X does not pay
   `mastodon`, `skool`, `slack`, `threads`, `tiktok`, `pinterest`,
   `wordpress`, `medium`, `devto`, `hashnode`, `webhooks`, …).
 - Shell sizing a session before enabling:
-  `social-forge mcp-tools --toolset x --pretty` (same membership rule
+  `switchpost mcp-tools --toolset x --pretty` (same membership rule
   as the in-session filter; plain output lists names only).
 
 ### Key MCP tool categories (389 total)
@@ -1337,7 +1337,7 @@ plus the two meta tools. A session that only touches X does not pay
 
 Before declaring a task complete, verify ALL of these:
 
-- [ ] `cargo check --lib --bin social-forge` → 0 errors
+- [ ] `cargo check --lib --bin switchpost` → 0 errors
 - [ ] `cargo test --lib` → all tests pass
 - [ ] `cd frontend && pnpm build` → succeeds
 - [ ] `cd frontend && pnpm exec svelte-check --threshold error` → 0 errors

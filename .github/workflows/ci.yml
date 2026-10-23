@@ -23,7 +23,7 @@ jobs:
       - name: Validate shell scripts
         run: |
           bash -n scripts/install.sh
-          bash -n scripts/social-forge-start.sh
+          bash -n scripts/switchpost-start.sh
           bash -n scripts/vendor-pull.sh
           echo "✓ Shell scripts are syntactically valid"
 
