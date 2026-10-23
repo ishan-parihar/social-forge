@@ -90,7 +90,7 @@ async function dismissOnboarding(page) {
     // mount.
     await page.evaluate(() => {
       try {
-        localStorage.setItem('social-forge-onboarded', 'true');
+        localStorage.setItem('switchpost-onboarded', 'true');
       } catch {}
     });
     const skip = page.getByRole('button', { name: /skip/i }).first();

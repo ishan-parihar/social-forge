@@ -61,7 +61,7 @@ async function main() {
   });
   await ctx.addInitScript(() => {
     try {
-      localStorage.setItem('social-forge-onboarded', 'true');
+      localStorage.setItem('switchpost-onboarded', 'true');
     } catch {}
   });
   const page = await ctx.newPage();

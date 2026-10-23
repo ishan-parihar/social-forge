@@ -2076,3 +2076,77 @@ Stage Summary:
   `relaypost`, `carrierpost` as backups.
 - NOTHING has been renamed. This is a decision doc awaiting the user's explicit go-ahead (the
   AGENTS.md DECISIONS precedent). No code, config, or doc has been modified.
+
+---
+Task ID: N-1-execute-rename
+Agent: jcode
+Task: Execute the approved rename to `switchpost`, directly, with no compatibility shim.
+Follows DECISION_RENAME_2026-10-23.md; the user approved the plan (2026-10-23) and
+explicitly declined the legacy-path shim ("very alpha project").
+
+Renamed in four pushed commits (e2c0fd1 plan, 4c6a6eb code+tests+skill, 54ecd28
+docs+ops, f757a5e fence fix):
+- Cargo package/bin/keywords/description, the `social_forge` crate identifier,
+  SocialForgeMcpServer, clap #[command(name)], tracing target, UNIT_NAME,
+  User-Agent strings, and every ~/.social-forge/ + data/social-forge.db path in
+  src/config.rs. No fallback path, per instruction.
+- SOCIAL_FORGE_TOOLSETS and SOCIAL_FORGE_DIR both -> SWITCHPOST_* (two
+  operator-facing env vars; the second would have silently broken the systemd unit).
+- frontend strings + localStorage keys; skills/social-forge-agent ->
+  skills/switchpost-agent (git mv); tests/ 68 occurrences.
+- README restructured per §10 archetypes; AGENTS.md, docs/, PAGE-INDEX row;
+  scripts/social-forge-start.sh + social-forge.service -> switchpost.* (git mv);
+  Dockerfile(.build), Makefile, CI workflows artifact names + release binary
+  paths, genome.toml, workspace-lint.yaml, .env.example.
+
+Four defects found and fixed by the rename itself, none of which a read would catch:
+1. `tests/doc_cli_commands_test.rs::trim_shell` modelled `&&` but not a bare `&`, so a
+   legitimately backgrounded doc example reached the CLI parser as `... --json &` and
+   failed. Fixed the parser, not the doc.
+2. `migrations/0001_init.sql` carries the old name in a header comment. Editing it made
+   every test boot fail ("migration 1 was previously applied but has been modified") —
+   sqlx checksums migration files. Reverted byte-for-byte; the comment is a permanent
+   fossil, now recorded in §9.1. Corrects the earlier "0 occurrences in migrations/"
+   measurement.
+3. The agent-path block I added to the README opened a ```json fence and never closed
+   it. 17 fence lines instead of 18: docs_lint stopped seeing the real headings and
+   reported the routing table's own (correct) links as dead, while the bash `#` comments
+   inside fences were parsed as document headings. Gate went 3 hard failures -> 0.
+   It would also have broken rendered Markdown on GitHub.
+4. The gitignored `.env` carried `DATABASE_URL=sqlite://data/social-forge.db`, which
+   outranks the compiled default, so the correctly-renamed server still opened the old
+   database and wrote to both files. Fixed one line and restarted; confirmed by the old
+   file's mtime going still. A rename sweep over TRACKED files renames the source, not
+   the deployment.
+
+Data migration (executed, §9.2): SIGTERM to the live server (it held writer.lock),
+`PRAGMA wal_checkpoint(TRUNCATE)` folding the 2.1MB WAL into the main file, a COPY of
+the trio to switchpost.* rather than a move, restart, verify (health 200, unauth
+providers 401, row counts identical: 2 posts / 3 integrations / 1 user / 2 media,
+integrity ok), and only then the old files retired into
+data/archive/switched-from-social-forge-2026-10-23/ with ~/.social-forge -> ~/.switchpost
+and a dated .env backup beside each.
+
+Also removed: tests/test_api.py and tests/test_api.sh — orphaned since the SQLite
+migration (0 references anywhere in the repo, no CI/Makefile/Cargo wiring, targeted
+localhost:3000 and a `PGPASSWORD=social-forge psql` fixture for the dropped Postgres
+path, one with a typo'd binary path `./target/releassocial-forge`).
+
+Final state: `git ls-files | xargs grep -i 'social.forge\|socialforge'` returns only
+the three intended fossils plus two [REDACTED:email] false positives: the historical
+decision doc (correctly keeps the old name), its PAGE-INDEX row, migrations/0001_init.sql
+(sqlx-checksummed), plus `.sqlx/` and `seed_demo.py` (redacted emails).
+
+Verification:
+- cargo check --lib --bin switchpost: 0 errors
+- cargo test --lib: 496/496 pass
+- cargo test --test uuid_column_decode_test: 3/3; --test doc_cli_commands_test: 3/3
+- pnpm build: succeeds; svelte-check: 0 errors 0 warnings
+- docs_lint --root .: 0 hard failures, 0 advisories (and the live pre-commit
+  docs-check reports ok on all four checks)
+- Release binary built and running: `switchpost 0.3.0` on 127.0.0.1:6544 against
+  data/switchpost.db; the audit scripts' localStorage keys now match the app's own
+  (switchpost-theme / switchpost-onboarded), so the visual gates still drive the app.
+
+Not done (operator's to do, named in §9 step 1): claim switchpost.com/.dev and rename
+the GitHub repo; crates.io was HTTP 403 throughout (UNKNOWN, not free).

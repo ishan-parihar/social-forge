@@ -779,7 +779,7 @@ async function main() {
     // store sees the value from its very first read.
     await context.addInitScript((t) => {
       try {
-        localStorage.setItem('social-forge-theme', t);
+        localStorage.setItem('switchpost-theme', t);
       } catch {
         // Storage denied (opaque origin) — the page falls back to dark.
       }

@@ -85,7 +85,7 @@ async function main() {
   // very first read.
   await ctx.addInitScript((zone) => {
     try {
-      localStorage.setItem('social-forge-timezone', zone);
+      localStorage.setItem('switchpost-timezone', zone);
     } catch {}
   }, ZONE);
 
@@ -189,7 +189,7 @@ async function main() {
   // The target must not be in the PAST: `isPast(date, timezone.value)`
   // gates the drop, and a past cell refuses it.
   const viewState = await page.evaluate(() => ({
-    zone: localStorage.getItem('social-forge-timezone'),
+    zone: localStorage.getItem('switchpost-timezone'),
     dataDateCells: document.querySelectorAll('[data-date]').length,
     dataDropCells: document.querySelectorAll('[data-drop-date]').length,
     gridcells: document.querySelectorAll('[role="gridcell"]').length,

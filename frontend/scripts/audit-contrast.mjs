@@ -240,7 +240,7 @@ async function main() {
 
   // The theme is a localStorage key the app reads at boot.
   await page.evaluate((t) => {
-    localStorage.setItem('social-forge-theme', t);
+    localStorage.setItem('switchpost-theme', t);
   }, THEME);
   await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(1500);

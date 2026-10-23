@@ -395,6 +395,27 @@ WAL, move the `.db` / `-wal` / `-shm` trio **together**, then start. Copy first 
 after the new path opens and migrates cleanly. Moving the `.db` while leaving `-wal` behind
 loses the tail of the database, and the tail is where the recent writes are.
 
+**Executed 2026-10-23, and one finding that the plan did not predict.** The move itself went as
+written: SIGTERM to the server, a `PRAGMA wal_checkpoint(TRUNCATE)` (which took the 2.1 MB WAL to
+zero and folded it into the main file), a **copy** of the trio to `switchpost.*` rather than a
+move, then a restart. Pre- and post-migration row counts matched exactly (2 posts, 3
+integrations, 1 user, 2 media) and `integrity_check` returned `ok`. Only after the new path had
+been proven live — `health` 200, unauthenticated `/api/providers` 401, the process listening as
+`switchpost` — were the old files retired into `data/archive/switched-from-social-forge-2026-10-23/`.
+
+The unpredicted part: **the repo's gitignored `.env` also carried `DATABASE_URL`**, and it names
+the old database with the highest precedence of any source (env vars > `.env` in CWD >
+`~/.switchpost/.env`). So after the code and config paths had been renamed correctly, the
+running server still opened `data/social-forge.db` — writing to both files — and the only place
+it showed was `config get DATABASE_URL`. Every rename sweep in this plan is expressed in terms of
+*tracked* files; **a rename that ignores gitignored operator files renames the source and not the
+deployment.** The fix was one line in `.env`, then a restart, and the confirmation that the new
+path was the only one being written (the old file's mtime stopped advancing).
+
+Retired old paths, each with a dated backup beside it: `data/social-forge.db{,-wal,-shm}`,
+`social-forge.writer.lock`, `social-forge.migrate.lock`, `social-forge.db.audit-backup`, and
+`~/.social-forge/.env`.
+
 ### The rename cost, stated plainly
 
 **1,009 occurrences of `social-forge` across 92 tracked files** (`git ls-files | xargs grep -Io
