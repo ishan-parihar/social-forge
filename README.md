@@ -64,6 +64,7 @@ switchpost mcp          # stdio MCP server, 389 tools
     }
   }
 }
+```
 
 Then ask your agent: *"post this to X and Bluesky, and schedule the same for LinkedIn tomorrow at 9am."*
 Full tool reference and session-start hooks are in [docs/agent-integration.md](docs/agent-integration.md).
