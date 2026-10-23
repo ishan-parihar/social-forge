@@ -361,6 +361,27 @@ impl XProvider {
         self.check_v2_response(status, &json)
     }
 
+    /// Fetch a v2 endpoint with whichever credential the row holds.
+    ///
+    /// A cookie-connected row (auth_token + ct0, the shape `connect x`
+    /// writes) has NO OAuth bearer — sending one to api.twitter.com
+    /// returns 401 "Token expired" and every analytics refresh for a
+    /// cookie-connected account fails, while the GraphQL surfaces that
+    /// use the same cookie work fine. A bearer row keeps the bearer path.
+    async fn v2_get_with_credential(
+        &self,
+        url: &str,
+        access_token: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        if let Some((at, ct)) = Self::parse_cookie_token(access_token) {
+            let cookie_str = Self::extract_cookie_string(access_token)
+                .unwrap_or_else(|| format!("auth_token={at}; ct0={ct};"));
+            self.v1_get_with_cookies(url, &cookie_str).await
+        } else {
+            self.v2_get(url, access_token).await
+        }
+    }
+
     async fn v2_get(
         &self,
         url: &str,
@@ -1977,12 +1998,20 @@ impl SocialProvider for XProvider {
         _internal_id: &str,
         _days: u32,
     ) -> Result<Vec<AnalyticsData>, ProviderError> {
-        let json = self
-            .v2_get(
+        // A cookie-connected row has no OAuth bearer, and X's v2 API
+        // rejects cookie auth with 403 — so the v2 endpoint 401/403s for
+        // every account that logged in with cookies. The cookie path
+        // reads the same two counts (followers, following) off the
+        // GraphQL profile that `get_me` already fetches.
+        let json = if Self::parse_cookie_token(access_token).is_some() {
+            self.get_me(access_token).await?
+        } else {
+            self.v2_get(
                 "https://api.twitter.com/2/users/me?user.fields=public_metrics",
                 access_token,
             )
-            .await?;
+            .await?
+        };
         Ok(Self::parse_account_metrics(&json))
     }
 
@@ -1994,7 +2023,9 @@ impl SocialProvider for XProvider {
         let url = format!(
             "https://api.twitter.com/2/tweets/{platform_post_id}?tweet.fields=public_metrics"
         );
-        let json = self.v2_get(&url, access_token).await?;
+        let json = self
+            .v2_get_with_credential(&url, access_token)
+            .await?;
         Ok(Self::parse_tweet_metrics(&json))
     }
 
@@ -3116,6 +3147,36 @@ mod tests {
 
     fn provider() -> XProvider {
         XProvider::new(&test_config())
+    }
+
+    // ── Credential shape decides the auth header ─────────────
+    //
+    // A cookie-connected row (what `connect x` writes) has NO OAuth
+    // bearer. The v2 analytics endpoints were called with the bearer
+    // path only, so every analytics refresh for a cookie-connected
+    // account returned 401 "Token expired" while the GraphQL surfaces
+    // using the SAME cookie worked. The dispatch is by credential
+    // shape, so it is testable without a network.
+    #[test]
+    fn cookie_credentials_are_recognised_as_a_cookie_blob() {
+        let cookie_blob = serde_json::json!({
+            "auth_token": "abc123",
+            "ct0": "csrf-token",
+            "cookie_string": "auth_token=abc123; ct0=csrf-token; guest_id=v1%3A1",
+        })
+        .to_string();
+        let (at, ct) = XProvider::parse_cookie_token(&cookie_blob).expect("cookie blob");
+        assert_eq!(at, "abc123");
+        assert_eq!(ct, "csrf-token");
+        assert!(XProvider::extract_cookie_string(&cookie_blob).is_some());
+    }
+
+    #[test]
+    fn an_oauth_bearer_is_not_mistaken_for_a_cookie_blob() {
+        // A bearer row must stay on the bearer path — the cookie path
+        // would send an empty Cookie header and get a 401.
+        assert!(XProvider::parse_cookie_token("ghp_token_or_bearer_value").is_none());
+        assert!(XProvider::extract_cookie_string("ghp_token_or_bearer_value").is_none());
     }
 
     // ── B2c: account analytics fixtures ──────────────────────

@@ -47,9 +47,18 @@ Full detail: [`docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md`](docs/planning/
 |Cookie (x, reddit)|Imports browser cookies, then falls back to `X_AUTH_TOKEN`+`X_CT0` / `REDDIT_COOKIE_TOKEN` env; validates against the live API; writes the row|Nothing — it either prints `connected` or names what is missing|
 |Token env (github, telegram-bot)|Validates the env token against the live API (`GET /user`, `getMe`) and writes the row NOW|Nothing — `connected`, or the exact validation error|
 |Session env (bluesky)|Creates a real session with the app password (`createSession`), stores the accessJwt + did|Nothing — `connected`, or the exact error|
-|OAuth (linkedin, facebook, instagram, threads, discord, slack, pinterest, tiktok, mastodon, youtube)|Emits an `auth_url` when the client credentials are configured; `not_configured` + `requires` when they are not|Opens the URL in a browser, completes the platform login; the callback writes the row|
+|OAuth (linkedin, facebook, instagram, threads, discord, slack, pinterest, tiktok, mastodon, youtube, google)|Emits a **provider-native** `auth_url` (the platform's own consent page, e.g. `https://www.threads.net/oauth/authorize?...`) when the client credentials are configured; `not_configured` + `requires` when they are not|Opens the URL in a browser, completes the platform login; the provider redirects to `/api/auth/callback` and the server writes the row|
 |One-time-token (telegram user)|Prints the code + instructions|Sends the code to the bot|
+|QR scan (telegram-user)|`qr_login_required` + the env names|Scans the QR in the dashboard's Telegram connect flow|
 |Per-site / QR / extension (wordpress, whatsapp, skool)|Names the exact web-UI path|Follows it in the dashboard|
+
+**The URL is usable with NO session cookie.** The CLI mints the
+authorization URL itself (code_verifier + state + `oauth_states` row +
+the provider's `generate_auth_url`), exactly as the web UI does. An agent
+driving its own browser goes straight to the platform's consent page —
+it never needs the founder's `sf_session` cookie, a `?token=` JWT, or a
+popup. The provider redirects to `{APP_URL}/api/auth/callback`, an
+auth-exempt route, and the server exchanges the code there.
 
 **The wait loop.** `connect <provider> --wait [--timeout-secs N]` (default
 300) turns the OAuth/OTT shapes into a single blocking command: it prints
@@ -61,6 +70,23 @@ social-forge connect linkedin --wait &     # emits auth_url, polls
 # drive a browser to the auth_url, complete the login
 # -> the CLI prints: status: connected, accounts: [...]
 ```
+
+`--wait` prints the `auth_url` BEFORE it starts polling, so the agent
+never has to run the command twice.
+
+**`redirect_uri` is printed alongside the URL.** When a platform answers
+`redirect_uri_mismatch`, the URI the provider's developer app must have
+registered is in the CLI's own output — no guessing:
+
+```sh
+social-forge connect linkedin --json
+# {"status":"not_connected","auth_url":"https://www.linkedin.com/oauth/v2/authorization?...",
+#  "redirect_uri":"https://localhost:6544/api/auth/callback", ...}
+```
+
+**Output format.** TOON is the default (~40% fewer tokens for an agent).
+`--json` emits compact JSON and `--pretty` emits indented JSON — both
+are global flags and apply to every command.
 
 Seed rows never count as connected: a `seed-token` placeholder (from
 `scripts/seed_demo.py`) is treated as absent, so `connect` re-imports and

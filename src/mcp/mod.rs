@@ -138,6 +138,23 @@ pub struct SocialForgeMcpServer {
     pub toolsets: Toolsets,
 }
 
+/// The parameter type for a tool that takes NO arguments.
+///
+/// rmcp's `Parameters<P>` extractor does `arguments.take().unwrap_or_default()`
+/// — an absent argument map becomes `{}` — and then deserializes it as
+/// `P`. `P = ()` cannot be built from a map: serde answers "invalid type:
+/// map, expected unit", so every such tool failed in EVERY MCP client
+/// (stdio, and the CLI's `mcp-call`) with a params error.
+///
+/// This type accepts the empty map (and any map), so a no-arg tool
+/// actually runs.
+#[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+pub struct EmptyParams {
+    #[serde(flatten)]
+    #[schemars(skip)]
+    _ignored: std::collections::BTreeMap<String, serde_json::Value>,
+}
+
 // Helper: get DB pool from state
 
 #[tool_router]
@@ -366,7 +383,7 @@ impl SocialForgeMcpServer {
     #[tool(description = "List all configuration entries in ~/.social-forge/.env.")]
     async fn setup_config_list(
         &self,
-        _params: Parameters<()>,
+        _params: Parameters<EmptyParams>,
     ) -> Result<Json<tools_setup::ConfigListOutput>, String> {
         tools_setup::config_list(&self.state)
     }
@@ -995,7 +1012,7 @@ impl SocialForgeMcpServer {
     #[tool(description = "Get the authenticated X/Twitter user's profile.")]
     async fn x_get_me(
         &self,
-        _params: Parameters<()>,
+        _params: Parameters<EmptyParams>,
     ) -> Result<Json<tools_x::XGetMeOutput>, String> {
         tools_x::x_get_me(&self.state).await
     }
@@ -2214,7 +2231,7 @@ impl SocialForgeMcpServer {
     #[tool(description = "Check WhatsApp authentication status.")]
     pub async fn wa_auth_status(
         &self,
-        _params: Parameters<()>,
+        _params: Parameters<EmptyParams>,
     ) -> Result<Json<tools_whatsapp::WaAuthStatusOutput>, String> {
         tools_whatsapp::handle_wa_auth_status(&self.state).await
     }
@@ -2824,7 +2841,7 @@ impl SocialForgeMcpServer {
     )]
     pub async fn tu_auth_status(
         &self,
-        _params: Parameters<()>,
+        _params: Parameters<EmptyParams>,
     ) -> Result<Json<tools_telegram_user::TuAuthStatusOutput>, String> {
         tools_telegram_user::handle_tu_auth_status(&self.state).await
     }
@@ -3351,7 +3368,7 @@ impl SocialForgeMcpServer {
     )]
     async fn feed_import(
         &self,
-        _params: Parameters<()>,
+        _params: Parameters<EmptyParams>,
     ) -> Result<Json<tools_feed::FeedImportOutput>, String> {
         tools_feed::handle_feed_import(&self.state).await
     }
@@ -4111,4 +4128,29 @@ pub async fn run_mcp_stdio(state: AppState) -> anyhow::Result<()> {
     tracing::info!("MCP server started on stdio");
     service.waiting().await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EmptyParams;
+
+    // A no-arg MCP tool must accept the EMPTY ARGUMENT MAP. rmcp's
+    // `Parameters<P>` extractor turns absent arguments into `{}` and
+    // deserializes THAT as `P`, so `P = ()` failed every call with
+    // "invalid type: map, expected unit" — in every MCP client, not just
+    // the CLI. This pins the contract that the empty map is accepted.
+    #[test]
+    fn empty_params_accepts_the_empty_argument_map() {
+        let parsed: EmptyParams =
+            serde_json::from_value(serde_json::json!({})).expect("empty map must deserialize");
+        assert!(parsed._ignored.is_empty());
+    }
+
+    #[test]
+    fn empty_params_ignores_stray_arguments() {
+        // An agent that passes an extra key must not break the call.
+        let parsed: EmptyParams = serde_json::from_value(serde_json::json!({"stray": 1}))
+            .expect("stray key must deserialize");
+        assert_eq!(parsed._ignored.len(), 1);
+    }
 }

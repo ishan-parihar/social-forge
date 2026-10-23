@@ -38,8 +38,27 @@ social-forge <cmd> --help              # Args for a command
 social-forge providers --pretty        # Connected accounts
 social-forge doctor                    # Provider health
 social-forge connect <provider>        # Connect a new account
+social-forge connect <provider> --wait # OAuth: prints auth_url, polls until the login lands
 social-forge mcp-tools --toolset x --pretty   # Tools in one toolset (sizing)
 ```
+
+### Logging a provider in (agent loop)
+
+```bash
+social-forge connect linkedin --wait --json &   # prints {status, auth_url, redirect_uri}
+# drive a browser to auth_url, complete the login
+# -> the CLI prints {status: connected, accounts: [...]} and exits 0
+```
+
+The `auth_url` is the PROVIDER's own consent page — no session cookie,
+no `?token=` JWT, no popup. The provider redirects to `redirect_uri`
+(`/api/auth/callback`), an auth-exempt route, and the server exchanges
+the code there. If the platform says `redirect_uri_mismatch`, register
+the `redirect_uri` value the CLI printed in the provider's developer
+console.
+
+Output is TOON by default; `--json` (compact) and `--pretty` (indented)
+are global flags on every command.
 
 ---
 

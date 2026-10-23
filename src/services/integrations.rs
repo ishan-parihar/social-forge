@@ -20,6 +20,38 @@ pub struct OAuthInitiateResult {
     pub auth_url: String,
     pub state: String,
     pub code_verifier: String,
+    /// The redirect URI the provider's developer app must have registered.
+    /// Returned so a caller can report it when the provider answers
+    /// `redirect_uri_mismatch` — the URI is otherwise invisible.
+    pub redirect_uri: String,
+}
+
+/// Pack the user id and the redirect URI into the one string the
+/// `oauth_states.redirect_uri` column carries.
+///
+/// The callback needs BOTH: the user to attach the integration to, and
+/// the exact redirect URI the provider must see during the code exchange.
+/// The URL may itself contain colons, so the user id is the FIRST segment
+/// and everything after it is the URL.
+pub fn pack_oauth_redirect(user_id: Uuid, redirect_uri: &str) -> String {
+    format!("{user_id}:{redirect_uri}")
+}
+
+/// Unpack what `pack_oauth_redirect` wrote.
+///
+/// The CLI once stored the bare URL here, so the callback parsed the
+/// whole string as a user id and every CLI-started OAuth flow died with
+/// "Invalid user ID" before the code exchange. This is the one rule.
+pub fn unpack_oauth_redirect(stored: &str) -> Result<(Uuid, String), String> {
+    let parts: Vec<&str> = stored.split(':').collect();
+    let user_id = Uuid::parse_str(parts.first().ok_or("Invalid state format")?)
+        .map_err(|e| format!("Invalid user ID: {e}"))?;
+    let redirect_uri = if parts.len() > 1 {
+        parts[1..].join(":")
+    } else {
+        String::new()
+    };
+    Ok((user_id, redirect_uri))
 }
 
 /// Integration service
@@ -58,7 +90,7 @@ impl IntegrationService {
             &state,
             provider_identifier,
             &code_verifier,
-            Some(&format!("{user_id}:{redirect_uri}")),
+            Some(&pack_oauth_redirect(user_id, &redirect_uri)),
         )
         .await
         .map_err(|e| format!("Database error: {e}"))?;
@@ -67,6 +99,7 @@ impl IntegrationService {
             auth_url: auth_response.url,
             state,
             code_verifier,
+            redirect_uri,
         })
     }
 
@@ -95,15 +128,7 @@ impl IntegrationService {
 
         // Parse user_id and redirect_uri from stored redirect_uri
         let stored_uri = oauth_state.redirect_uri.as_deref().unwrap_or("");
-        let parts: Vec<&str> = stored_uri.split(':').collect();
-        let user_id = Uuid::parse_str(parts.first().ok_or("Invalid state format")?)
-            .map_err(|e| format!("Invalid user ID: {e}"))?;
-        // Reconstruct redirect_uri (UUID is first part, rest is the URL which may contain colons)
-        let redirect_uri = if parts.len() > 1 {
-            parts[1..].join(":")
-        } else {
-            String::new()
-        };
+        let (user_id, redirect_uri) = unpack_oauth_redirect(stored_uri)?;
 
         let token = provider
             .exchange_code(code, &oauth_state.code_verifier, &redirect_uri)
@@ -186,5 +211,33 @@ impl IntegrationService {
         }
 
         Ok(deleted)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The oauth_states.redirect_uri column carries "<user_id>:<url>".
+    // The URL itself contains colons ("https://host:6544/..."), so the
+    // user id is the FIRST segment and the rest is the URL. A caller
+    // that stores the bare URL makes every callback fail with
+    // "Invalid user ID" and the code exchange never runs.
+    #[test]
+    fn oauth_redirect_round_trips_through_the_state_column() {
+        let user_id = Uuid::new_v4();
+        let url = "https://localhost:6544/api/auth/callback";
+        let packed = pack_oauth_redirect(user_id, url);
+        let (parsed_id, parsed_url) = unpack_oauth_redirect(&packed).expect("must unpack");
+        assert_eq!(parsed_id, user_id);
+        assert_eq!(parsed_url, url);
+    }
+
+    #[test]
+    fn a_bare_url_in_the_state_column_is_rejected() {
+        // The exact shape the CLI used to store.
+        let err = unpack_oauth_redirect("https://localhost:6544/api/auth/callback")
+            .expect_err("a bare URL is not a state");
+        assert!(err.starts_with("Invalid user ID"), "got: {err}");
     }
 }

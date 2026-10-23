@@ -1,11 +1,13 @@
 # Decision: project name — N-1
 
-Status key: **OPEN** = waiting on the user; **RECOMMENDED** = recommendation given, not yet approved.
+Status key: **APPROVED** = the user has accepted the recommendation and the execution is in
+progress; sections below are updated to match the approved plan rather than the original
+recommendation.
 
-Companion analysis to the competitor red-team below. **Nothing in this file has been applied.** A
-full-project rename is irreversible once external links accumulate, and the repo has carries 0
-stars today, so this decision is priced at the cheapest moment it will ever have. The user's
-explicit go-ahead is required before any rename executes.
+Companion analysis to the competitor red-team below. **The user approved `switchpost` on
+2026-10-23 and the rename is executing**, so this file is now both the analysis and the
+running record. One change was made to the original recommendation on approval: **no
+compatibility shim.** See §9.1 for what that costs and why the trade is right at 0 stars.
 
 ---
 
@@ -263,7 +265,7 @@ against this tree:
 | Docs | 119 in `docs/`, 43 in `README.md`, 33 in `AGENTS.md` | **grows with every doc written** |
 | Scripts / systemd / Makefile / service | 81 occurrences | flat |
 | Installed skill directory | 413 occurrences in `skills/`, and the directory name `skills/social-forge-agent/` | **grows with every skill revision** |
-| `.env.example` / config defaults / DB path / config dir | 26 occurrences; `~/.social-forge/.env` is an **operator-visible path that existing installs have on disk** | **this is the one lock that silently breaks existing deployments** |
+| `.env.example` / config defaults / DB path / config dir | 26 occurrences; `~/.social-forge/.env` and `data/social-forge.db` are **operator-visible paths that a live install has on disk** | **the one lock that silently breaks a live deployment** — resolved by the direct rename plus the ordered data move in §9.2 |
 | Crates.io package name | UNKNOWN (403) | grows only once published |
 | npm name | 200 for every dictionary word tested (i.e. taken); irrelevant unless we publish JS | flat |
 | Trademark | Unmeasured: USPTO TESS needs a key. Both finalists are unregistered on GitHub/PyPI/domains, which is the observable proxy | **the cheapest moment to file is before launch** |
@@ -271,10 +273,11 @@ against this tree:
 **The verdict the card produces.** Two locks are zero-cost now and grow forever: adoption
 links, and the installed-skill surface. Two locks are permanent costs that exist no matter
 when we act: the `~/.social-forge/` config path, and any operator's existing SQLite file. The
-permanent ones are **migration costs, not blocking costs**: the config path can keep reading
-the legacy location with a deprecation notice and a one-line migration, which converts an
-irreversible break into a supported upgrade path. That is the single design decision the
-rename requires, and it must be specified before execution, not after.
+permanent ones are **migration costs, not blocking costs** (§9.2): a WAL checkpoint, a move of
+the `.db` / `-wal` / `-shm` trio together, and a re-run of `init` convert an irreversible break
+into a supported upgrade path. The user chose the direct rename over the shim (§9.1); the data
+move is the one step that cannot be skipped, and it is sequenced in §9.2 rather than left to
+chance.
 
 **Therefore: the window is open now and closes with the first external link that matters.**
 The correct sequencing is a rename *before* the launch push, not after.
@@ -304,39 +307,102 @@ Atlas discipline: the falsifier that would prove the selection wrong.
 
 ---
 
-## 9. If approved: the execution sequence (deliberately not applied)
+## 9. The execution sequence (APPROVED: direct rename, no shim)
 
 Ordered so that nothing irreversible happens before the reversible work is verified. Each step
-is a separate commit, per AGENTS.md §4.1.
+is a separate commit, per AGENTS.md §4.1. The user approved this sequence on 2026-10-23 with
+one deviation from the original recommendation, recorded in §9.1.
 
 1. **Claim the handles first** (reversible, cheap): `switchpost.com` + `.dev` + GitHub org or
    repo rename, and confirm crates.io now that the 403 has cleared. *Nothing in the tree yet.*
-2. **Config-path compatibility shim** (the one design decision): `config.rs` reads
-   `~/.social-forge/.env` **and** `~/.switchpost/.env`, preferring the new path and warning on
-   the legacy one. Same for the default `DATABASE_URL` filename. This is what makes the rename
-   a supported upgrade rather than a break.
-3. **Mechanical rename** in one commit: `Cargo.toml` (`[[bin]]`, crate name, description,
-   repository), binary name, systemd unit, installer, Makefile targets, `social-forge.service`,
-   `.env.example`, and the 239 Rust + 28 frontend occurrences of the internal identifier.
-4. **Verification gate before the docs pass:** `cargo check --lib --bin social-forge` (0
+2. **Code + config pass** in one commit, and the config paths move **directly, with no legacy
+   fallback**: `Cargo.toml` (crate name, `[[bin]]`, description, repository, homepage,
+   keywords), the `social_forge` crate identifier across `src/`, `SocialForgeMcpServer`, clap's
+   `#[command(name = "social-forge")]`, the tracing target string, `UNIT_NAME`,
+   `.env.example`, and every `~/.social-forge/` and `data/social-forge.db` reference in
+   `src/config.rs` — `DEFAULT_DATABASE_URL`, `TEST_DATABASE_URL`, the SQLite-guard error text
+   and its `postgres://social_forge:...` example, and the operator-facing help strings.
+3. **Tests + skill pass:** 32 files under `tests/` reference the command name, and
+   `doc_cli_commands_test.rs` *walks* `skills/social-forge-agent/`, so the skill directory
+   rename (`social-forge-agent` → `switchpost-agent`) must land in the same commit or the suite
+   cannot find its own fixtures.
+4. **Verification gate before the docs pass:** `cargo check --lib --bin switchpost` (0
    errors), `cargo test --lib` (all pass), `cd frontend && pnpm build`, `pnpm exec svelte-check
    --threshold error` (0 errors). The MCP tool surface is provably untouched (0 prefix
    occurrences), so no integration test is needed for the API contract.
 5. **Docs pass**, and this is where the audience work in §10 lands: README, AGENTS.md,
    `docs/agent-integration.md`, `docs/platforms-and-cli.md`, PAGE-INDEX rows, the skill
    directory rename, and the session hooks in `docs/SESSION_HOOKS.md`.
-6. **Relaunch, not rebrand:** new README hero (the existing forge spec becomes a
+6. **Ops pass:** `.github/workflows/{ci,release}.yml` (artifact names and the
+   `target/${{ matrix.target }}/release/...` binary paths), `Dockerfile`, `Dockerfile.build`,
+   `Makefile` targets, `scripts/social-forge-start.sh` → `scripts/switchpost-start.sh`,
+   `scripts/social-forge.service` → `scripts/switchpost.service`, `genome.toml`,
+   `workspace-lint.yaml`.
+7. **On-disk data migration:** move `data/social-forge.db*` to `data/switchpost.db*` and
+   `~/.social-forge/` to `~/.switchpost/`, in that order, after a WAL checkpoint. See §9.2 —
+   a live server held the writer lock at approval time, so the move is sequenced rather than a
+   bare `mv`.
+8. **Relaunch, not rebrand:** new README hero (the existing forge spec becomes a
    *waystation/switchboard* spec), the first launch post, and the sponsor block. The rename is
    worth nothing until a stranger sees it.
 
+### 9.1 The approved deviation: no compatibility shim
+
+The original recommendation asked for a legacy-path fallback in `config.rs`. The user declined
+it: **the project is very alpha, so everything is renamed directly, config directories
+included.** Recorded so the omission is deliberate rather than an oversight.
+
+**What it costs.** An install that has already run keeps a `~/.social-forge/.env` and a
+`data/social-forge.db` that the renamed binary will not read. The operator re-runs the
+init/config command, re-points `DATABASE_URL`, and reconnects the channels whose OAuth rows
+lived in the old file. **`migrations/` contains 0 occurrences of the name**, so the schema is
+unaffected and the old database is not corrupt — it is a file the new binary is not looking at.
+
+**Why the trade is right.** A shim protects accumulated adoption, and accumulated adoption is
+0 stars, 0 forks, 0 subscribers. It would have spent permanent complexity in the config loader
+to protect a lock that does not exist yet, and the only thing it would have preserved — one
+developer's already-connected channels — is cheaper to reconnect than the code is to carry.
+Correct call. It becomes the wrong call only after the first real user, which is exactly the
+moment to revisit it.
+
+### 9.2 The on-disk state at approval (measured, not assumed)
+
+A rename of this shape can destroy data if the database is written while its path moves, so the
+state was measured first:
+
+```
+data/social-forge.db              806,912 bytes
+data/social-forge.db-wal         2,130,072 bytes   <- uncheckpointed writes
+data/social-forge.db-shm            32,768 bytes
+data/social-forge.writer.lock      pid 426867       <- a live server holds this
+127.0.0.1:6544  LISTEN  pid 426867 ("social-forge")
+~/.social-forge/.env               46 bytes         (APP_PASSWORD)
+```
+
+So the move is ordered, not a bare `mv`: stop the server (or confirm it stopped), checkpoint the
+WAL, move the `.db` / `-wal` / `-shm` trio **together**, then start. Copy first and only move
+after the new path opens and migrates cleanly. Moving the `.db` while leaving `-wal` behind
+loses the tail of the database, and the tail is where the recent writes are.
+
 ### The rename cost, stated plainly
 
-A rough scan of the tree: **~1,050 occurrences of the name across ~1,100 files** (239 Rust,
-28 frontend, 413 skill, 119 docs, 43 README, 33 AGENTS, 81 scripts, 26 env/config, plus the
-PAGE-INDEX and planning docs). The mechanical part is one `sed` pass plus a review of the
-`~/.social-forge/` path, the skill directory, and the three hook registrations. The expensive
-part is not code: it is that **every external reference has to be re-earned**, which is the
-argument for doing it at 0 stars.
+**1,009 occurrences of `social-forge` across 92 tracked files** (`git ls-files | xargs grep -Io
+"social-forge" | wc -l`). Counting variants adds 3,688 `social_forge`, 2,469 `SocialForge`,
+2,902 `Social Forge`, 58 `Social-Forge`, 17 `SOCIAL_FORGE`, and 379 `social-forge-agent`, but
+most of those overlap the first. The first per-directory scan said 268,537 occurrences; that was
+`target/` (26 GB of build artifacts) and the agent caches, which are gitignored and untouched —
+the tracked-file count is the only one that matters.
+
+Distribution of the 1,009: 175 `src/` (21 files), 117 `docs/` (21), 117 `frontend/` (38), 76
+`scripts/` (8), 68 `tests/` (32), 415 `skills/` (7), 35 top-level files (README 37, AGENTS 29,
+worklog 16, Cargo 5, Makefile 5, Dockerfile 4, Dockerfile.build 8, .env.example 4, genome 3,
+TODO 2, workspace-lint 1), and 1 in `.sqlx/` — which is a redacted email inside a cached query
+payload, **not** the project name, so the offline cache needs no regeneration.
+
+The mechanical part is one `sed` pass per variant plus a review of the `~/.social-forge/` path,
+the skill directory, and the three hook registrations. The expensive part is not code: it is
+that **every external reference has to be re-earned**, which is the argument for doing it at 0
+stars.
 
 ---
 
@@ -416,8 +482,8 @@ so no doc is ever left describing a project that no longer exists.
 
 Deliberately out of scope, recorded so it is not re-litigated:
 
-- **No execute.** This is a decision doc. The rename runs only on the user's explicit go-ahead,
-  per AGENTS.md (the DECISIONS precedent).
+- **No execute before approval.** Discharged: the user approved `switchpost` on 2026-10-23, so
+  the rename is running and this line is kept only as the record of what it used to say.
 - **No trademark filing.** USPTO TESS requires a key; the observable proxies are clean for both
   finalists, but a filing decision is legal advice and stays with the user.
 - **No rename of the crate unless crates.io confirms availability** once the 403 clears.

@@ -9,11 +9,11 @@ use clap::{Parser, Subcommand};
 #[derive(Parser, Debug)]
 #[command(name = "social-forge", version, about, long_about = None)]
 pub struct Cli {
-    /// Output as JSON (default: true)
-    #[arg(long, global = true, default_value_t = true)]
+    /// Output as compact JSON (default: TOON, ~40% fewer tokens for agents)
+    #[arg(long, global = true, default_value_t = false)]
     pub json: bool,
 
-    /// Pretty-print output for human readability
+    /// Pretty-print JSON output for human readability
     #[arg(long, global = true, default_value_t = false)]
     pub pretty: bool,
 

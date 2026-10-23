@@ -72,19 +72,49 @@ pub(crate) fn truncate_json_strings(
 
 // ── Output Helpers ───────────────────────────────────────────
 
+/// Output format for every command that prints a result.
+///
+/// 0 = TOON (default: ~40% fewer tokens for an agent), 1 = JSON, 2 = pretty JSON.
+///
+/// The `--json` / `--pretty` flags are GLOBAL and were declared but never
+/// honored — `output_json` hardcoded TOON, so an agent that asked for JSON
+/// got TOON and could not parse the result. Set once at startup from the
+/// parsed flags.
+static OUTPUT_FORMAT: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+pub(crate) fn set_output_format(json: bool, pretty: bool) {
+    let value = if pretty {
+        2
+    } else if json {
+        1
+    } else {
+        0
+    };
+    OUTPUT_FORMAT.store(value, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn current_output_format() -> u8 {
+    OUTPUT_FORMAT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 pub(crate) fn output_json(value: &serde_json::Value) {
-    println!("{}", format_text(value, "toon"));
+    let text = match current_output_format() {
+        1 => serde_json::to_string(value).unwrap_or_default(),
+        2 => serde_json::to_string_pretty(value).unwrap_or_default(),
+        _ => format_text(value, "toon"),
+    };
+    println!("{text}");
 }
 
 pub(crate) fn output_error(msg: &str) -> anyhow::Result<()> {
     let err = serde_json::json!({"error": msg});
-    println!("{}", format_text(&err, "toon"));
+    output_json(&err);
     std::process::exit(2);
 }
 
 pub(crate) fn output_error_with_hint(msg: &str, hint: &str) -> ! {
     let err = serde_json::json!({"error": msg, "help": hint});
-    println!("{}", format_text(&err, "toon"));
+    output_json(&err);
     std::process::exit(2);
 }
 
@@ -489,10 +519,17 @@ async fn handle_mcp_call_with_state(
         .map_err(|e| anyhow::anyhow!("mcp-call server task panicked: {e}"))?
         .map_err(|e| anyhow::anyhow!("mcp-call server init failed: {e}"))?;
 
+    // A tool whose params type is `()` rejects an arguments MAP — even an
+    // empty one ("invalid type: map, expected unit"). So the arguments are
+    // attached only when there are some; otherwise the request carries
+    // none, which is what a no-arg tool expects.
+    let mut params = rmcp::model::CallToolRequestParams::new(tool.to_string());
+    if !arguments.is_empty() {
+        params = params.with_arguments(arguments);
+    }
+
     let result = client
-        .call_tool(
-            rmcp::model::CallToolRequestParams::new(tool.to_string()).with_arguments(arguments),
-        )
+        .call_tool(params)
         .await
         .map_err(|e| anyhow::anyhow!("mcp-call '{tool}' failed: {e}"))?;
 
@@ -1242,13 +1279,71 @@ async fn handle_connect_wait(
 
     let user_id = resolve_user(state).await?;
 
-    // Step 1: the one-shot connect (import or URL emission). Its output
-    // already told the agent what to do; swallow it here and re-report.
     let started = Instant::now();
-    let _ = handle_connect_with_state(state, provider).await;
 
-    // Already done? (cookie import landed, or the provider was
-    // already_connected with a real credential)
+    // Step 1: report the CURRENT state before asking for anything.
+    let existing: Vec<_> = crate::db::queries::list_integrations(&state.db, user_id)
+        .await?
+        .into_iter()
+        .filter(|i| i.provider_identifier == provider && is_credential_row(i))
+        .collect();
+    if !existing.is_empty() {
+        output_json(&serde_json::json!({
+            "status": "already_connected",
+            "provider": provider,
+            "count": existing.len(),
+            "accounts": existing.iter().map(|i| serde_json::json!({
+                "name": i.profile_name,
+                "internal_id": i.internal_id,
+            })).collect::<Vec<_>>(),
+            "hint": "Already connected.",
+        }));
+        return Ok(());
+    }
+
+    // Step 2: hand the agent the NEXT ACTION.
+    //
+    // For an OAuth provider that is the provider's own authorization URL —
+    // minted here, so the agent gets it NOW and can drive its browser
+    // straight to the platform's consent page. (The one-shot connect
+    // swallowed its output before, so `connect --wait` printed no URL at
+    // all and only revealed the problem at timeout.)
+    //
+    // For a cookie/credential provider the one-shot connect IS the action:
+    // it imports from the browser or the environment.
+    let oauth_provider = state
+        .providers
+        .get(provider)
+        .map(|p| p.uses_oauth())
+        .unwrap_or(false);
+    if oauth_provider {
+        match oauth_auth_url_with_redirect(state, provider).await {
+            Ok((url, redirect_uri)) => output_json(&serde_json::json!({
+                "status": "waiting_for_oauth",
+                "provider": provider,
+                "method": "oauth",
+                "auth_url": url,
+                "redirect_uri": redirect_uri,
+                "hint": "Open the auth_url in a browser, complete the login, and this command will report the connection. If the platform says redirect_uri_mismatch, register the redirect_uri above in the provider's developer console.",
+            })),
+            Err(e) => {
+                // Not configured, or the provider refused to build a URL —
+                // let the one-shot print the actionable diagnostic.
+                let _ = handle_connect_with_state(state, provider).await;
+                output_json(&serde_json::json!({
+                    "status": "error",
+                    "provider": provider,
+                    "error": format!("{e}"),
+                    "hint": "Check the provider's credentials in ~/.social-forge/.env, then run this command again.",
+                }));
+                return Ok(());
+            }
+        }
+    } else {
+        let _ = handle_connect_with_state(state, provider).await;
+    }
+
+    // Step 3: did the import land already?
     if crate::db::queries::list_integrations(&state.db, user_id)
         .await?
         .iter()
@@ -1257,7 +1352,7 @@ async fn handle_connect_wait(
         return Ok(());
     }
 
-    // Step 2: poll until the credential row appears or the timeout hits.
+    // Step 4: poll until the credential row appears or the timeout hits.
     let deadline = started + Duration::from_secs(timeout_secs);
     loop {
         if Instant::now() >= deadline {
@@ -1265,7 +1360,7 @@ async fn handle_connect_wait(
                 "status": "timeout",
                 "provider": provider,
                 "waited_secs": started.elapsed().as_secs(),
-                "hint": "No credential landed before --timeout-secs. Open the auth_url from the connect output in a browser and complete the login, then run again.",
+                "hint": "No credential landed before --timeout-secs. Open the auth_url (printed above) in a browser and complete the login, then run again.",
             }));
             return Ok(());
         }
@@ -1289,6 +1384,61 @@ async fn handle_connect_wait(
             return Ok(());
         }
     }
+}
+
+/// Mint a provider-NATIVE OAuth authorization URL for an agent-driven login.
+///
+/// The old shape emitted `{app_url}/api/public/connect/{provider}`, a SERVER
+/// route gated by the browser's `sf_session` cookie (or a `?token=` JWT).
+/// An agent driving its own browser hits a 401 dead end there, because the
+/// agent's browser session is not the founder's web session.
+///
+/// This mints the same URL the web UI mints — code_verifier + state +
+/// `oauth_states` row + the provider's own `generate_auth_url` — so the
+/// browser goes straight to the platform's consent page and the provider
+/// redirects back to `{app_url}/api/auth/callback`, where the server
+/// exchanges the code and writes the integration row that `connect --wait`
+/// polls for. No cookie, no JWT, no popup required.
+/// The redirect URI every OAuth provider's app must have registered.
+fn oauth_redirect_uri_for(app_url: &str) -> String {
+    format!("{}/api/auth/callback", app_url.trim_end_matches('/'))
+}
+
+fn oauth_redirect_uri(state: &AppState) -> String {
+    oauth_redirect_uri_for(&state.config.app_url)
+}
+
+async fn oauth_auth_url(state: &AppState, provider: &str) -> anyhow::Result<String> {
+    Ok(oauth_auth_url_with_redirect(state, provider).await?.0)
+}
+
+/// The same URL, plus the `redirect_uri` the provider's developer console
+/// must have registered.
+///
+/// Every OAuth provider rejects the request with `redirect_uri_mismatch`
+/// when its app does not list this exact URI, and the operator cannot see
+/// the URI in the provider's error page — they have to read it out of the
+/// URL we generated. Handing it over turns a dead end into one setting.
+async fn oauth_auth_url_with_redirect(
+    state: &AppState,
+    provider: &str,
+) -> anyhow::Result<(String, String)> {
+    // The SERVICE owns the OAuth initiation, including how the state's
+    // redirect_uri column is packed ("<user_id>:<url>"). The CLI used to
+    // re-implement the flow and stored the bare URL, so every
+    // CLI-started OAuth flow died at the callback with "Invalid user ID"
+    // and the code exchange never ran. One implementation, one rule.
+    let user_id = resolve_user(state).await?;
+    let result = crate::services::integrations::IntegrationService::initiate_connect(
+        &state.db,
+        &state.providers,
+        user_id,
+        provider,
+        state.config.app_url.trim_end_matches('/'),
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to build {provider} authorization URL: {e}"))?;
+    Ok((result.auth_url, result.redirect_uri))
 }
 
 async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::Result<()> {
@@ -1585,11 +1735,16 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                         && is_credential_row(i)
                 })
                 .collect();
-            let app_url = &state.config.app_url;
             // An auth_url without configured client credentials 400s on
             // /api/public/connect — an agent following it hits a dead end.
             // Report the missing env vars instead, like the other OAuth arms.
             let configured = state.config.provider_credentials("linkedin").is_some();
+            let (auth_url, redirect_uri) = if configured {
+                let (u, r) = oauth_auth_url_with_redirect(state, provider).await?;
+                (Some(u), Some(r))
+            } else {
+                (None, None)
+            };
             output_json(&serde_json::json!({
                 "status": if !connected.is_empty() { "already_connected" }
                     else if configured { "not_connected" }
@@ -1602,10 +1757,11 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                     "type": i.provider_identifier,
                 })).collect::<Vec<_>>(),
                 "method": "oauth",
-                "auth_url": if configured { serde_json::Value::from(format!("{}/api/public/connect/{}", app_url, provider)) } else { serde_json::Value::Null },
+                "auth_url": auth_url.map(serde_json::Value::from).unwrap_or(serde_json::Value::Null),
+                "redirect_uri": redirect_uri.map(serde_json::Value::from).unwrap_or(serde_json::Value::Null),
                 "requires": if configured { serde_json::Value::Null } else { serde_json::json!(["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"]) },
                 "hint": if connected.is_empty() && configured {
-                    "Open the auth_url in a browser to complete OAuth authorization."
+                    "Open the auth_url in a browser to complete OAuth authorization. If the platform says redirect_uri_mismatch, register the redirect_uri above in the provider's developer console."
                 } else if connected.is_empty() {
                     "Set LINKEDIN_CLIENT_ID + LINKEDIN_CLIENT_SECRET in ~/.social-forge/.env, restart the server, then connect again."
                 } else {
@@ -1619,9 +1775,14 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 .iter()
                 .filter(|i| i.provider_identifier == provider && is_credential_row(i))
                 .collect();
-            let app_url = &state.config.app_url;
             // Same gate as linkedin: no client creds, no auth_url.
             let configured = state.config.provider_credentials(provider).is_some();
+            let (auth_url, redirect_uri) = if configured {
+                let (u, r) = oauth_auth_url_with_redirect(state, provider).await?;
+                (Some(u), Some(r))
+            } else {
+                (None, None)
+            };
             output_json(&serde_json::json!({
                 "status": if !connected.is_empty() { "already_connected" }
                     else if configured { "not_connected" }
@@ -1633,10 +1794,11 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                     "internal_id": i.internal_id,
                 })).collect::<Vec<_>>(),
                 "method": "oauth",
-                "auth_url": if configured { serde_json::Value::from(format!("{}/api/public/connect/{}", app_url, provider)) } else { serde_json::Value::Null },
+                "auth_url": auth_url.map(serde_json::Value::from).unwrap_or(serde_json::Value::Null),
+                "redirect_uri": redirect_uri.map(serde_json::Value::from).unwrap_or(serde_json::Value::Null),
                 "requires": if configured { serde_json::Value::Null } else { serde_json::json!(["FACEBOOK_CLIENT_ID", "FACEBOOK_CLIENT_SECRET"]) },
                 "hint": if connected.is_empty() && configured {
-                    "Open the auth_url in a browser to complete OAuth authorization."
+                    "Open the auth_url in a browser to complete OAuth authorization. If the platform says redirect_uri_mismatch, register the redirect_uri above in the provider's developer console."
                 } else if connected.is_empty() {
                     "Set FACEBOOK_CLIENT_ID + FACEBOOK_CLIENT_SECRET in ~/.social-forge/.env, restart, then connect again."
                 } else {
@@ -1949,7 +2111,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 && state.config.discord_client_secret.is_some()
             {
                 output_json(
-                    &serde_json::json!({"status": "not_connected", "provider": "discord", "method": "oauth", "auth_url": format!("{}/api/public/connect/discord", state.config.app_url), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
+                    &serde_json::json!({"status": "not_connected", "provider": "discord", "method": "oauth", "auth_url": oauth_auth_url(state, "discord").await?, "redirect_uri": oauth_redirect_uri(state), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
                 );
             } else {
                 output_json(
@@ -1970,7 +2132,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 && state.config.slack_client_secret.is_some()
             {
                 output_json(
-                     &serde_json::json!({"status": "not_connected", "provider": "slack", "method": "oauth", "auth_url": format!("{}/api/public/connect/slack", state.config.app_url), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
+                     &serde_json::json!({"status": "not_connected", "provider": "slack", "method": "oauth", "auth_url": oauth_auth_url(state, "slack").await?, "redirect_uri": oauth_redirect_uri(state), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
                 );
             } else {
                 output_json(
@@ -1991,7 +2153,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 && state.config.pinterest_client_secret.is_some()
             {
                 output_json(
-                    &serde_json::json!({"status": "not_connected", "provider": "pinterest", "method": "oauth", "auth_url": format!("{}/api/public/connect/pinterest", state.config.app_url), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
+                    &serde_json::json!({"status": "not_connected", "provider": "pinterest", "method": "oauth", "auth_url": oauth_auth_url(state, "pinterest").await?, "redirect_uri": oauth_redirect_uri(state), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
                 );
             } else {
                 output_json(
@@ -2012,7 +2174,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 && state.config.tiktok_client_secret.is_some()
             {
                 output_json(
-                    &serde_json::json!({"status": "not_connected", "provider": "tiktok", "method": "oauth", "auth_url": format!("{}/api/public/connect/tiktok", state.config.app_url), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
+                    &serde_json::json!({"status": "not_connected", "provider": "tiktok", "method": "oauth", "auth_url": oauth_auth_url(state, "tiktok").await?, "redirect_uri": oauth_redirect_uri(state), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
                 );
             } else {
                 output_json(
@@ -2034,7 +2196,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 && state.config.mastodon_instance_url.is_some()
             {
                 output_json(
-                    &serde_json::json!({"status": "not_connected", "provider": "mastodon", "method": "oauth", "auth_url": format!("{}/api/public/connect/mastodon", state.config.app_url), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
+                    &serde_json::json!({"status": "not_connected", "provider": "mastodon", "method": "oauth", "auth_url": oauth_auth_url(state, "mastodon").await?, "redirect_uri": oauth_redirect_uri(state), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
                 );
             } else {
                 output_json(
@@ -2056,7 +2218,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 && state.config.youtube_client_secret.is_some()
             {
                 output_json(
-                     &serde_json::json!({"status": "not_connected", "provider": "youtube", "method": "oauth", "auth_url": format!("{}/api/public/connect/youtube", state.config.app_url), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
+                     &serde_json::json!({"status": "not_connected", "provider": "youtube", "method": "oauth", "auth_url": oauth_auth_url(state, "youtube").await?, "redirect_uri": oauth_redirect_uri(state), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
                 );
             } else {
                 output_json(
@@ -2120,7 +2282,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         "threads" => {
             if state.config.threads_app_id.is_some() && state.config.threads_app_secret.is_some() {
                 output_json(
-                    &serde_json::json!({"status": "not_connected", "provider": "threads", "method": "oauth", "auth_url": format!("{}/api/public/connect/threads", state.config.app_url), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
+                    &serde_json::json!({"status": "not_connected", "provider": "threads", "method": "oauth", "auth_url": oauth_auth_url(state, "threads").await?, "redirect_uri": oauth_redirect_uri(state), "hint": "Open the auth_url in a browser to complete OAuth authorization."}),
                 );
             } else {
                 output_json(
@@ -2129,6 +2291,78 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
             }
         }
 
+        "telegram-user" => {
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            let connected: Vec<_> = integrations
+                .iter()
+                .filter(|i| i.provider_identifier == "telegram-user" && is_credential_row(i))
+                .collect();
+            if !connected.is_empty() {
+                output_json(&serde_json::json!({
+                    "status": "already_connected",
+                    "provider": "telegram-user",
+                    "count": connected.len(),
+                    "accounts": connected.iter().map(|i| serde_json::json!({
+                        "name": i.profile_name,
+                        "internal_id": i.internal_id,
+                    })).collect::<Vec<_>>(),
+                    "hint": "Already connected.",
+                }));
+            } else if state.config.telegram_api_id.is_some()
+                && state.config.telegram_api_hash.is_some()
+                && state.config.telegram_session_dir.is_some()
+            {
+                // A user-session login needs the phone's QR scan, so the
+                // action is a SCAN, not a URL. The CLI tells the agent
+                // exactly that instead of claiming it will auto-connect.
+                output_json(&serde_json::json!({
+                    "status": "qr_login_required",
+                    "provider": "telegram-user",
+                    "method": "qr",
+                    "requires": ["TELEGRAM_API_ID", "TELEGRAM_API_HASH", "TELEGRAM_SESSION_DIR"],
+                    "hint": "Telegram user accounts log in by QR scan: run the server's Telegram user connect flow (web UI: Channels -> Telegram -> QR), or use the telegram_user_* CLI commands to log in interactively, then re-run this command.",
+                }));
+            } else {
+                output_json(&serde_json::json!({
+                    "status": "not_configured",
+                    "provider": "telegram-user",
+                    "requires": ["TELEGRAM_API_ID", "TELEGRAM_API_HASH", "TELEGRAM_SESSION_DIR"],
+                    "hint": "Get API id/hash from my.telegram.org and set TELEGRAM_API_ID, TELEGRAM_API_HASH and TELEGRAM_SESSION_DIR in ~/.social-forge/.env",
+                }));
+            }
+        }
+        "google_my_business" => {
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            let connected: Vec<_> = integrations
+                .iter()
+                .filter(|i| i.provider_identifier == "google_my_business" && is_credential_row(i))
+                .collect();
+            if !connected.is_empty() {
+                output_json(&serde_json::json!({
+                    "status": "already_connected",
+                    "provider": "google_my_business",
+                    "count": connected.len(),
+                    "accounts": connected.iter().map(|i| serde_json::json!({
+                        "name": i.profile_name,
+                        "internal_id": i.internal_id,
+                    })).collect::<Vec<_>>(),
+                    "hint": "Already connected.",
+                }));
+            } else if state.config.provider_credentials("google_my_business").is_some() {
+                output_json(&serde_json::json!({
+                    "status": "not_connected",
+                    "provider": "google_my_business", "method": "oauth", "auth_url": oauth_auth_url(state, "google_my_business").await?, "redirect_uri": oauth_redirect_uri(state),
+                    "hint": "Open the auth_url in a browser to complete OAuth authorization.",
+                }));
+            } else {
+                output_json(&serde_json::json!({
+                    "status": "not_configured",
+                    "provider": "google_my_business",
+                    "requires": ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"],
+                    "hint": "Google uses OAuth client credentials. Set YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET in ~/.social-forge/.env",
+                }));
+            }
+        }
         _ => {
             output_json(&serde_json::json!({
                 "status": "unknown",
@@ -4114,6 +4348,10 @@ fn handle_split_preview(text: &str, platforms: Option<&str>) -> anyhow::Result<(
 // ── Main CLI Dispatcher ──────────────────────────────────────
 
 pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
+    // The global --json/--pretty flags select the output format for every
+    // command. Set them BEFORE any handler runs.
+    set_output_format(cli.json, cli.pretty);
+
     // Commands that don't need AppState — handle early, skip init_state().
     match cli.command {
         Command::Serve { .. } | Command::Mcp => {
@@ -4340,6 +4578,37 @@ mod tests {
         let val = serde_json::json!({"key": "value"});
         assert!(format_text(&val, "json").starts_with('{'));
         assert!(!format_text(&val, "toon").starts_with('{'));
+    }
+
+    // The --json/--pretty flags are GLOBAL and were declared but never
+    // honored: output_json hardcoded TOON, so an agent that asked for
+    // JSON got TOON and could not parse the result. This pins the
+    // format the flags select.
+    #[test]
+    fn json_flag_selects_json_output() {
+        set_output_format(true, false);
+        assert!(format_text(&serde_json::json!({"a": 1}), "json").starts_with('{'));
+        set_output_format(false, false);
+        assert!(!format_text(&serde_json::json!({"a": 1}), "toon").starts_with('{'));
+    }
+
+    // An OAuth provider's auth_url must be the PROVIDER's own consent
+    // page. The old shape emitted `{app_url}/api/public/connect/{p}`,
+    // a server route gated by the browser's session cookie — an agent
+    // driving its own browser hit a 401 there and never reached the
+    // platform. The redirect URI is the one the provider's app must
+    // have registered; a trailing slash in APP_URL would produce a
+    // double slash that the provider rejects as a mismatch.
+    #[test]
+    fn oauth_redirect_uri_is_the_callback_route() {
+        assert_eq!(
+            oauth_redirect_uri_for("https://localhost:6544"),
+            "https://localhost:6544/api/auth/callback"
+        );
+        assert_eq!(
+            oauth_redirect_uri_for("https://localhost:6544/"),
+            "https://localhost:6544/api/auth/callback"
+        );
     }
 
     // ── G-10: --platforms must not fan out to a colliding variant ───────────
