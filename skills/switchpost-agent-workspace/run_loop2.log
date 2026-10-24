@@ -1,0 +1,30 @@
+Split: 13 train, 7 test (holdout=0.4)
+
+============================================================
+Iteration 1/2
+Description: Use Switchpost to manage social media accounts via CLI. Trigger this skill whenever the user wants to post, read, schedule, comment, DM, or manage any social media — X/Twitter, Reddit, LinkedIn, Facebook, Instagram, YouTube, Bluesky, Mastodon, TikTok, Threads, Discord, Slack, Telegram, WhatsApp, Pinterest, GitHub, WordPress, Hashnode, Medium, Dev.to, Skool, Google (Drive/Calendar/Gmail), or any connected provider. Also trigger on "post to X", "check my LinkedIn", "browse Reddit", "manage my socials", "schedule a tweet", "what's on my feed", "get Instagram insights", "post to Facebook page", "send a Telegram message", "manage Discord", "check WhatsApp", "carousel", "autopost", or any social media operation. Also trigger for engagement workflows (like, retweet, reply to comments, send DMs), analytics and performance questions (followers, reach, streak, "how did my post do"), thread/recurring scheduling ("post this thread", "repost every Monday"), failed-post recovery, multi-platform cross-posting, and RSS/blog cross-publishing.
+============================================================
+Train: 5/13 correct, precision=100% recall=0% accuracy=38% (398.9s)
+  [FAIL] rate=0/1 expected=True: i keep hearing about posting at the right time. whats the be
+  [FAIL] rate=0/1 expected=True: im gonna start posting a 5-part thread on bluesky about our 
+  [FAIL] rate=0/1 expected=True: someone left a pretty critical comment on my reddit post in 
+  [FAIL] rate=0/1 expected=True: im getting a csrf_origin_mismatch error whenever i try to sa
+  [FAIL] rate=0/1 expected=True: set up my agency's rss feed from the blog so every new artic
+  [FAIL] rate=0/1 expected=True: i want to run the same announcement on x, my linkedin person
+  [FAIL] rate=0/1 expected=True: my linkedin post from tuesday got barely any impressions com
+  [FAIL] rate=0/1 expected=True: the switchpost serve daemon on my vps keeps dying after the 
+  [PASS] rate=0/1 expected=False: set up a zapier webhook so that when a new row appears in ou
+  [PASS] rate=0/1 expected=False: how do i write a good instagram caption for a carousel of be
+  [PASS] rate=0/1 expected=False: im building my own social media scheduler in rust, can you d
+  [PASS] rate=0/1 expected=False: can you write a review of our social media strategy overall?
+  [PASS] rate=0/1 expected=False: write a python script that uses the twitter api v2 directly 
+Test : 2/7 correct, precision=100% recall=0% accuracy=29% (0.0s)
+  [FAIL] rate=0/1 expected=True: three posts i had queued for last night never went out and n
+  [FAIL] rate=0/1 expected=True: we've been posting to ig every day for two weeks and the acc
+  [FAIL] rate=0/1 expected=True: whenever someone dms the support account on telegram with th
+  [FAIL] rate=0/1 expected=True: whats my posting streak look like? and which of my dev.to ar
+  [FAIL] rate=0/1 expected=True: hook up my company whatsapp number so our support team can s
+  [PASS] rate=0/1 expected=False: my discord bot keeps crashing when it tries to send an embed
+  [PASS] rate=0/1 expected=False: draft me a 60-second tiktok script about our new feature, ju
+
+Improving description...

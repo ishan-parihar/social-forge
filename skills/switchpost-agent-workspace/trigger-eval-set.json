@@ -1,0 +1,22 @@
+[
+  {"query": "my linkedin post from tuesday got barely any impressions compared to the one last week. can you pull the numbers for both so i can compare? i use switchpost for all this", "should_trigger": true},
+  {"query": "i want to run the same announcement on x, my linkedin personal profile AND the company page - but the linkedin page needs the more formal version of the text. it should go out tomorrow morning around 9", "should_trigger": true},
+  {"query": "three posts i had queued for last night never went out and now they show as failed or errored or something. figure out why and get them published", "should_trigger": true},
+  {"query": "someone left a pretty critical comment on my reddit post in r/rust (its the one about the cli tool i posted 2 days ago). i want to see it and post a reply before it gets buried", "should_trigger": true},
+  {"query": "set up my agency's rss feed from the blog so every new article auto-posts to x with an ai summary, but hold each one as a draft for my review first", "should_trigger": true},
+  {"query": "im gonna start posting a 5-part thread on bluesky about our launch. first post goes out friday 10am est, and the rest should follow every 2 hours. heres the draft text for all five parts in this file", "should_trigger": true},
+  {"query": "whenever someone dms the support account on telegram with the word 'refund', send them our refund policy link automatically", "should_trigger": true},
+  {"query": "we've been posting to ig every day for two weeks and the account still feels dead. pull my instagram insights - reach, followers, all of it - and tell me if its actually working", "should_trigger": true},
+  {"query": "i keep hearing about posting at the right time. whats the best time to post on MY accounts based on how my past posts actually performed? then queue up next weeks batch in those slots", "should_trigger": true},
+  {"query": "whats my posting streak look like? and which of my dev.to articles got the most traction this month", "should_trigger": true},
+  {"query": "write a python script that uses the twitter api v2 directly with my own bearer token to fetch my last 100 tweets into a csv", "should_trigger": false},
+  {"query": "im building my own social media scheduler in rust, can you design the database schema for posts across multiple platforms", "should_trigger": false},
+  {"query": "my discord bot keeps crashing when it tries to send an embed - heres the code, can you find the bug", "should_trigger": false},
+  {"query": "draft me a 60-second tiktok script about our new feature, just the creative concept, no posting", "should_trigger": false},
+  {"query": "set up a zapier webhook so that when a new row appears in our airtable base it also creates a notion page", "should_trigger": false},
+  {"query": "can you write a review of our social media strategy overall? like a consulting document, we mostly post on x and sometimes instagram", "should_trigger": false},
+  {"query": "the switchpost serve daemon on my vps keeps dying after the machine reboots, can you fix the systemd unit so it comes back up", "should_trigger": true},
+  {"query": "im getting a csrf_origin_mismatch error whenever i try to save anything from the switchpost web ui, nothing i change works. its driving me insane", "should_trigger": true},
+  {"query": "hook up my company whatsapp number so our support team can send order confirmation templates from the command line", "should_trigger": true},
+  {"query": "how do i write a good instagram caption for a carousel of before/after renovation photos? just give me caption ideas to pick from", "should_trigger": false}
+]
