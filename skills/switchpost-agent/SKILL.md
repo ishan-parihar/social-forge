@@ -7,12 +7,28 @@ description: >
 # Switchpost — AI Agent Guide
 
 One Rust binary, 26 social platforms, three interfaces (CLI / REST / MCP). For an
-agent, the CLI is the interface: every command is JSON on stdout, errors are
-JSON on stderr with exit code 1. `mcp-call` bridges to all 389 MCP tools
+agent, the CLI is the interface. `mcp-call` bridges to all 389 MCP tools
 in-process — no separate server needed.
+
+**Error contract** (live-verified, four distinct paths):
+
+| Path | Streams | Exit |
+|---|---|---|
+| Success | TOON/JSON on **stdout** | 0 |
+| Usage/arg error (clap) | clap text on **stderr** | 2 |
+| Runtime error, core command (`output_error`) | `{error, help?}` TOON/JSON on **stdout** | 2 |
+| Runtime error, platform shim (`emit_result`) | `{error, hint}` TOON/JSON on **stdout** | 2 |
+| `anyhow` propagation (e.g. `No X integration found`) | `Error: <msg>` on **stderr** | 1 |
+
+So **check stdout for the payload, stderr only for clap/anyhow** — a
+nonzero exit with empty stderr means the error object is on stdout.
+Never trust exit code alone: a platform lookup of a nonexistent user/tweet
+returns exit 0 with empty-shaped data (`data: {id: ""}`), not an error.
 
 **Output**: default is TOON (compact human-readable, ~40% fewer tokens). Use
 default or `--json` when parsing. `--pretty` only for showing a human.
+`--json`/`--pretty` are GLOBAL and reach every command, including platform
+shims (`x timeline --json` emits real JSON).
 
 ## Two ID systems (read this before anything else)
 
@@ -150,7 +166,7 @@ NOT filtered — it names one tool and pays no list cost.
 | `tool not found` (mcp-call) | Tool name typo | `mcp-tools` to list; `tools_search` to find by keyword |
 | `No X/Twitter integration found` etc. | Provider not connected | `switchpost connect <provider>` / `doctor` for health |
 | `csrf_origin_mismatch` (REST only) | Server port ≠ FRONTEND_URL port | run `serve --port` matching FRONTEND_URL, or fix the env |
-| `Rate limit exceeded` / HTTP 429 | Provider quota | wait; X free tier is ~17 tweets/day total |
+| `Rate limit exceeded` / HTTP 429 / `X API rate limit` | Provider quota (X: cookie-path hits the account-level cap; OAuth path is pay-per-post, ~$0.015 each) | wait for reset; `doctor` shows provider health; scheduler retries with exponential backoff automatically |
 | `Token expired` | OAuth token expired | `switchpost connect <provider>` again; auto-refresh usually handles it |
 | `unknown flag` / `invalid value` | CLI syntax | `switchpost <cmd> --help` |
 | `redirect_uri_mismatch` (connect) | Provider app's registered URI differs | register the `redirect_uri` the CLI printed in the provider's developer console |

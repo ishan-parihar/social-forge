@@ -40,15 +40,16 @@ switchpost carousel "5 Tips for Devs" --integration <INTEGRATION_UUID> --media h
 ## Deckmill autopost (render → upload → post, one command)
 
 ```bash
-switchpost autopost --slides slides.json --platforms instagram --content "Three things we learned" --url https://example.com --hashtags "ai,automation" --publish
+switchpost autopost --slides slides.json --platforms instagram --content "Three things we learned" --brand-name "Acme" --topic "Release" --url https://example.com --hashtags "ai,automation" --publish
 ```
 
 `slides.json` is a JSON array of Deckmill slide specs:
 `[{"type": "hero", "params": {"headline": "…"}}]`. Run
-`deckmill slide-info <type>` for a type's params. `--url` and `--hashtags`
-are required by the renderer. Other flags: `--preset` (default
+`deckmill slide-info <type>` for a type's params. Four flags are
+required by the renderer (each renders a slide overlay): `--brand-name`,
+`--topic`, `--url`, `--hashtags`. Other flags: `--preset` (default
 instagram_portrait), `--aspect-ratio` (default 4:5), `--primary-color`,
-`--brand-name`, `--brand-handle`, `--topic`, `--work-dir`, `--settings`.
+`--brand-handle`, `--work-dir`, `--settings`.
 
 **Recurring series** (DB-backed; the scheduler publishes — no loop process):
 

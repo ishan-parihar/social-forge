@@ -187,7 +187,7 @@ the slide overlays); pass them even when the brand does not use them.
 turns the post into a RECURRING SERIES:
 
 ```sh
-switchpost autopost --slides slides.json --platforms instagram --content "Weekly release notes" --schedule 2026-11-01T09:00:00Z --repeat-days 7 --repeat-until 2026-12-01T09:00:00Z
+switchpost autopost --slides slides.json --platforms instagram --content "Weekly release notes" --brand-name "Acme" --topic "Release" --url "https://example.com" --hashtags "ai,automation" --schedule 2026-11-01T09:00:00Z --repeat-days 7 --repeat-until 2026-12-01T09:00:00Z
 ```
 
 This creates the spaced copies in the DATABASE and lets the switchpost

@@ -97,13 +97,19 @@ fn current_output_format() -> u8 {
     OUTPUT_FORMAT.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-pub(crate) fn output_json(value: &serde_json::Value) {
-    let text = match current_output_format() {
+/// Render a value in the format the global --json/--pretty flags
+/// selected. THE one renderer for every CLI result — emit_result and
+/// output_json both route through it, so no shim can bypass the flag.
+pub(crate) fn render_output(value: &serde_json::Value) -> String {
+    match current_output_format() {
         1 => serde_json::to_string(value).unwrap_or_default(),
         2 => serde_json::to_string_pretty(value).unwrap_or_default(),
         _ => format_text(value, "toon"),
-    };
-    println!("{text}");
+    }
+}
+
+pub(crate) fn output_json(value: &serde_json::Value) {
+    println!("{}", render_output(value));
 }
 
 pub(crate) fn output_error(msg: &str) -> anyhow::Result<()> {
@@ -560,7 +566,15 @@ async fn handle_mcp_call_with_state(
             }
         }
     }
-    print!("{text_out}");
+    // The tool's output is itself a JSON document (rmcp Json outputs are
+    // serialized above; Text outputs carry JSON too). Parse it and render
+    // through the shared formatter so the global --json/--pretty flags and
+    // the list truncation apply to mcp-call like every other command.
+    // Unparseable output (plain text) is printed verbatim.
+    match serde_json::from_str::<serde_json::Value>(text_out.trim()) {
+        Ok(value) => println!("{}", render_output(&truncate_json_strings(&value, 500))),
+        Err(_) => print!("{text_out}"),
+    }
 
     if result.is_error.unwrap_or(false) {
         anyhow::bail!("tool '{tool}' returned an error result");
@@ -4855,16 +4869,23 @@ mod tests {
         assert!(!format_text(&val, "toon").starts_with('{'));
     }
 
-    // The --json/--pretty flags are GLOBAL and were declared but never
-    // honored: output_json hardcoded TOON, so an agent that asked for
-    // JSON got TOON and could not parse the result. This pins the
-    // format the flags select.
+    // The platform shims' emit_result hardcoded TOON, so every
+    // `switchpost x timeline`-style command silently ignored the
+    // global --json flag. This drives the REAL render path the shims
+    // print from and fails if it stops honoring the flags.
     #[test]
-    fn json_flag_selects_json_output() {
+    fn platform_shim_output_honors_json_flag() {
         set_output_format(true, false);
-        assert!(format_text(&serde_json::json!({"a": 1}), "json").starts_with('{'));
+        let ok_text = crate::cli::platforms::render_emit(&Ok(serde_json::json!({"a": 1})));
+        assert!(ok_text.starts_with('{'), "--json must reach platform shims, got: {ok_text}");
+        let err_text = crate::cli::platforms::render_emit::<serde_json::Value>(&Err("boom".into()));
+        assert!(err_text.starts_with('{'), "--json must reach error arm, got: {err_text}");
+        set_output_format(false, true);
+        let pretty_text = crate::cli::platforms::render_emit(&Ok(serde_json::json!({"a": 1})));
+        assert!(pretty_text.starts_with('{'), "--pretty must reach platform shims");
         set_output_format(false, false);
-        assert!(!format_text(&serde_json::json!({"a": 1}), "toon").starts_with('{'));
+        let toon_text = crate::cli::platforms::render_emit(&Ok(serde_json::json!({"a": 1})));
+        assert!(!toon_text.starts_with('{'), "default must stay TOON");
     }
 
     // An OAuth provider's auth_url must be the PROVIDER's own consent
@@ -4933,7 +4954,26 @@ async fn handle_autopost(
         ));
     }
 
-    // 3. Render.
+    // 3. Render. Deckmill requires all four overlay fields non-empty
+    // (its own error names each); with the CLI's "" defaults the
+    // failure surfaced mid-render as a deckmill error string. Fail
+    // here with the flags named instead.
+    let missing = [
+        ("--brand-name", options.brand_name.as_str()),
+        ("--topic", options.topic.as_str()),
+        ("--url", options.url.as_str()),
+        ("--hashtags", options.hashtags.as_str()),
+    ]
+    .iter()
+    .filter(|(_, v)| v.trim().is_empty())
+    .map(|(flag, _)| *flag)
+    .collect::<Vec<_>>()
+    .join(", ");
+    if !missing.is_empty() {
+        return Err(anyhow::anyhow!(
+            "autopost: {missing} must be non-empty (Deckmill renders each as a slide overlay). Add them and retry."
+        ));
+    }
     let work_dir = match &options.work_dir {
         Some(dir) => std::path::PathBuf::from(dir),
         None => std::env::temp_dir().join(format!("switchpost-autopost-{}", uuid::Uuid::new_v4())),
@@ -5135,14 +5175,14 @@ async fn handle_agent(state: &AppState) -> anyhow::Result<()> {
             "autopost --slides f.json --platforms x --content '...'   render a Deckmill carousel and post it",
             "posts list|create|publish         the post lifecycle",
             "media upload <path>               upload a file",
-            "mcp-call <tool> '<json>'          call any MCP tool in-process",
+            "mcp-call <tool> --args '<json>'  call any MCP tool in-process",
             "mcp-tools                         list the MCP tools",
             "providers                         the connected accounts",
             "doctor                            health-check every provider",
         ],
         "workflows": {
             "oauth_login": "switchpost connect linkedin --browser",
-            "deckmill_autopost": "switchpost autopost --slides slides.json --platforms instagram --content '...' --url https://example.com --hashtags ai",
+            "deckmill_autopost": "switchpost autopost --slides slides.json --platforms instagram --brand-name 'Acme' --topic 'Release' --content '...' --url https://example.com --hashtags ai",
         },
         "providers": providers,
         "connected": connected,

@@ -32,26 +32,41 @@ pub mod youtube;
 
 use serde::Serialize;
 
-use super::run::{format_text, truncate_json_strings};
+use super::run::{render_output, truncate_json_strings};
 
 /// Maximum chars for string values in list outputs (AXI §3: truncation).
 const LIST_TRUNCATE_CHARS: usize = 500;
 
-/// Shared result-printing footer for every CLI platform shim.
-///
-/// Uses TOON format (AXI §1) with optional truncation for list payloads.
-pub fn emit_result<T: Serialize>(result: Result<T, String>) -> anyhow::Result<()> {
+/// Render what emit_result would print, without printing — so a test
+/// can pin that the GLOBAL --json/--pretty flags reach the platform
+/// shims' output. emit_result itself hardcodes TOON once, and every
+/// `switchpost x timeline`-style command silently ignored the flags.
+pub(crate) fn render_emit<T: Serialize>(result: &Result<T, String>) -> String {
     match result {
         Ok(v) => {
-            let val = serde_json::to_value(&v).unwrap_or_default();
+            let val = serde_json::to_value(v).unwrap_or_default();
             // AXI §3: truncate string fields in list-like outputs
             let truncated = truncate_json_strings(&val, LIST_TRUNCATE_CHARS);
-            println!("{}", format_text(&truncated, "toon"));
+            render_output(&truncated)
+        }
+        Err(e) => render_output(&serde_json::json!({
+            "error": e,
+            "hint": "Run `switchpost doctor` to check provider health."
+        })),
+    }
+}
+
+/// Shared result-printing footer for every CLI platform shim.
+///
+/// Uses the global output format (AXI §1: TOON default, --json/--pretty).
+pub fn emit_result<T: Serialize>(result: Result<T, String>) -> anyhow::Result<()> {
+    match &result {
+        Ok(_) => {
+            println!("{}", render_emit(&result));
             Ok(())
         }
-        Err(e) => {
-            let err = serde_json::json!({"error": e, "hint": "Run `switchpost doctor` to check provider health."});
-            println!("{}", format_text(&err, "toon"));
+        Err(_) => {
+            println!("{}", render_emit(&result));
             std::process::exit(2);
         }
     }
