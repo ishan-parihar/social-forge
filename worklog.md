@@ -2636,3 +2636,73 @@ Stage Summary:
   platform page-id semantics is a provider quirk worth a code fix someday
   (list returns id+name only); github/google have no post-publish surface
   (publish_capable=false) and the skill says so via providers' flags.
+
+---
+Task ID: skill-red-team-pass-2 (v0.6.1)
+Agent: Jcode (second-pass red-team audit)
+Task: Red-team pass 2 on skills/switchpost-agent — attack semantic claims, output shapes, error contracts, and pass-1's own new claims; land verified parallel-session drops; gates; push.
+
+Work Log:
+- Live-mapped the CLI error contract: FOUR paths, not the documented one.
+  clap usage -> clap text on stderr, exit 2 (posts list --bogus);
+  runtime core -> {error,help?} TOON/JSON on STDOUT, exit 2
+  (integrations disable not-a-uuid); runtime platform-shim -> {error,hint}
+  on STDOUT, exit 2 (github repos <404 user>, via emit_result); anyhow
+  propagation -> Error: <msg> on stderr, exit 1 (bluesky timeline, not
+  connected). SKILL.md's "JSON on stderr with exit code 1" was wrong on
+  every path; replaced with the verified table.
+- Falsified live: ops.md's install URL. https://switchpost.dev/install.sh
+  fails TLS (handshake alert 40); http:// falls back to a "Coming Soon"
+  parking page. curl|sh of that is a broken instruction. Replaced with the
+  repo's real raw.githubusercontent.com/ishan-parihar/social-forge path
+  (live 200). Also: "config init" doesn't exist -> top-level "switchpost
+  init".
+- Falsified by official docs: SKILL.md's "X free tier is ~17 tweets/day".
+  X API is pay-per-usage now ($0.015/post, no free monthly quota); and the
+  app's default X path is cookie-GraphQL (account-level cap, not API tier).
+  Rewrote the rate-limit row to name both real paths.
+- Found the X empty-shape trap live: x user <bad> / x delete <bad-id>
+  return exit 0 with an empty-shaped data object (id:"") — a missing
+  tweet/user looks like success. Documented in platform-matrices.md.
+  (First draft named a nonexistent "x tweet-detail" — caught against the
+  binary's real subcommand list before landing.)
+- Coverage diff (binary surface vs skill): 9 MCP tools missing from my own
+  pass-1 catalogue (analytics_summary, feed_analytics, media_delete,
+  posts_set_tags, posts_create_carousel, setup_config_set, setup_guide,
+  setup_import_cookies, setup_status) — added with purposes captured from
+  tools_search. 5 CLI actions undocumented (integrations enable/disable,
+  posts get, tags get, webhooks get) — added to recipes.md/ops.md with
+  live-captured output shapes. Catalogue's "core ~40 tools" was stale ->
+  67, with the re-measure command.
+- emit_result --json fix (uncommitted from a 3rd parallel session): verified
+  root cause + fix correct (render_output routes all output through the
+  global format), landed with its unit test; release binary rebuilt and
+  re-verified live on all three paths (ok/data/error) for x + github.
+- Landed 3 more verified parallel-session drops: mcp-call --json tests
+  (tests/mcp_call_reach_test.rs, real binary on scratch DB),
+  DECKMILL_BIN hint in autopost's PATH error (env var is genuinely read),
+  home.rs 21->26 platforms (matches tier.rs), and the OUTPUT_FORMAT
+  snapshot/restore in the shim format test.
+- Gates: cargo check 0 errors; 521/521 lib; doc_cli 3/3 (caught one
+  wording of my own that parsed as a command — fixed); skill_install 2/2;
+  mcp_call_reach 6/6. make install-skill: installed copy synced 5/5.
+- Probe hygiene: one throwaway draft post created (posts get shape probe)
+  and deleted; no live tweets this pass (the pass-1 incident probe was
+  deleted in the previous session).
+
+Stage Summary:
+- v0.6.1 pushed as 51a33f4. Every doc claim changed this pass was
+  live-executed against the release binary (or falsified by an official
+  source for external facts); every command newly documented had its
+  output shape captured live.
+- The error-contract rewrite is the highest-value fix: an agent following
+  the old text would parse stderr for errors that actually live on
+  stdout, and treat exit 2 as a usage error when it's a runtime failure.
+- The guard worked as designed: it caught my own catalogue rewording
+  ("switchpost signatures list/create/update/delete" parsed as a literal
+  command) before it shipped.
+- Known leftovers for a future pass: x user's empty-shape behavior is a
+  candidate for a code fix (return a clear error when the GraphQL lookup
+  resolves nothing) rather than a doc workaround; the two-space
+  linkedin-page gap and the provider "coming soon" landing page are
+  still open upstream of the docs.
