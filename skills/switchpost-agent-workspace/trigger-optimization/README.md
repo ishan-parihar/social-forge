@@ -3,8 +3,8 @@
 ## Status: BLOCKED by environment (no reliable measurement produced)
 
 The skill-creator description-optimization loop (`scripts/run_loop.py`)
-was run twice against `trigger-eval-set.json` (20 queries: 12
-should-trigger, 8 should-not-trigger, all realistic user phrasings).
+was run twice against `trigger-eval-set.json` (20 queries: 13
+should-trigger, 7 should-not-trigger, all realistic user phrasings).
 
 ## What happened
 

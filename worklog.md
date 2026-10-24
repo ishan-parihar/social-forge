@@ -2853,8 +2853,10 @@ Work Log:
   mentioning the right form while the command artifact was wrong), and
   benchmark metadata now says runs_per_configuration: 1 (n=1 point
   estimates) instead of the aggregator's default 3.
-- Drafted the 20-query trigger eval set (12 should-trigger across all
-  workflow classes incl. ops/debugging; 8 should-not near-misses).
+- Drafted the 20-query trigger eval set (13 should-trigger across all
+  workflow classes incl. ops/debugging; 7 should-not near-misses).
+  (Corrected 2026-10-24 round-4 validation: originally recorded here as
+  12/8; the set and both run logs are 13/7.)
 - Ran run_loop twice. Run 1: all claude -p calls died on the unroutable
   default model (aroute gateway). Run 2 (ANTHROPIC_MODEL=glm-5.3):
   eval phase completed, measured precision 100% / recall 0% — then the

@@ -115,3 +115,52 @@ Nine further surfaces — the artifact-internal consistency that rounds
 
 No corrections required — rounds 1-3 now cover every artifact,
 every number, every claim.
+
+---
+
+## Validation round 4 (2026-10-24, same hour)
+
+Nine further surfaces — the answers' live factual claims, the run logs,
+and the one defect this round actually found:
+
+1. **Task parity across arms**: both arms of every eval answered the
+   same task prompt (confirmed via eval_metadata prompts + answer
+   openings; the with/old twins address identical tasks).
+2. **Timing plausibility**: all 8 timing.json durations are plausible
+   worker wall-clock spans (900-4500s) and match benchmark.json.
+3. **Token-rounding disclosure**: benchmark.json explicitly notes
+   "Timing/token data approximate from observed swarm stats" — the
+   round numbers (2.5M, 3.2M...) are disclosed approximations, not
+   fabricated precision.
+4. **eval0 live claims re-verified NOW**: followers 9 / following 93 /
+   user id 3301263462 (x_get_me live); latest OWN post is still
+   "The research tab ranks..." Oct 19 13:59:35 UTC (x_user_tweets
+   live — the Oct-24 tweets in the HOME timeline are followed
+   accounts', not own posts); the single reply landed on exactly
+   "The worst part of social media management..." (reply_count: 1
+   live). All claims hold at validation time, not just run time.
+5. **eval2 live claims re-verified NOW**: the Reddit 403 "whoa there,
+   pardner" still reproduces on the www path; the OAuth paths
+   (reddit_get_saved → real Listing + modhash, reddit_list_friends →
+   UserList) still succeed — the www-vs-OAuth endpoint distinction
+   the answer drew is real and current.
+6. **eval3 workflow claims re-verified NOW**: posts list --state error
+   (returns 0 on the clean DB), posts update --settings/--content/
+   --title/--media flags exist as documented, posts publish help says
+   "queued or errored post" as the answer claims.
+7. **eval1 claims re-verified NOW**: no native CLI repeat subcommand
+   (confirmed), tools_search still returns posts_repeat with the
+   documented description, and the old-skill's two probe calls
+   ("nonexistent-schema-probe", "not-a-date") still error BEFORE any
+   write (Invalid post_id UUID / Post not found; DB unchanged).
+   Eval-design note: the old-skill probe's bad post_id meant it could
+   never have discovered the RFC3339 requirement by probing — the
+   assertion correctly grades the answer artifact.
+8. **review.html**: embeds the real committed data (0.667 appears
+   once, for eval0 old_skill; per-eval verdicts match grading.json).
+9. **DEFECT FOUND AND FIXED**: trigger-optimization/README.md and the
+   worklog said the trigger eval set was "12 should-trigger, 8
+   should-not" — the set is **13/7**, and both run_loop logs graded
+   13/7 (13 expected=True lines, 7 expected=False, in each). The
+   a5b13f8 commit message carries the same wrong count (immutable;
+   corrected here per protocol). Both files corrected in this commit.
