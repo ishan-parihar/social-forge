@@ -2731,3 +2731,59 @@ Stage Summary:
 - 3 CLI agent-surface defects fixed and live-verified (a557a9f); coverage added where the gap let defect 1 ship undetected.
 - Known-open: no CLI `media delete` subcommand (MCP-only; documented); x timeline/search still return the provider's selected GraphQL subtree (URT-narrowed, NOT the full envelope — measured 22KB for a 3-result search) rather than a distilled row set — a deliberate projection at the provider boundary is the fix if token cost bites; ~8 slide_N.png media rows from prior agents' testing remain (operator's call to purge); LinkedIn consent tab 31 (previous session) remains open in browseros-neo.
 - Daemon note: a557a9f+this commit are CLI-dispatch-time only — the running serve (pid 3642446) is correct as-is; target/release/switchpost is current for CLI use; no restart needed for correctness, only to pick up the new binary.
+
+---
+Task ID: skill-red-team-pass-3 (v0.6.3)
+Agent: Jcode (third-pass red-team audit, skill-creator methodology)
+Task: Workflow-class coverage audit — every job class needs a one-hop verified route; then refine triggers + token efficiency via skill-creator.
+
+Work Log:
+- Coverage matrix: mapped all 62 top-level commands against {mentioned,
+  runnable example, eval}. All 62 mentioned; the 6 "no example" hits
+  (doctor, audit, init, setup, connect-all, mcp) are bare commands
+  correctly documented as bare — regex false positives, verified by
+  reading the lines.
+- Falsified live #1: posts_repeat. Doc said "until an end date" with no
+  param name. Real: param is `end_date`, MUST be full RFC3339
+  ("2026-11-08" rejected; "2026-11-08T23:59:59Z" accepted). Verified
+  end-to-end (group_id + 2 post_ids + scheduled_dates), cleaned up.
+- Falsified live #2 (would have shipped): --first-comment. My draft
+  claimed X/Reddit/FB. Source shows X has NO comment() impl. Real set:
+  FB/Reddit/Slack/Dev.to/Hashnode/Medium/GMB; failed first comment never
+  fails the post. Fixed before commit.
+- Coverage gap #1: cross-platform `analytics get <provider>` /
+  `analytics post <uuid>` documented NOWHERE — the #1 "how did my
+  content do" job. Added recipes section + core-routes row + the
+  internal-vs-platform-UUID trap.
+- Coverage gap #2: failed-post recovery untaught. Added the
+  list --state error -> get (error_message) -> update + publish loop
+  and the "retries already exhausted" fact.
+- Coverage gap #3: posts_thread contract undocumented. Pinned live:
+  content_parts[] + integration_ids[] -> group_id + ordered post_ids;
+  scheduler auto-links replies. Verified + cleaned up.
+- Env finding: reddit www reads 403 "whoa there, pardner" from this
+  datacenter IP while doctor shows live_verified: true. Added an
+  error-table row so agents don't chase phantom auth bugs.
+- skill-creator refinements: description frontmatter extended with the
+  missing trigger classes (engagement, analytics, threads/recurring,
+  failed posts, cross-posting, RSS/blog). Core-routes table grew 4 rows
+  so each job class has a one-hop route. Routing table updated. Eval set
+  43 -> 50 (one per new workflow).
+- Guard caught my own new prose twice (backticked bare command parsed
+  as missing-arg) — reworded both before ship.
+- Gates: cargo check 0 errors; 521/521 lib; doc_cli 3/3; skill_install
+  2/2; install-skill synced 5/5. Probe hygiene: all probe posts
+  deleted; posts list total 0; no tweets sent this pass.
+
+Stage Summary:
+- v0.6.3 pushed as 7db1a44. Every workflow class in the CLI's 62
+  commands now has a verified route in SKILL.md's core table or a
+  named leaf section; every claim added this pass was executed against
+  the real binary or read from the provider source.
+- The pass's highest-value fixes: posts_repeat's end_date RFC3339 trap
+  (an agent following the old doc would fail every repeat), and the
+  analytics/recovery routes (both previously invisible).
+- Known leftovers: reddit publish-path probe from a residential
+  context; catalogue contents block if it keeps growing; trigger-
+  description optimization loop (skill-creator's run_loop.py) not run
+  this pass — the eval queries for it are drafted in the description.
