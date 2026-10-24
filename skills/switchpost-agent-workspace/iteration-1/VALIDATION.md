@@ -41,3 +41,34 @@
    commands.txt + grading.json; all committed on `github/master`
    (verified via `git ls-tree` on the remote ref, 15 files across the
    three eval dirs).
+
+---
+
+## Validation round 2 (2026-10-24, later the same hour)
+
+Seven further surfaces, all green:
+
+1. **Grading reproducibility**: an independent re-grading script
+   (fresh logic, same artifacts) reproduces the committed pass/fail
+   matrix exactly — 0 mismatches across all 8 runs.
+2. **Assertion discrimination**: five adversarial fake answers (the
+   date-only end_date, the `until` param, an answer without the
+   per-post route, a "reconnect your account" verdict, a recovery
+   answer that never names error_message) are all correctly REJECTED
+   by the assertions. The grading is not a rubber stamp.
+3. **Skill sync + guards**: installed skill identical to the repo
+   (5/5 files); doc-CLI guard 3/3; skill_install 2/2.
+4. **Code-fix regressions**: all four session fixes re-verified on
+   the current binary — analytics_summary reports 0 (soft-deleted
+   excluded); `--state errored` returns 0 WITH a live draft present
+   (proving it filters rather than falls through); `--json` emits
+   real JSON on both the shim ok-path and the error arm.
+5. **Lib suite**: 521/521 at HEAD.
+6. **Answer-claim spot-checks**: analytics_get_post still rejects
+   feed uuids ("Post not found"); doctor still reports reddit
+   healthy/live_verified; `posts get` exists as documented.
+7. **Tree + remote**: clean tree (`.serena/` junk untracked only);
+   remote at 3e21cbe.
+
+No further corrections required — round 2 found nothing the round-1
+record had wrong.
