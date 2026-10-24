@@ -332,6 +332,21 @@ async fn main() -> anyhow::Result<()> {
     let http_addr = format!("{bind_host}:{port}");
     let use_tls = config.app_url.starts_with("https://");
 
+    // CSRF vs bind-port drift guard — the predicate and its rationale live in
+    // `config::frontend_origins_cover_port`. Warn at boot, naming the actual
+    // port, so a relaunch on a different port surfaces as a one-line env fix
+    // instead of mysterious browser 403s on every state-changing route.
+    if !config::frontend_origins_cover_port(&config.frontend_url, port) {
+        tracing::warn!(
+            "⚠️  FRONTEND_URL={:?} does not include this server's port {port}. \
+             Browsers will send Origin https://localhost:{port} and every \
+             state-changing route will 403 (csrf_origin_mismatch) — including \
+             login. Fix: APP_URL/FRONTEND_URL=https://localhost:{port} (or \
+             serve --port to match the configured URL).",
+            config.frontend_url
+        );
+    }
+
     // Shared shutdown signal — fires once on SIGINT (Ctrl+C) OR SIGTERM.
     // Both the HTTP server (via `with_graceful_shutdown`) and the
     // background-task drain logic below subscribe to this same signal,

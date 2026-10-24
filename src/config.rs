@@ -510,9 +510,28 @@ pub(crate) fn persist_app_password(password: &str) -> anyhow::Result<std::path::
     Ok(env_path)
 }
 
+/// Does any origin in the comma-separated `FRONTEND_URL`/`CSRF` allow-list
+/// cover the port this server is actually bound to?
+///
+/// The browser sends `Origin` with the port the page is ACTUALLY served from,
+/// and `csrf_origin_check` compares it against the allow-list verbatim. A
+/// serve on any other port makes every state-changing route 403
+/// (`csrf_origin_mismatch`) — login included — which reads as "the app is
+/// broken" rather than "the env is stale". This bit twice before
+/// (worklog 2026-10-22; AGENTS.md §10's FRONTEND_URL note documents the trap).
+///
+/// A scheme-default URL (no explicit `:port`, i.e. `https://…` = 443) counts
+/// as covering only a 443 bind.
+pub fn frontend_origins_cover_port(frontend_url: &str, bind_port: u16) -> bool {
+    frontend_url
+        .split(',')
+        .filter_map(|o| url::Url::parse(o.trim()).ok())
+        .any(|u| u.port() == Some(bind_port) || (u.port().is_none() && bind_port == 443))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::ensure_sqlite_url;
+    use super::{ensure_sqlite_url, frontend_origins_cover_port};
 
     #[test]
     fn accepts_sqlite_urls_and_bare_paths() {
@@ -555,5 +574,45 @@ mod tests {
             .to_string();
         assert!(!err.contains("hunter2"), "leaked password: {err}");
         assert!(err.contains("postgres"), "scheme not named: {err}");
+    }
+
+    #[test]
+    fn port_coverage_accepts_matching_port() {
+        assert!(frontend_origins_cover_port(
+            "https://localhost:6544",
+            6544
+        ));
+    }
+
+    #[test]
+    fn port_coverage_rejects_stale_port() {
+        // The exact drift that 403'd every browser write: env pinned to
+        // 6543, serve running on 6544.
+        assert!(!frontend_origins_cover_port(
+            "https://localhost:6543",
+            6544
+        ));
+    }
+
+    #[test]
+    fn port_coverage_accepts_any_matching_origin_in_list() {
+        // v23-9 comma-separated allow-list: one matching entry is enough.
+        assert!(frontend_origins_cover_port(
+            "https://a.com, https://localhost:6544",
+            6544
+        ));
+    }
+
+    #[test]
+    fn port_coverage_scheme_default_only_covers_443() {
+        assert!(frontend_origins_cover_port("https://example.com", 443));
+        assert!(!frontend_origins_cover_port("https://example.com", 6544));
+    }
+
+    #[test]
+    fn port_coverage_ignores_unparseable_entries() {
+        assert!(frontend_origins_cover_port("not a url, https://localhost:6544", 6544));
+        // Nothing parseable at all — never claim coverage.
+        assert!(!frontend_origins_cover_port("*", 6544));
     }
 }

@@ -2395,3 +2395,70 @@ Stage Summary:
 - Still the operator's: `gh repo rename switchpost --repo
   ishan-parihar/social-forge --yes` (measured available, deliberately not run
   by me), after which the README badges resolve.
+
+---
+Task ID: cli-completeness
+Agent: omp
+Task: Complete the switchpost CLI as an agentic utility — browser-driven OAuth,
+  Deckmill recursive auto-posting, and full CLI↔MCP parity — with exhaustive tests.
+
+Work Log:
+1. New CLI surfaces, all reusing the existing implementations rather than
+   re-implementing them:
+   - `connect --browser` drives the OAuth consent page through the browseros-neo
+     MCP server and lets the switchpost server own the code exchange (memory
+     #398). The MCP client is a minimal implementation over the existing
+     reqwest 0.12 (memory #401): rmcp's HTTP transport would pull a second
+     reqwest (0.13).
+   - `autopost` renders a Deckmill carousel, uploads every PNG through the
+     dashboard's own media path and calls switchpost's own staging service.
+     Recurrence (`--repeat-days`/`--repeat-until`) reuses the DB-backed repeat
+     series the scheduler already publishes (memory #409) — deliberately NOT a
+     custom loop process, which would double-post against the scheduler.
+   - `agent` prints the discovery card an agent needs.
+   - `rss`, `campaigns`, `signatures`, AI and `streak` close the measured
+     CLI↔MCP gap (390 MCP tools vs 300 CLI commands; 15 tools in 4 families
+     had no CLI equivalent). Every wrapper calls the MCP handler, so there is
+     one implementation per operation.
+
+2. Two real defects found and fixed while proving the paths:
+   - The staging readiness check tested the RAW relative media URL
+     (`/api/media/<uuid>`) while the publish path resolves it against APP_URL
+     first, so a post that would have published was rejected as unready.
+     Readiness now sees exactly what the provider would see. Fixed in the
+     shared service (src/services/staging.rs), so the dashboard composer and
+     the MCP stage path are fixed with it.
+   - `rss add` took `--enabled <true|false>`, which no agent can guess right
+     and which reads as a value rather than a state. It is now `--disabled`,
+     a flag whose absence means the default.
+
+3. The exhaustive-test pass found three defects in the TEST and DOC layers:
+   - `tests/cli_agent_surface_test.rs` asserted that a bare URL string decodes
+     to an empty vec. It does not: the decoder is strict and ERRORS. The
+     test now pins the loud failure, which is the better contract.
+   - The doc-to-CLI guard caught three documented commands the CLI rejects:
+     two shell line-continuations and `rss add ... --integration <UUID>`
+     (the id is positional). Fixed in the docs.
+   - `docs/platforms-and-cli.md` stated 56 CLI commands; the true count is
+     now 63. Fixed.
+
+4. `tests/streak_unification_test.rs` was TIME-DEPENDENT and failed at
+   00:35 UTC. The seed anchored "today" at MIDDAY UTC, which is in the
+   FUTURE before 12:00 UTC; in New York the seed landed on a day the zone
+   had not reached yet, and `calculate_streak` only accepts a streak that
+   starts on today or yesterday, so it measured 0. Verified INNOCENT of my
+   diff first: a clean HEAD worktree failed identically (left: 0, right: 3).
+   The seed now anchors on the most recent PAST UTC midnight, so every
+   seeded day is today-or-yesterday in every queried zone at every hour.
+
+Stage Summary:
+- `connect --browser`, `autopost`, `agent`, `rss`, `campaigns`, `signatures`,
+  AI and `streak` all work against the live binary and the live database.
+- Autopost proven end to end against a live connected account: 3 slides
+  rendered -> uploaded -> staged on X; the recurring variant produced 1 post
+  + 3 spaced copies.
+- Gates: cargo check 0 errors; cargo test 520 lib tests + every integration
+  binary green; pnpm build succeeded; svelte-check 0 errors, 0 warnings.
+- Deckmill facts corrected against the renderer itself: `render-carousel`
+  requires --url, --hashtags AND --primary-color; hero uses `headline` (not
+  `heading`); `cta` and `feature` are unavailable; `text_block` is valid.
