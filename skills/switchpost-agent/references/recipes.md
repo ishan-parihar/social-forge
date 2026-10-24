@@ -63,6 +63,7 @@ switchpost autopost --slides slides.json --platforms x --content "Weekly notes" 
 switchpost posts find-slot                       # next free slot (all accounts)
 switchpost posts find-slot --integration <UUID>  # for one account → {ok, scheduled_at, integration_id}
 switchpost posts create "text" --integrations <UUID> --schedule "2026-11-01T09:00:00Z"
+switchpost posts create "text" --integrations <UUID> --first-comment "Context thread…"  # auto-comment right after publish — works on providers that implement comment (FB/Reddit/Slack/Dev.to/Hashnode/Medium/GMB); a failed first comment NEVER fails the post
 switchpost posts get <POST_ID>                   # one post: id, content, state, integration_id, scheduled_at, …
 switchpost posts schedule <POST_ID> "2026-11-02T09:00:00Z"    # reschedule
 switchpost posts update <POST_ID> --content "new text"        # omitted fields kept
@@ -70,9 +71,29 @@ switchpost posts tags <POST_ID> <TAG_ID1> <TAG_ID2>           # replace tags (no
 switchpost posts validate "text" --integrations <UUID>       # check limits w/o creating
 ```
 
-MCP extras (posts_* tools via mcp-call): `posts_repeat` (copies a scheduled
-post every N days until an end date — returns `group_id` + `post_ids`),
-`posts_best_times` (per-account best posting hours), `posts_stage` v2 with
+## Failed-post recovery
+
+```bash
+switchpost posts list --state error            # what failed (also: draft|queued|published)
+switchpost posts get <POST_ID>                  # read error_message for the cause
+switchpost posts publish <POST_ID>              # retry immediately (editor's fixes first: posts update)
+switchpost posts delete <POST_ID>              # or drop it
+```
+
+The scheduler retries `RateLimited`/`Network` failures with exponential
+backoff automatically; a post only lands in `error` after the retries are
+exhausted. `posts update <ID> --content "fixed"` then `posts publish` is
+the recovery loop.
+
+MCP extras (posts_* tools via mcp-call): `posts_repeat` —
+`{"post_id":"…","interval_days":7,"end_date":"2026-11-08T23:59:59Z"}`
+(note the param is `end_date`, a FULL RFC3339 timestamp — a date-only
+string is rejected; returns `group_id` + `post_ids` + `scheduled_dates`),
+`posts_best_times` (`{"integration_id":"…"}` → per-account best
+weekday/hour slots), `posts_thread` — `{"content_parts":["t1","t2"],
+"integration_ids":["…"],"scheduled_at":"…"}` (creates a linked thread:
+returns `group_id` + ordered `post_ids`; the scheduler auto-links each
+part as a reply to the previous one), `posts_stage` v2 with
 `overrides` (per-provider content), `dry_run` (readiness only),
 `force` (stage despite readiness errors), `scheduled_at: "next-slot"`,
 `group_id` (campaign). `posts_delete` takes `delete_from_platform: true` to
@@ -122,7 +143,20 @@ switchpost ai hashtags "a post about Rust"
 switchpost ai tone "some text" casual
 ```
 
-## Campaigns / signatures / streak / tags / notifications
+## Analytics (cross-platform aggregates)
+
+```bash
+switchpost analytics get <PROVIDER>          # account-level series: {label, data:[{total,date}], percentage_change}
+switchpost analytics post <POST_ID>          # one post's own engagement series (live fetch)
+switchpost streak --tz America/New_York      # consecutive-day publishing streak: {streak_days, streak_since}
+```
+
+Per-platform analytics (richer: insights, reach, audience) live in the
+platform shims — see [platform-matrices.md](platform-matrices.md).
+The `analytics post` argument is the INTERNAL post UUID (from `posts
+list`), NOT the platform's post id.
+
+## Campaigns / signatures / tags / notifications
 
 ```bash
 switchpost campaigns create "Launch week" --goal "Ship v1" --start-date 2026-11-01 --end-date 2026-11-08 --progress-metric posts --progress-target 10
@@ -134,8 +168,6 @@ switchpost signatures create "Sign-off" "— Acme" --provider x   # omit --provi
 switchpost signatures list
 switchpost signatures update <SIGNATURE_ID>
 switchpost signatures delete <SIGNATURE_ID>
-
-switchpost streak --tz America/New_York
 
 switchpost tags create "work" --color "#ff0000"
 switchpost tags list

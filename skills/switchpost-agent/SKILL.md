@@ -1,7 +1,7 @@
 ---
 name: switchpost-agent
 description: >
-  Use Switchpost to manage social media accounts via CLI. Trigger this skill whenever the user wants to post, read, schedule, comment, DM, or manage any social media — X/Twitter, Reddit, LinkedIn, Facebook, Instagram, YouTube, Bluesky, Mastodon, TikTok, Threads, Discord, Slack, Telegram, WhatsApp, Pinterest, GitHub, WordPress, Hashnode, Medium, Dev.to, Skool, Google (Drive/Calendar/Gmail), or any connected provider. Also trigger on "post to X", "check my LinkedIn", "browse Reddit", "manage my socials", "schedule a tweet", "what's on my feed", "get Instagram insights", "post to Facebook page", "send a Telegram message", "manage Discord", "check WhatsApp", "carousel", "autopost", or any social media operation.
+  Use Switchpost to manage social media accounts via CLI. Trigger this skill whenever the user wants to post, read, schedule, comment, DM, or manage any social media — X/Twitter, Reddit, LinkedIn, Facebook, Instagram, YouTube, Bluesky, Mastodon, TikTok, Threads, Discord, Slack, Telegram, WhatsApp, Pinterest, GitHub, WordPress, Hashnode, Medium, Dev.to, Skool, Google (Drive/Calendar/Gmail), or any connected provider. Also trigger on "post to X", "check my LinkedIn", "browse Reddit", "manage my socials", "schedule a tweet", "what's on my feed", "get Instagram insights", "post to Facebook page", "send a Telegram message", "manage Discord", "check WhatsApp", "carousel", "autopost", or any social media operation. Also trigger for engagement workflows (like, retweet, reply to comments, send DMs), analytics and performance questions (followers, reach, streak, "how did my post do"), thread/recurring scheduling ("post this thread", "repost every Monday"), failed-post recovery, multi-platform cross-posting, and RSS/blog cross-publishing.
 ---
 
 # Switchpost — AI Agent Guide
@@ -81,6 +81,10 @@ browser cookies; `connect-all` does every cookie provider at once.
 | List posts | `switchpost posts list --state queued --limit 10` |
 | Cancel | `switchpost posts delete <POST_ID>` |
 | Read a feed | `switchpost x timeline --count 5` / `switchpost reddit browse rust` / `switchpost feed` (unified, local) |
+| Analytics (account + per-post) | `switchpost analytics get <provider>` / `switchpost analytics post <POST_UUID>` / `switchpost streak --tz <zone>` |
+| Engage (like/comment/DM) | `switchpost x like <TWEET_ID>` / `comment reply <UUID> <COMMENT_ID> "text"` / `dm send <UUID> <RECIPIENT> "text"` — full set in platform-matrices.md |
+| Thread / recurring | `mcp-call posts_thread` (content_parts) / `posts_repeat` (interval_days + FULL-RFC3339 end_date) — exact params in recipes.md |
+| Fix a failed post | `switchpost posts list --state error` → `posts get <ID>` (read error_message) → `posts update` + `posts publish` |
 | Any MCP tool | `switchpost mcp-call <tool> --args '<json>'` |
 | Discover tools | `switchpost mcp-tools` (all 389) / `switchpost mcp-tools --toolset x` (one set) |
 
@@ -151,7 +155,7 @@ NOT filtered — it names one tool and pays no list cost.
 | Need | Read |
 |---|---|
 | Read/engage/DM/comment/analytics per platform, full CRUD families | [references/platform-matrices.md](references/platform-matrices.md) |
-| Instagram container flow, carousel, autopost (Deckmill), recurring, RSS, automation, webhooks, AI helpers, campaigns | [references/recipes.md](references/recipes.md) |
+| Instagram container flow, carousel, autopost (Deckmill), threads/recurring (posts_thread/posts_repeat params), failed-post recovery, analytics, RSS, automation, webhooks, AI helpers, campaigns | [references/recipes.md](references/recipes.md) |
 | MCP tool catalogue by category, staging v2 contracts, toolset budgeting | [references/mcp-catalogue.md](references/mcp-catalogue.md) |
 | Install/ops: serve daemon, systemd, config, audit, browser OAuth | [references/ops.md](references/ops.md) |
 | Unknown flag | `switchpost <command> --help` — never guess |
@@ -167,6 +171,7 @@ NOT filtered — it names one tool and pays no list cost.
 | `No X/Twitter integration found` etc. | Provider not connected | `switchpost connect <provider>` / `doctor` for health |
 | `csrf_origin_mismatch` (REST only) | Server port ≠ FRONTEND_URL port | run `serve --port` matching FRONTEND_URL, or fix the env |
 | `Rate limit exceeded` / HTTP 429 / `X API rate limit` | Provider quota (X: cookie-path hits the account-level cap; OAuth path is billed per post by X) | wait for reset; `doctor` shows provider health; scheduler retries with exponential backoff automatically |
+| Reddit 403 `whoa there, pardner` | Reddit's www endpoints block datacenter IPs — the token is NOT the problem | `doctor` confirms the account is healthy; treat as environment, not auth; other Reddit paths may still work |
 | `Token expired` | OAuth token expired | `switchpost connect <provider>` again; auto-refresh usually handles it |
 | `unknown flag` / `invalid value` | CLI syntax | `switchpost <cmd> --help` |
 | `redirect_uri_mismatch` (connect) | Provider app's registered URI differs | register the `redirect_uri` the CLI printed in the provider's developer console |

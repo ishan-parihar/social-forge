@@ -434,6 +434,48 @@
       ],
       "expected_output": "Answers yes from the skill's carousel command shape without opening any references/ file. One call per target integration (the command takes one --integration).",
       "files": []
+    },
+    {
+      "id": 44,
+      "prompt": "Show me how my X account is performing overall - followers over time and then the engagement on my most recent post (post id from my posts list). I want the aggregate view, not just X-specific metrics.",
+      "expected_output": "Uses `switchpost analytics get x` for account-level series and `switchpost analytics post <POST_UUID>` for the per-post engagement, noting the post UUID comes from posts list (internal UUID, not platform post id).",
+      "files": []
+    },
+    {
+      "id": 45,
+      "prompt": "I have a 3-part thread about Rust error handling. Part 1: 'Error handling in Rust: Result and ? are your friends.' Part 2: 'Never unwrap in production code - propagate instead.' Part 3: 'thiserror for libs, anyhow for binaries.' Schedule it as a linked thread on X for tomorrow 9am.",
+      "expected_output": "Uses `switchpost mcp-call posts_thread --args '{\"content_parts\":[...],\"integration_ids\":[\"<X_UUID>\"],\"scheduled_at\":\"<tomorrow 09:00>\"}'` - gets the X integration UUID from integrations_list first. Returns group_id + ordered post_ids, scheduler auto-links replies.",
+      "files": []
+    },
+    {
+      "id": 46,
+      "prompt": "I published a post yesterday and I want to repost the same thing every Monday for the next month. The post id is 550e8400-e29b-41d4-a716-446655440000.",
+      "expected_output": "Uses `switchpost mcp-call posts_repeat --args '{\"post_id\":\"550e8400-...\",\"interval_days\":7,\"end_date\":\"<full RFC3339 timestamp, not date-only>\"}'`. The end_date must be a full RFC3339 timestamp like 2026-11-30T23:59:59Z - a date-only string is rejected.",
+      "files": []
+    },
+    {
+      "id": 47,
+      "prompt": "Three of my scheduled posts failed last night. Show me what went wrong and fix the one that hit a rate limit by rescheduling it.",
+      "expected_output": "`switchpost posts list --state error` to find them, `switchpost posts get <ID>` to read error_message, then either `posts schedule <ID> <new_time>` (rate limit = wait) or `posts update` + `posts publish` (content fix). Knows the scheduler already retried with backoff - error means retries exhausted.",
+      "files": []
+    },
+    {
+      "id": 48,
+      "prompt": "When I publish to Reddit I want to automatically add a first comment with some context links. How do I set that up when creating the post?",
+      "expected_output": "Uses `switchpost posts create \"text\" --integrations <REDDIT_UUID> --first-comment \"context links...\"`. Knows first-comment works on providers that implement comment (FB/Reddit/Slack/Dev.to/Hashnode/Medium/GMB) and that a failed first comment never fails the post itself.",
+      "files": []
+    },
+    {
+      "id": 49,
+      "prompt": "What are the best times to post on my X account? Then find me the next free slot after the best one.",
+      "expected_output": "Two calls: `switchpost mcp-call posts_best_times --args '{\"integration_id\":\"<X_UUID>\"}'` for per-account best weekday/hour slots, then `switchpost posts find-slot --integration <X_UUID>` for the next free slot. Optionally combines: pick the next date matching the best weekday from find-slot's output.",
+      "files": []
+    },
+    {
+      "id": 50,
+      "prompt": "I got a Reddit error saying 'whoa there, pardner' and something about a network policy. Is my Reddit account broken? Should I reconnect?",
+      "expected_output": "Recognizes the datacenter-IP 403 pattern: runs `switchpost doctor` which shows Reddit healthy, and does NOT reconnect (the token is fine). Explains it's Reddit's network policy on www endpoints from datacenter IPs, not an auth problem.",
+      "files": []
     }
   ]
 }
