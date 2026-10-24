@@ -74,3 +74,4 @@ frontend/package-lock.json
 *.genome-lock
 *.genome-tmp
 .genome/
+.serena/
