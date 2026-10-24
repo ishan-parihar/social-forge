@@ -2706,3 +2706,28 @@ Stage Summary:
   resolves nothing) rather than a doc workaround; the two-space
   linkedin-page gap and the provider "coming soon" landing page are
   still open upstream of the docs.
+
+---
+Task ID: cli-surface-audit-v0.6.0
+Agent: omp (glm-5.3)
+Task: Audit the CLI/MCP agent surface after the 24h+ autonomous session; verify previous agents' fixes; exhaustively test the agent workflows (login/OAuth, deckmill autopost, posting lifecycle).
+
+Work Log:
+- Verified push state clean (master = github/master, no unpushed work); removed stray `download`/`sweep` example.com fetch artifacts; left `.serena/` untracked (tool config, NOT committed).
+- Ran the gate battery: 521/521 lib tests; doc_cli 3/3, skill_install 4/4, mcp_call_reach 2/2→6/6, toolset_membership 1/1, mcp_session_toolset 4/4, cli_agent_surface 7/7; frontend build OK.
+- Live-verified the previous session's claims: two-ID-systems chain (integrations_list → UUID → posts create --integrations), mcp-call reach for non-core tools under default toolset, deckmill contract match, connect --browser arms browseros-neo correctly, recurring series DB-backed.
+- Fixed 3 defects (commit a557a9f):
+  1. emit_result (31 platform shims) + mcp-call print path hardcoded TOON — the global --json/--pretty flags were advertised in --help but silently ignored. Extracted render_output/render_emit; mutation-proven test.
+  2. autopost defaults made every default invocation die inside deckmill (requires --brand-name/--topic/--url/--hashtags non-empty, verified live per-flag). Now fails fast naming the flags; fixed the skill recipe + docs recurring example (both carried broken invocations).
+  3. `switchpost agent` taught `mcp-call <tool> '<json>'` (positional, clap rejects). Now teaches --args.
+- Follow-up commit (this one): mcp-call format tests (mutation-proven via the TOON-default discriminator — the --json-parse test alone passes with the fix reverted because the tool's raw output is already JSON), OUTPUT_FORMAT snapshot/restore in the lib test (parallel-thread flake hazard), DECKMILL_BIN named in the spawn error + help, media_delete param quirk (media_id, not id) documented in recipes.md, home view platform count corrected 21→25 with the 4 missing providers listed, removed the unverified "~$0.015 per post" price claim from SKILL.md.
+- Smoke cleanup: live X tweet deleted platform-side, all post rows deleted, all media deleted, recurring series deleted (group-scoped soft-delete: ONE delete of the original covers the copies — the ok:false responses were correct no-ops).
+
+IMPORTANT provenance note for the next agent: a557a9f's SKILL.md diff (the error-contract table + rate-limit row) was NOT authored by this session — it was uncommitted work the previous 24h session left in the tree, absorbed by `git add -A`. I live-verified every row of it after the fact (clap→stderr/2, anyhow→stderr/1, shim error→stdout TOON/2, core error→stdout JSON/2, nonexistent x user→exit 0 empty shape) and all rows hold. Note its "--json reaches platform shims" claim was FALSE when the previous session wrote it (emit_result was still hardcoded) — the previous session had diagnosed and documented the fix without landing it; my emit_result fix made the sentence true. LESSON: `git add -A` in a shared tree silently commits prior-session work — inspect `git diff` against the last worklog entry before staging.
+
+Concurrent-session note: 4 skill reference files (mcp-catalogue, ops, platform-matrices, recipes) gained uncommitted edits from ANOTHER session mid-audit (posts get/webhooks get/tags get documentation, integrations disable, install URL). I verified their claims against the binary (all accurate) but did NOT commit them — they are in the tree for their session to land. My recipes.md media-delete addition coexists with their edits in that file.
+
+Stage Summary:
+- 3 CLI agent-surface defects fixed and live-verified (a557a9f); coverage added where the gap let defect 1 ship undetected.
+- Known-open: no CLI `media delete` subcommand (MCP-only; documented); x timeline/search still return the provider's selected GraphQL subtree (URT-narrowed, NOT the full envelope — measured 22KB for a 3-result search) rather than a distilled row set — a deliberate projection at the provider boundary is the fix if token cost bites; ~8 slide_N.png media rows from prior agents' testing remain (operator's call to purge); LinkedIn consent tab 31 (previous session) remains open in browseros-neo.
+- Daemon note: a557a9f+this commit are CLI-dispatch-time only — the running serve (pid 3642446) is correct as-is; target/release/switchpost is current for CLI use; no restart needed for correctness, only to pick up the new binary.
