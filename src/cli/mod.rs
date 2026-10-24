@@ -95,7 +95,7 @@ pub enum Command {
     Mcp,
 
     /// Call one MCP tool by name, in-process — the documented shell path
-    /// for agents (skills/quick-reference.md). Args are a JSON object.
+    /// for agents (skills/switchpost-agent). Args are a JSON object.
     McpCall {
         /// Tool name as advertised by tools/list (e.g. posts_stage, x_create_tweet)
         tool: String,

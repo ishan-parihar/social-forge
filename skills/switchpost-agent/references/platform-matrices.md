@@ -1,194 +1,282 @@
-# Platform matrices
+# Platform matrices — read, engage, DM, comment, analytics
 
-Read and engage command lookup per platform. Loaded on demand from `SKILL.md`.
+Every line verified against the real CLI (`switchpost <cmd> --help`).
+Loaded on demand from SKILL.md. Two ID systems: see SKILL.md — `<PAGE_ID>`,
+`<ACCOUNT_ID>`, `<CHANNEL_ID>` etc. are PLATFORM ids (`providers` /
+platform `list` commands); `--integrations` needs integration UUIDs
+(`mcp-call integrations_list`).
 
-### Read from any platform
+## X / Twitter
 
 ```bash
-# TikTok
-switchpost tiktok profile --pretty
-switchpost tiktok videos --limit 10 --pretty
-
-# Threads
-switchpost threads list <ACCOUNT_ID> --limit 10 --pretty
-switchpost threads profile <ACCOUNT_ID> --pretty
-
-# Discord
-switchpost discord channels <GUILD_ID> --pretty
-switchpost discord messages <CHANNEL_ID> --limit 10 --pretty
-switchpost discord server <GUILD_ID> --pretty
-
-# Slack
-switchpost slack channels --pretty
-switchpost slack history <CHANNEL_ID> --limit 10 --pretty
-switchpost slack users --pretty
-
-# Telegram Bot
-switchpost telegram-bot updates --pretty
-switchpost telegram-bot chat <CHAT_ID> --pretty
-
-# Telegram User
-switchpost telegram-user dialogs --limit 10 --pretty
-switchpost telegram-user contacts --pretty
-switchpost telegram-user search "query" --pretty
-
-# WhatsApp
-switchpost whatsapp chats --limit 10 --pretty
-switchpost whatsapp contacts --pretty
-switchpost whatsapp groups --pretty
-
-# Pinterest
-switchpost pinterest profile <BOARD_ID> --pretty
-switchpost pinterest board <BOARD_ID> --pretty
-switchpost pinterest pins <BOARD_ID> --limit 10 --pretty
-switchpost pinterest search "query" --pretty
-
-# GitHub
-switchpost github me --pretty
-switchpost github my-repos --limit 10 --pretty
-switchpost github issues <OWNER> <REPO> --pretty
-switchpost github prs <OWNER> <REPO> --pretty
-switchpost github commits <OWNER> <REPO> --limit 10 --pretty
-switchpost github search "query" --pretty
-
-# WordPress
-switchpost wordpress list --limit 10 --pretty
-switchpost wordpress get 1 --pretty
-switchpost wordpress categories --pretty
-
-# Hashnode
-switchpost hashnode list <PUB_ID> --pretty
-switchpost hashnode get <POST_ID> --pretty
-
-# Medium
-switchpost medium-blog list --pretty
-switchpost medium-blog get <POST_ID> --pretty
-
-# Dev.to
-switchpost devto list --pretty
-switchpost devto get <POST_ID> --pretty
-
-# Skool
-switchpost skool posts <SLUG> --pretty
-switchpost skool info <SLUG> --pretty
-
-# Google Workspace
-switchpost google youtube-search <CHANNEL_ID> "query" --pretty
-switchpost google video <CHANNEL_ID> <VIDEO_ID> --pretty
-switchpost google playlists <CHANNEL_ID> --pretty
-switchpost google channel-stats <CHANNEL_ID> --pretty
-
-# Google Drive
-switchpost gdrive files --limit 10 --pretty
-switchpost gdrive search "query" --pretty
-switchpost gdrive folders --pretty
-
-# Google Calendar
-switchpost gcal calendars --pretty
-switchpost gcal events --limit 10 --pretty
-switchpost gcal event <EVENT_ID> --pretty
-
-# Gmail
-switchpost gmail-ops messages --limit 10 --pretty
-switchpost gmail-ops search "query" --pretty
-switchpost gmail-ops labels --pretty
-switchpost gmail-ops profile --pretty
-
-# Webhooks
-switchpost webhooks list --pretty
-switchpost webhooks get <ID> --pretty
-
-# Notifications
-switchpost notifications list --limit 10 --pretty
-
-# Tags
-switchpost tags list --pretty
-switchpost tags get <ID> --pretty
-
-# Analytics
-switchpost analytics get <PROVIDER> --days 7 --pretty
-switchpost analytics post <POST_ID> --pretty
+switchpost x timeline --count 5           # home timeline (--count, not --limit)
+switchpost x search "query"
+switchpost x user <username>
+switchpost x like <TWEET_ID>              # also: retweet, bookmark <TWEET_ID>
+switchpost x delete <TWEET_ID>
+switchpost x reply <TWEET_ID> "reply text"
+switchpost x dm <RECIPIENT_ID> "text"     # recipient = X user id
+switchpost x dm-list
+switchpost x dm-messages <CONVERSATION_ID>
 ```
 
-### Engage on any platform
+## Reddit (cookie auth — richest access)
 
 ```bash
-# X
-switchpost x like <TWEET_ID>
-switchpost x retweet <TWEET_ID>
-switchpost x bookmark <TWEET_ID>
-switchpost x reply <TWEET_ID> "reply text"
-
-# Reddit
-switchpost reddit vote <THING_ID> up
-switchpost reddit save <THING_ID>
+switchpost reddit browse <subreddit> --sort hot --limit 25   # sorts: hot,new,top,rising
+switchpost reddit search "query"
+switchpost reddit user <username>
+switchpost reddit inbox
 switchpost reddit comment <THING_ID> "reply text"
+switchpost reddit vote <THING_ID> up       # or down
+switchpost reddit save <THING_ID>          # also: unsave, delete
+switchpost reddit mod remove <THING_ID>    # also: approve, lock, unlock
+```
 
-# Facebook
-switchpost facebook react <POST_ID> LIKE
-switchpost facebook comment <POST_ID> "reply text"
+## LinkedIn (personal)
 
-# Instagram
-switchpost instagram comment <MEDIA_ID> "reply text"
-
-# LinkedIn
+```bash
+switchpost linkedin profile
+switchpost linkedin posts
+switchpost linkedin analytics
+switchpost linkedin reactions <POST_URN>
+switchpost linkedin delete <POST_URN>
 switchpost linkedin reply <COMMENT_ID> "reply text"
+switchpost linkedin dm <RECIPIENT> "text"
+switchpost linkedin dm-list
+switchpost linkedin dm-messages <CONVERSATION_ID>
+```
 
-# Discord
-switchpost discord send <CHANNEL_ID> "reply text"
+## LinkedIn page
+
+```bash
+switchpost linkedin-page list             # page ids (platform ids)
+switchpost linkedin-page post <PAGE_ID> "text"
+switchpost linkedin-page page <PAGE_ID>
+switchpost linkedin-page feed <PAGE_ID>
+switchpost linkedin-page analytics <PAGE_ID>
+switchpost linkedin-page followers <PAGE_ID>
+switchpost linkedin-page create-comment <POST_URN> <PAGE_URN> "text"
+switchpost linkedin-page delete <POST_URN>
+switchpost linkedin-page reactions <POST_URN>
+switchpost linkedin-page shares <POST_URN>
+switchpost linkedin-page post-analytics <POST_URN>
+```
+
+## Facebook (page)
+
+```bash
+switchpost facebook posts <PAGE_ID>
+switchpost facebook insights <PAGE_ID> --metric page_impressions,page_engaged_users
+switchpost facebook page-insights <PAGE_ID>
+switchpost facebook albums <PAGE_ID>
+switchpost facebook pages <QUERY>          # search public pages
+switchpost facebook conversations <PAGE_ID>
+switchpost facebook send <PAGE_ID> <CONVERSATION_ID> "text"
+switchpost facebook comment <POST_ID> "text"
+switchpost facebook react <POST_ID> LIKE   # reaction types: LIKE, LOVE, HAHA, ...
+switchpost facebook delete <POST_ID>
+switchpost facebook create <PAGE_ID> "message"
+switchpost facebook photo <PAGE_ID> <URL>
+switchpost facebook video <PAGE_ID> <URL>
+```
+
+## Instagram
+
+```bash
+switchpost instagram posts <ACCOUNT_ID>
+switchpost instagram insights <ACCOUNT_ID> --metric reach,follower_count
+# metrics (comma-separated): day: reach,follower_count,online_followers
+#   lifetime: total_interactions,comments,shares,saves,likes,accounts_engaged,profile_views,website_clicks
+switchpost instagram insights-audience <ACCOUNT_ID>
+switchpost instagram media-detail <ACCOUNT_ID> <MEDIA_ID>
+switchpost instagram hashtag <ACCOUNT_ID> <QUERY>
+switchpost instagram reels <ACCOUNT_ID>
+switchpost instagram stories <ACCOUNT_ID>
+switchpost instagram followers <ACCOUNT_ID>
+switchpost instagram mentions <ACCOUNT_ID>
+switchpost instagram comment <MEDIA_ID> "text"
+switchpost instagram dm <ACCOUNT_ID> <RECIPIENT> "text"
+switchpost instagram dm-list <ACCOUNT_ID>
+switchpost instagram dm-messages <ACCOUNT_ID> <CONVERSATION_ID>
+switchpost instagram poll-container <ACCOUNT_ID> <CREATION_ID>
+```
+
+## YouTube (native family)
+
+```bash
+switchpost youtube search <QUERY>
+switchpost youtube video <VIDEO_ID>
+switchpost youtube playlists <CHANNEL_ID>
+switchpost youtube stats <CHANNEL_ID>
+switchpost youtube analytics <CHANNEL_ID> --start-date <DATE> --end-date <DATE>
+switchpost youtube subscriptions <CHANNEL_ID>
+switchpost youtube creators <QUERY>
+switchpost youtube reply <COMMENT_ID> "reply text"
+```
+
+## Bluesky / Mastodon
+
+```bash
+switchpost bluesky timeline
+switchpost bluesky feed
+switchpost bluesky search "query"
+switchpost bluesky profile <HANDLE>
+switchpost bluesky reply <POST_URI> "reply text"
+
+switchpost mastodon timeline
+switchpost mastodon whoami
+switchpost mastodon search "query"
+switchpost mastodon get <POST_ID>
+switchpost mastodon reply <STATUS_ID> "reply text"
+```
+
+## TikTok / Threads
+
+```bash
+switchpost tiktok profile
+switchpost tiktok videos
+
+switchpost threads profile <THREADS_ID>
+switchpost threads list <THREADS_ID>
+switchpost threads reply <THREADS_ID> <MEDIA_ID> "text"
+switchpost threads delete <THREADS_ID> <MEDIA_ID>
+switchpost threads insights <THREADS_ID> <METRIC>
+```
+
+## Discord / Slack
+
+```bash
+switchpost discord channels <GUILD_ID>
+switchpost discord messages <CHANNEL_ID> --limit 10
+switchpost discord send <CHANNEL_ID> "text"
+switchpost discord server <GUILD_ID>
 switchpost discord forum <CHANNEL_ID> "title" "content"
 
-# Slack
-switchpost slack send <CHANNEL_ID> "reply text"
+switchpost slack channels
+switchpost slack history <CHANNEL_ID>
+switchpost slack send <CHANNEL_ID> "text"
+switchpost slack users
+```
 
-# WhatsApp
-switchpost whatsapp send <PHONE> "reply text"
+## Telegram
 
-# Telegram
-switchpost telegram-bot send <CHAT_ID> "reply text"
-switchpost telegram-user send <PEER> "reply text"
+```bash
+switchpost telegram-bot send <CHAT_ID> "text"
+switchpost telegram-bot photo <CHAT_ID> <URL>
+switchpost telegram-bot document <CHAT_ID> <PATH>
+switchpost telegram-bot chat <CHAT_ID>
+switchpost telegram-bot updates
 
-# GitHub
+switchpost telegram-user send <PEER> "text"
+switchpost telegram-user dialogs
+switchpost telegram-user contacts
+switchpost telegram-user search "query"
+```
+
+## WhatsApp
+
+```bash
+switchpost whatsapp send <PHONE> "text"
+switchpost whatsapp chats
+switchpost whatsapp contacts
+switchpost whatsapp groups
+switchpost whatsapp create-group <NAME> [PARTICIPANTS]...
+switchpost whatsapp invite-link <GROUP_JID>
+```
+
+## Pinterest
+
+```bash
+switchpost pinterest profile <BOARD_ID>    # board id used for token resolution
+switchpost pinterest board <BOARD_ID>
+switchpost pinterest pins <BOARD_ID>
+switchpost pinterest pin <BOARD_ID> <PIN_ID>
+switchpost pinterest search "query"
+switchpost pinterest board-analytics <BOARD_ID> --start-date <D> --end-date <D>
+switchpost pinterest pin-analytics <BOARD_ID> <PIN_ID> --start-date <D> --end-date <D>
+```
+
+## GitHub
+
+```bash
+switchpost github me
+switchpost github my-repos
+switchpost github user <LOGIN>
+switchpost github repos <USERNAME>
+switchpost github issues <OWNER> <REPO>
+switchpost github prs <OWNER> <REPO>
+switchpost github commits <OWNER> <REPO>
+switchpost github branches <OWNER> <REPO>
+switchpost github releases <OWNER> <REPO>
+switchpost github search "query"
 switchpost github create-issue <OWNER> <REPO> "title" --body "description"
 switchpost github close-issue <OWNER> <REPO> <NUMBER>
+```
 
-# WordPress
-switchpost wordpress post "title" "content"
+## Blogs (WordPress / Hashnode / Medium / Dev.to)
 
-# Hashnode
-switchpost hashnode post <PUB_ID> "title" "content"
+```bash
+switchpost wordpress list
+switchpost wordpress get <NUMBER_ID>              # numeric post id
+switchpost wordpress categories
+switchpost hashnode list <PUBLICATION_ID>
+switchpost hashnode get <POST_ID>
+switchpost medium-blog list
+switchpost medium-blog get <POST_ID>
+switchpost devto list
+switchpost devto get <POST_ID>
+```
 
-# Medium
-switchpost medium-blog post "content"
+## Skool
 
-# Dev.to
-switchpost devto post "content"
+```bash
+switchpost skool info <COMMUNITY_SLUG>
+switchpost skool posts <COMMUNITY_SLUG>
+switchpost skool comment <POST_ID> <GROUP_ID> "text"
+```
 
-# Skool
-switchpost skool post <GROUP_ID> "title" "content"
-switchpost skool comment <POST_ID> <GROUP_ID> "reply text"
+## Google (older `google` family + Drive/Calendar/Gmail)
 
-# Google Calendar
-switchpost gcal create "Meeting" "2026-07-02T09:00:00Z" "2026-07-02T10:00:00Z"
+```bash
+switchpost google youtube-search <CHANNEL_ID> "query"
+switchpost google video <CHANNEL_ID> <VIDEO_ID>
+switchpost google playlists <CHANNEL_ID>
+switchpost google channel-stats <CHANNEL_ID>
+
+switchpost gdrive files
+switchpost gdrive file <FILE_ID>
+switchpost gdrive search "query"
+switchpost gdrive folders
+switchpost gdrive metadata <FILE_ID>
+switchpost gdrive export <FILE_ID> <MIME_TYPE>
+
+switchpost gcal calendars
+switchpost gcal events --calendar-id <ID> --limit 20
+switchpost gcal event <EVENT_ID>
+switchpost gcal create "Title" <START_ISO> <END_ISO>
+switchpost gcal update <EVENT_ID>
 switchpost gcal delete <EVENT_ID>
 
-# Gmail
-switchpost gmail-ops send "user@example.com" "Hi" "Hello!"
+switchpost gmail-ops profile
+switchpost gmail-ops messages --limit 20
+switchpost gmail-ops message <ID>
+switchpost gmail-ops search "query"
+switchpost gmail-ops thread <ID>
+switchpost gmail-ops labels
+switchpost gmail-ops send <TO> "Subject" "Body"
+```
 
-# Webhooks
-switchpost webhooks create "https://example.com/hook" --name "my-hook"
-switchpost webhooks test <ID>
-switchpost webhooks delete <ID>
+## Cross-platform engagement (any provider)
 
-# Tags
-switchpost tags create "work" --color "#ff0000"
-switchpost tags delete <ID>
-
-# Notifications
-switchpost notifications read <ID>
-switchpost notifications read-all
-
-# Analytics
-switchpost analytics get instagram --days 7
+```bash
+switchpost comment get <INTEGRATION_UUID> <POST_ID> --limit 20
+switchpost comment reply <INTEGRATION_UUID> <COMMENT_ID> "text"
+switchpost dm send <INTEGRATION_UUID> <RECIPIENT_ID> "text"
+switchpost dm list <INTEGRATION_UUID>
+switchpost dm messages <INTEGRATION_UUID> <CONVERSATION_ID>
+switchpost import x --count 20      # pull a provider's posts into the local store
+switchpost feed --provider x        # unified local feed
+switchpost analytics get <PROVIDER> --days 7
 switchpost analytics post <POST_ID>
 ```

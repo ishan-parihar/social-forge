@@ -2547,3 +2547,92 @@ Stage Summary:
   BEFORE any redirect exists, so it is not a driver defect.
 - All leftover test tabs (LinkedIn consent pages, the redirect probe) were
   closed; the browser is back to a single blank newtab.
+
+---
+Task ID: skill-red-team-rebuild
+Agent: jcode
+Task: Audit the switchpost-agent skill against the real binary, red-team it,
+  and rebuild it so every agent workflow has a verified leaf.
+
+Work Log:
+1. Ground truth: dumped all 63 CLI commands' --help from the shipped binary
+   and all 389 MCP tools (mcp-tools), plus every subcommand family. Verified
+   each documented claim against live execution, not source reading.
+2. Red-team findings (11, three critical):
+   - F1 CRITICAL: SKILL.md + references + evals taught that `providers`
+     -> internal_id is "the integration UUID you need for scheduling and
+     posting". FALSE: internal_id is the PLATFORM account id (x=3301263462).
+     `posts create --integrations <internal_id>` -> "At least one valid
+     integration UUID required". The real source: `mcp-call integrations_list`
+     -> id. Conversely `linkedin-page post <PAGE_ID>` takes the PLATFORM id.
+     Two ID systems, one conflation — the skill's central ID table was wrong.
+   - F2 CRITICAL: documented `mcp-call posts_create '{"content":...,
+     "platforms":["x"]}'` — the real param is integration_id (singular,
+     UUID-validated), NOT platforms. Live error: missing field integration_id.
+   - F3 HIGH (was a code bug): mcp-call was served through the session-
+     filtered router, so with default boot toolset every non-core tool
+     answered "tool not found" (x_create_tweet reproduced live). Found the
+     parallel session's fix in the uncommitted tree, live-verified it,
+     landed it (v0.4.5) and rebuilt + redeployed the release binary.
+   - F4 HIGH: coverage gaps — setup/connect-all/audit/service/config/init/
+     split-preview, the native youtube family, x/linkedin/instagram DM
+     families, reddit mod, facebook extras, gcal/gmail/gdrive full CRUD,
+     autopost recurring flags, posts update/tags/validate/schedule.
+   - F5: toolset docs said provider prefixes; real sets are google/github/
+     linkedin/facebook/instagram/telegram/discord/mastodon/bluesky/youtube/
+     skool/whatsapp/wc/webhooks/slack/x/reddit/th/tt/pi/wp/md/dv/hn/core.
+   - F6: docs claimed auth_register/auth_login/auth_me MCP tools — only
+     auth_status exists.
+   - F7: providers.md said Facebook/Bluesky/Mastodon/WordPress/Dev.to have
+     no native post command — all five do.
+   - F8: evals embedded the same ID/syntax errors (eval 2, 4, 9, ...).
+   - F9: pinterest profile takes <BOARD_ID> (correct but undocumented quirk).
+   - F10: skill said "always use --pretty"; default TOON is more token-
+     efficient for agents.
+   - F11: `switchpost post "..."` creates a DRAFT (not published) without
+     --schedule; the old "Verify: state published" advice failed. Live probe
+     confirmed: state=draft, cleaned up.
+3. Rebuild (skill-creator methodology):
+   - SKILL.md 356 -> 170 lines: router-first, two-ID-systems table up top,
+     core-routes table, platform posting table, correct unified-post
+     semantics (draft vs queued vs immediate), toolset list, error recovery
+     keyed to real error strings.
+   - Four leaves, no content duplicated across them: platform-matrices.md
+     (282 lines, every platform's read/engage/DM family), recipes.md (162,
+     Instagram two-route publish, autopost, RSS, automation, campaigns),
+     mcp-catalogue.md (249, all 389 tool names verified present by script),
+     ops.md (71, connect/serve/service/config/init + the CSRF port trap).
+   - Retired providers.md / quick-reference.md / recipes-extended.md (fully
+     superseded). Fixed every doc pointer: binary --help text (cli/mod.rs),
+     run.rs doc comment, AGENTS.md document map (deduped),
+     docs/platforms-and-cli.md's own wrong `providers -> integration UUIDs`
+     line.
+   - Fixed evals.json: 43 evals re-anchored to the real commands (fb native
+     create, --args on mcp-call lines, count not max_results, carousel real
+     syntax).
+   - Makefile install-skill now PRUNES stale leaves from the install dir
+     (planted-file test: stale-test.md removed).
+4. Validation:
+   - doc-CLI guard: 336 documented commands, all parse under the real clap
+     (it caught 5 real errors during the rebuild: instagram hashtag/dm
+     arg counts, wordpress numeric id, automation update positional form,
+     a broken header fragment — all fixed).
+   - tool-name script: 375 documented MCP tool names, all present in the
+     binary's 389 (the one "missing" was a parameter name, not a tool).
+   - LIVE end-to-end: the corrected chain (integrations_list -> posts
+     create --integrations -> delete) executed and cleaned up.
+   - Gates: cargo check 0 errors; 521/521 lib tests; doc_cli 3/3,
+     skill_install 2/2, mcp_call_reach 4/4, toolset_membership 4/4,
+     mcp_session_toolset 1/1.
+
+Stage Summary:
+- The skill's #1 documented workflow (find ID -> create post) was broken;
+  it now works live, and the doc-CLI guard + tool-name script keep every
+  documented command and tool name honest against the binary.
+- Token efficiency: SKILL.md 170 lines (~52% of before), references 764
+  lines across 4 focused leaves (vs 817 across 5 with heavy duplication);
+  no --pretty-by-default advice; TOON-first guidance.
+- Known leftovers: the two-space gap between `linkedin-page` and its
+  platform page-id semantics is a provider quirk worth a code fix someday
+  (list returns id+name only); github/google have no post-publish surface
+  (publish_capable=false) and the skill says so via providers' flags.

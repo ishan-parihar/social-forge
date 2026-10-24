@@ -169,6 +169,13 @@ install-skill:
 	@mkdir -p $(SKILL_DEST)/references
 	@cp $(SKILL_SRC)/SKILL.md $(SKILL_DEST)/SKILL.md
 	@cp $(SKILL_SRC)/references/*.md $(SKILL_DEST)/references/
+	@# Remove leaves the repo no longer ships: a renamed or deleted reference
+	@# used to linger in the install dir, and an agent reading it got stale
+	@# commands the doc-CLI guard had never seen.
+	@for f in $(SKILL_DEST)/references/*.md; do \
+	   b=$$(basename $$f); \
+	   [ -f "$(SKILL_SRC)/references/$$b" ] || { echo "  → removing stale $$b"; rm "$$f"; }; \
+	 done
 	@for f in $(SKILL_SRC)/references/*.md; do \
 	   printf '  → %s\n' "$$(basename $$f)"; done
 	@echo "✓ Installed skill to $(SKILL_DEST)"

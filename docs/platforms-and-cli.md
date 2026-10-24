@@ -20,7 +20,7 @@ switchpost post "hello" --platforms instagram
 switchpost post "hello" --platforms instagram,instagram-standalone
 
 # Or skip name resolution entirely and pick exact accounts
-switchpost providers                                   # get integration UUIDs
+switchpost mcp-call integrations_list --args '{}'   # get integration UUIDs (id field)
 switchpost stage "hello" --integrations 6f1c...-...     # mutually exclusive with --platforms
 ```
 

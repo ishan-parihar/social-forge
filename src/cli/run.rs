@@ -463,7 +463,7 @@ async fn handle_mcp_tools_with_state(
 
 /// Call one MCP tool by name, in-process — the shell path the agent
 /// skill documents (`switchpost mcp-call <tool> --args '<json>'`,
-/// ×116 references in skills/quick-reference.md) and that did not
+/// ×116 references in skills/switchpost-agent) and that did not
 /// exist until now.
 async fn handle_mcp_call_with_state(
     state: &AppState,
