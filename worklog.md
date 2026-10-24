@@ -2462,3 +2462,47 @@ Stage Summary:
 - Deckmill facts corrected against the renderer itself: `render-carousel`
   requires --url, --hashtags AND --primary-color; hero uses `headline` (not
   `heading`); `cta` and `feature` are unavailable; `text_block` is valid.
+
+---
+Task ID: csrf-port-drift-guard
+Agent: jcode
+Task: Post-reload verification of the running deployment; fix the FRONTEND_URL
+  vs serve-port CSRF drift that the reload re-introduced.
+
+Work Log:
+1. Verified the config migration state: ~/.switchpost/.env live, old dirs
+   archived intact (row counts identical in the archived DB), 389 MCP tools
+   counted from the SHIPPED BINARY (mcp-tools), live DB integrity ok.
+2. Chased a suspected posts_list bug (total: 0 against a DB with rows) to
+   ground: every row was soft-deleted (deleted_at set), so the
+   `deleted_at IS NULL` filter was correct. Triple-interface parity
+   confirmed (CLI/MCP/REST all agreed at every step). NOT a bug.
+3. Found the real defect while testing REST: login POST with a browser
+   Origin https://localhost:6544 -> 403 csrf_origin_mismatch, because a
+   harness reload relaunched serve on 6544 while .env still pinned
+   APP_URL/FRONTEND_URL to 6543. Every browser state-changing route was
+   dead — the third occurrence of this drift (worklog 2026-10-22, 2026-10-24).
+4. Fixes:
+   - .env (gitignored, local): APP_URL/FRONTEND_URL pinned to 6544 with a
+     comment naming the trap. Restarted serve; browser-origin login now 200,
+     stale-origin login correctly still 403, authenticated reads 200.
+   - config::frontend_origins_cover_port: pure predicate, unit-tested for
+     the exact drift, comma-list entries, scheme-default (443) semantics,
+     and unparseable entries. Mutation run: removing the scheme-default
+     clause made port_coverage_scheme_default_only_covers_443 fail, as designed.
+   - main.rs: boot warning naming the actual port and the one-line fix;
+     proven live on a scratch 6545 instance with a stale FRONTEND_URL.
+     Thin-MCP and CLI modes exit before the block; only serve warns.
+5. Landed the interrupted session's verified-but-uncommitted CLI-completeness
+   work unchanged (commit v0.4.2), then this fix (v0.4.3).
+
+Stage Summary:
+- Gates: cargo check 0 errors; cargo test --lib 520/520 (5 new); integration
+  cli_agent_surface 7/7, streak_unification 3/3; pnpm build ok; svelte-check
+  0/0; release binary rebuilt and serving on 6544 with no CSRF warning.
+- Both commits pushed to github/master (3795bcb..473d1e1), remote ref verified.
+- Known leftovers for the operator: the repo DIRECTORY is still named
+  social-forge on disk while the product is Switchpost (the GitHub repo is
+  still ishan-parihar/social-forge too); the running serve is a plain
+  nohup process, not a systemd unit, so a machine reboot needs a manual
+  relaunch with --port 6544.
