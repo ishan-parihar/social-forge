@@ -175,7 +175,7 @@ async fn open_auth_page(browser: &mut Browser, auth_url: &str) -> Result<u32> {
 ///
 /// Both are read the same way: list the tabs, find the one whose URL is
 /// the callback, and read its query string.
-async fn wait_for_redirect(
+pub async fn wait_for_redirect(
     browser: &mut Browser,
     app_url: &str,
     oauth_state: &str,
@@ -220,8 +220,9 @@ async fn wait_for_redirect(
 ///     URL alone would read somebody else's authorization code.
 ///
 /// The match is therefore on the `state` THIS run minted — unique per
-/// login, and it is the value `complete_connect` looks up. The parse
-/// stops at `Other agents' tabs:` as a second guard.
+/// login, and it is the value `complete_connect` looks up. The tab this
+/// driver opens is itself reported under "Other agents' tabs:", so the
+/// parse does NOT stop at that header; the state is the guard.
 async fn find_callback_url(
     browser: &mut Browser,
     callback_prefix: &str,
@@ -234,8 +235,18 @@ async fn find_callback_url(
 
 /// Parse the tab URLs out of browseros-neo's `tabs list` text.
 ///
-/// Only the USER's section is read: the server also lists other agents'
-/// tabs, and this agent must never pick up another agent's OAuth code.
+/// The server splits the listing into sections ("Your tabs:", "User's
+/// tabs:", "Other agents' tabs:") and the tab THIS driver opens is
+/// reported under "Other agents' tabs:" — annotated "owned by <agent>" —
+/// not necessarily in the user's section. An earlier version read only
+/// the user's section and worked only because the server also MIRRORED
+/// the tab there; that mirror is not a contract.
+///
+/// Safety does not come from the section. It comes from the `state`:
+/// `find_matching_callback` only accepts a callback carrying the state
+/// THIS run minted, and that value is unique per login. Another agent's
+/// callback carries a different state and can never match, wherever it
+/// is listed. So every section is read and the state does the isolating.
 fn parse_tab_urls(text: &str) -> Vec<String> {
     let mut urls = Vec::new();
     for line in text.lines() {
@@ -243,10 +254,9 @@ fn parse_tab_urls(text: &str) -> Vec<String> {
         if line.is_empty() {
             continue;
         }
-        // The server lists the user's tabs, then OTHER AGENTS' tabs. Only
-        // the first section is ours.
-        if line.starts_with("Other agents' tabs:") {
-            break;
+        // Section headers are not tab lines.
+        if line.ends_with("tabs:") {
+            continue;
         }
         if !line.starts_with('[') {
             continue;
@@ -287,8 +297,9 @@ fn extract_param(url: &str, key: &str) -> Option<String> {
 /// Pick the callback URL for THIS login out of the parsed tab URLs.
 ///
 /// The match is on the minted `state`, not on the callback path alone:
-/// browseros-neo lists OTHER AGENTS' tabs too, and one of them can be
-/// on a callback URL.
+/// browseros-neo lists every agent's tabs, and another agent's tab can
+/// be on the same callback URL. The `state` is unique per login, so it
+/// is what makes another agent's authorization code unreachable.
 fn find_matching_callback(urls: &[String], callback_prefix: &str, oauth_state: &str) -> Option<String> {
     urls.iter()
         .find(|url| {
@@ -419,29 +430,65 @@ mod tests {
     }
 
     // The live server's `tabs list` answer is TEXT, and it lists OTHER
-    // agents' tabs too. A parser that reads the wrong section would pick
-    // up another agent's authorization code.
-    const TABS_TEXT: &str = "User's tabs:\n\
+    // agents' tabs too. The tab THIS driver opens is itself reported
+    // under "Other agents' tabs:" (annotated "owned by <agent>"), so a
+    // parser that stopped at that header would never see its own
+    // redirect. Every section is read; the minted `state` is what
+    // isolates one agent's callback from another's.
+    const TABS_TEXT: &str = "Your tabs:\n\
 [1] chrome://newtab/ (BrowserOS neo)\n\
+\n\
+User's tabs:\n\
 [13] https://example.com/xyz?code=Q&state=S (Example Domain) [group ABC]\n\
 \n\
 Other agents' tabs:\n\
-[9] https://127.0.0.1:59999/api/auth/callback?code=THEIRS&state=THEIRS (127.0.0.1) [group DEF]\n";
+[21] https://localhost:6544/api/auth/callback?code=OURS&state=OURSTATE (Authorize), owned by p [group DEF]\n\
+[9] https://localhost:6544/api/auth/callback?code=THEIRS&state=THEIRS (127.0.0.1) [group GHI]\n";
 
     #[test]
     fn tab_urls_are_parsed_from_the_text_format() {
         let urls = parse_tab_urls(TABS_TEXT);
-        assert_eq!(
-            urls,
-            vec!["https://example.com/xyz?code=Q&state=S".to_string()]
+        assert!(urls.contains(&"https://example.com/xyz?code=Q&state=S".to_string()));
+        assert!(urls.contains(&"https://localhost:6544/api/auth/callback?code=OURS&state=OURSTATE".to_string()));
+    }
+
+    #[test]
+    fn a_tab_opened_by_this_driver_is_parsed_even_though_it_is_listed_under_other_agents() {
+        // The live server reports the driver's OWN tab under "Other
+        // agents' tabs:" with an "owned by <agent>" annotation. If the
+        // parser stopped at that header it would never find its own
+        // redirect, and every browser login would time out.
+        let urls = parse_tab_urls(TABS_TEXT);
+        assert!(
+            urls.iter().any(|u| u.contains("state=OURSTATE")),
+            "the driver's own tab must be a candidate: {urls:?}"
         );
     }
 
     #[test]
-    fn another_agents_tabs_are_not_parsed() {
-        // The other agent's callback tab must not be a candidate URL.
+    fn another_agents_callback_is_never_matched_because_of_the_state() {
+        // Their tab IS parsed, but the state keeps it from matching.
         let urls = parse_tab_urls(TABS_TEXT);
-        assert!(!urls.iter().any(|u| u.contains("THEIRS")));
+        assert!(urls.iter().any(|u| u.contains("THEIRS")));
+        assert!(find_matching_callback(
+            &urls,
+            "https://localhost:6544/api/auth/callback",
+            "OURSTATE"
+        )
+        .is_some());
+        assert!(find_matching_callback(
+            &urls,
+            "https://localhost:6544/api/auth/callback",
+            "THEIRS"
+        )
+        .is_some());
+        // Neither state can reach the other's code.
+        assert!(find_matching_callback(
+            &urls,
+            "https://localhost:6544/api/auth/callback",
+            "SOMEONE_ELSE"
+        )
+        .is_none());
     }
 
     #[test]

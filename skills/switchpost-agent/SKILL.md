@@ -78,6 +78,7 @@ Does `switchpost <provider> <action>` exist in the recipes below?
 - `SWITCHPOST_TOOLSETS=x,reddit` (or `all`) selects sets at boot; `tools_enable` adds them at runtime.
 - Call `tools_search` before `tools_enable` to find the set name for a provider.
 - Size a set before enabling: `switchpost mcp-tools --toolset x --pretty`.
+- `mcp-call` reaches EVERY tool, whatever the session's toolsets are — it names one tool explicitly and pays no `tools/list` cost, so the filter does not apply to it. Only a live `mcp` session needs `tools_enable`.
 - `mcp-call`, staging v2 (`overrides`/`dry_run`/`force`/`next-slot`), group verbs and `utm_campaign` are in `references/quick-reference.md` § "MCP tool contracts (v11 — current)" (repo copy; not installed).
 
 **Platforms with native CLI posting**:

@@ -440,7 +440,7 @@ async fn handle_mcp_tools_with_state(
     // B3: same set-membership rule as the per-session MCP filter
     // (§5.5) so shell discovery matches what a session would advertise.
     if let Some(set) = toolset.map(|s| s.trim().to_ascii_lowercase()) {
-        tools.retain(|t| crate::mcp::SwitchpostMcpServer::toolset_of(t.name.as_ref()) == set);
+        tools.retain(|t| crate::mcp::SwitchpostMcpServer::tool_in_toolset(t.name.as_ref(), &set));
     }
     tools.sort_by(|a, b| a.name.cmp(&b.name));
     if pretty {
@@ -481,6 +481,14 @@ async fn handle_mcp_call_with_state(
     };
 
     let server = crate::mcp::SwitchpostMcpServer::new(state.clone());
+    // §5.5: the per-session toolset filter cuts the ADVERTISED schema
+    // (the tools/list payload an agent pays for in context). It is NOT a
+    // capability switch: `mcp-call` names ONE tool explicitly and pays
+    // no list cost, so filtering it would reject tools the agent can
+    // see in `mcp-tools` with "tool not found". The filter stays on the
+    // live session (stdio/HTTP), where tools_enable is how a toolset is
+    // turned on.
+    server.toolsets.insert("all".into());
     let router = crate::mcp::SwitchpostMcpServer::router();
     if router.get(tool).is_none() {
         let mut names: Vec<String> = router

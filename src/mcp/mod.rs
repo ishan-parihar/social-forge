@@ -178,9 +178,13 @@ impl SwitchpostMcpServer {
             .collect()
     }
 
+    /// §5.5: the meta tools are never filtered - an agent must always be
+    /// able to search and enable more toolsets.
+    pub(crate) const META_TOOLS: [&str; 2] = ["tools_search", "tools_enable"];
+
     /// §5.5: which set a tool belongs to. Providers map to their platform
     /// name; cross-platform lifecycle tools map to `core`.
-    pub(crate) fn toolset_of(name: &str) -> String {
+    pub fn toolset_of(name: &str) -> String {
         match name {
             "get_comments"
             | "reply_to_comment"
@@ -213,6 +217,26 @@ impl SwitchpostMcpServer {
         }
     }
 
+    /// §5.5: the ONE membership rule for a toolset filter. The session
+    /// router, `tools_search` and the CLI's `mcp-tools --toolset` all
+    /// use it, so a shell listing and a live session advertise the same
+    /// tools.
+    ///
+    ///   - `all` means NO filtering;
+    ///   - the meta tools are always present (an agent must always be
+    ///     able to search and enable more toolsets);
+    ///   - otherwise the tool's own set must match.
+    pub fn tool_in_toolset(tool_name: &str, set: &str) -> bool {
+        let set = set.trim().to_ascii_lowercase();
+        if set == "all" {
+            return true;
+        }
+        if Self::META_TOOLS.contains(&tool_name) {
+            return true;
+        }
+        Self::toolset_of(tool_name) == set
+    }
+
     /// The router this session advertises: every tool whose set is not
     /// enabled is hidden (list) and rejected (call). Meta tools stay up.
     pub(crate) fn filtered_tool_router(
@@ -231,7 +255,7 @@ impl SwitchpostMcpServer {
         for name in names {
             // Meta tools are never filtered — an agent must always be able
             // to search and enable more toolsets.
-            if matches!(name.as_str(), "tools_search" | "tools_enable") {
+            if Self::META_TOOLS.contains(&name.as_str()) {
                 continue;
             }
             let set = Self::toolset_of(&name);
@@ -4069,7 +4093,9 @@ impl SwitchpostMcpServer {
                 serde_json::json!({
                     "name": t.name,
                     "set": set,
-                    "enabled": enabled.contains("all") || enabled.contains(&set),
+                    "enabled": enabled.contains("all")
+                        || enabled.contains(&set)
+                        || Self::META_TOOLS.contains(&t.name.as_ref()),
                     "description": t.description.unwrap_or_default(),
                 })
             })
@@ -4116,7 +4142,7 @@ impl rmcp::ServerHandler for SwitchpostMcpServer {}
 /// Crate-visible accessor for the (privately generated) tool router —
 /// `mcp-call` (§5.3) dispatches tools in-process through it.
 impl SwitchpostMcpServer {
-    pub(crate) fn router() -> rmcp::handler::server::router::tool::ToolRouter<Self> {
+    pub fn router() -> rmcp::handler::server::router::tool::ToolRouter<Self> {
         Self::tool_router()
     }
 }

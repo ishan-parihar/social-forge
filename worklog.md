@@ -2506,3 +2506,44 @@ Stage Summary:
   still ishan-parihar/social-forge too); the running serve is a plain
   nohup process, not a systemd unit, so a machine reboot needs a manual
   relaunch with --port 6544.
+
+---
+Task ID: cli-browser-oauth-verification
+Agent: omp
+Task: Prove the `connect --browser` success path and harden the OAuth driver against the live browseros-neo tab format.
+
+Work Log:
+1. Ran `connect linkedin --browser` against the LIVE browseros-neo server. The
+   driver opened the consent page, printed progress to stderr (stdout stayed
+   clean for JSON), timed out with the tab LEFT OPEN, and named the page plus
+   the recovery command. Correct behaviour.
+2. Inspected the live `tabs list` output and found the real shape has THREE
+   sections - "Your tabs:", "User's tabs:", "Other agents' tabs:" - and the
+   driver's OWN tab is reported under "Other agents' tabs:" with an
+   "owned by switchpost-cli" annotation. The old parser stopped at that
+   header and only worked because the live server also MIRRORED the tab into
+   "User's tabs:". The mirror is not a contract.
+3. Root-cause fix: the section boundary was the WRONG guard. The minted OAuth
+   `state` is unique per login, so it is what isolates one agent's callback
+   from another's. `parse_tab_urls` now reads every section, and
+   `find_matching_callback` still requires BOTH the callback prefix and the
+   exact minted state.
+4. Wrote `tests/browser_oauth_e2e_test.rs`: a mock browseros-neo that
+   reproduces the live wire format (SSE framing, session-id header, text
+   listing, section headers, "owned by" annotation), driven by the REAL MCP
+   client and the REAL `wait_for_redirect`.
+5. Negative control: mutated `parse_tab_urls` back to the old
+   "stop at Other agents' tabs:" behaviour and BOTH tests failed with the
+   exact real symptom ("No OAuth callback within 10s"). Restored the fix via
+   an aft_safety checkpoint.
+6. Corrected `docs/platforms-and-cli.md`: it claimed the tab is always left
+   open; the code closes it on success and leaves it open only on timeout.
+
+Stage Summary:
+- The driver's success path is now covered end to end against the live wire
+  format, with a mutation-proven test.
+- Live LinkedIn currently answers "Bummer, something went wrong." on the
+  authorization request itself - provider-side (app scopes/redirect URI),
+  BEFORE any redirect exists, so it is not a driver defect.
+- All leftover test tabs (LinkedIn consent pages, the redirect probe) were
+  closed; the browser is back to a single blank newtab.

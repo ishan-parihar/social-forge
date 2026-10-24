@@ -88,6 +88,29 @@ switchpost connect linkedin --json
 `--json` emits compact JSON and `--pretty` emits indented JSON — both
 are global flags and apply to every command.
 
+### Toolsets and the shell path
+
+An MCP session boots with the `core` toolset only, so a session that
+touches one platform does not pay the full tool-schema cost. The filter
+is on the ADVERTISED schema (`tools/list`), not on capability.
+
+|Shell command|Effect of the session filter|
+|---|---|
+|`switchpost mcp-tools`|Lists every tool (389 at the time of writing)|
+|`switchpost mcp-tools --toolset x`|Lists the `x` set, plus the two meta tools|
+|`switchpost mcp-tools --toolset all`|Lists every tool — `all` means no filtering|
+|`switchpost mcp-call <tool> --args '<json>'`|Reaches EVERY tool, filtered or not|
+
+`mcp-call` names one tool explicitly and pays no `tools/list` cost, so
+the filter does not apply to it. A live `switchpost mcp` session DOES
+need `tools_enable` — that is how a toolset is turned on there.
+
+The membership rule is one function (`tool_in_toolset`): `all` keeps
+everything, the meta tools (`tools_search`, `tools_enable`) are always
+present, and otherwise the tool's own set must match. The session
+router, `tools_search`'s `enabled` flag and the CLI all call it, so a
+shell listing and a live session never disagree.
+
 Seed rows never count as connected: a `seed-token` placeholder (from
 `scripts/seed_demo.py`) is treated as absent, so `connect` re-imports and
 replaces it instead of answering `already_connected` forever.
@@ -120,8 +143,14 @@ What it does, in order:
 The server does **not** need to be running for `--browser`. `--wait` does
 need it (it polls for the row the callback writes); `--browser` does not.
 
-The browser tab is left open on the provider's page so the operator can
-finish any step the CLI cannot (a CAPTCHA, a 2FA code, a password).
+Progress is written to **stderr** while the wait is on ("Opened the
+`<provider>` consent page in the operator's browser (page N)…"), so stdout
+stays clean for the JSON result.
+
+On success the consent tab is closed. On **timeout** it is deliberately
+LEFT OPEN — the operator may still be mid-consent, and closing it would
+throw their work away — and the error names the page plus the command to
+run once they finish (`switchpost connect <provider> --wait`).
 
 #### Deckmill autopost: `switchpost autopost`
 

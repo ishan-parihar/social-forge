@@ -17,7 +17,6 @@
 // Run: cargo test --test streak_unification_test
 
 use axum::http::{Method, StatusCode};
-use serde_json::json;
 use switchpost::api::{build_router, AppState};
 use switchpost::auth::jwt::create_token;
 use switchpost::auth::middleware::{DEFAULT_USER_ID, SESSION_COOKIE};
