@@ -2819,8 +2819,15 @@ Work Log:
   run-N layout + summary blocks): review.html static viewer generated
   (browser open suppressed in this env; file is in the workspace).
 - Gates: 521/521 lib; doc_cli 3/3; skill_install 2/2; release rebuilt
-  twice; live DB clean (0 live posts; no mutations by any run -
-  transcripts audited); install-skill synced.
+  twice; live DB clean (0 live posts; no PLATFORM mutations by any
+  run - transcripts audited, the two old_skill posts_repeat probes
+  error pre-write, reproduced: 'Invalid post_id UUID'/'Post not
+  found', row count unchanged; the with_skill analytics run did run
+  'import x' which writes ONLY to the local external_posts cache, not
+  the platform - harmless but noted; install-skill synced. Row
+  provenance corrected later: the 29 soft-deleted rows are 27 from
+  this session's own verified probes + 2 from Oct 22, NOT '25
+  predating the session' as first written.
 
 Stage Summary:
 - v0.6.4 pushed as 3513d7c. The behavioral loop both PROVED the pass-3
