@@ -164,3 +164,51 @@ and the one defect this round actually found:
    13/7 (13 expected=True lines, 7 expected=False, in each). The
    a5b13f8 commit message carries the same wrong count (immutable;
    corrected here per protocol). Both files corrected in this commit.
+
+---
+
+## Validation round 5 (2026-10-24, same hour)
+
+Six further surfaces — the grading's coverage, the causal
+differential, and two record corrections:
+
+1. **Workspace file count**: 49 files (the round-4 commit message
+   said "52 files" — corrected here; the count was taken before
+   `.serena/` was excluded).
+2. **Causal differential verified at the source**: the current skill
+   teaches `end_date` + FULL RFC3339 at 3 sites (SKILL.md:86,
+   recipes.md:89-90); the v0.6.2 snapshot has ZERO `end_date`
+   mentions — its only repeat guidance was "until an end date" with
+   no param name, no format, no example. The old-skill failure is
+   the direct product of that gap.
+3. **Schema discoverability**: `mcp-tools` lists descriptions only;
+   the input schema is discoverable only field-by-field via
+   `missing field` errors, and the RFC3339 format requirement is
+   reachable ONLY through a call with a real, scheduled post (the
+   post-exists check runs BEFORE the date check — a nonexistent-id
+   probe can never see it). The skill's example is the only cheap
+   route; the eval measures a real capability gap, not a trick.
+4. **Fresh faithful regrade**: all 11 committed expectation texts
+   re-implemented from scratch and re-run against the 8 answers —
+   0 mismatches. The committed evidence strings are exact and honest
+   (with_skill: `value: 2026-11-30T23:59:59Z` passed; old_skill:
+   `value: 2026-11-30` failed).
+5. **COVERAGE DISCLOSURE (new finding)**: eval_metadata declares 15
+   assertions but grading.json graded only 11 (per-run: 3+2+3+3).
+   Four designed assertions were not in the graded matrix: analytics'
+   "read-only transcript" and "numbers not placeholders", and
+   posts-repeat's "uses mcp-call" and "no repeat actually created",
+   and failed-recovery's "discovery actually run". All four were
+   re-run fresh in this round across BOTH arms: all 10 rows PASS for
+   both arms. So the headline 11/11 (100%) vs 9/11 (81.8%) is
+   accurate AS GRADED, and the full 15-assertion matrix would read
+   16/16 (100%) vs 14/16 (87.5%) — same direction, slightly narrower
+   gap, because the dropped assertions were safety/quality checks
+   both arms passed. The dropped assertions' safety content WAS
+   independently covered by the v0.6.7 mutation audit and the
+   round-3 read-only audit, so no unsafe run went undetected.
+6. **Local-write reconciliation**: the with_skill analytics run's
+   `import x --count 20` (feed-cache write) does NOT violate the
+   assertion as worded ("create, schedule, publish, or delete") —
+   the VALIDATION.md caveat was the looser reading, and both
+   statements are consistent.
