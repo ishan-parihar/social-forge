@@ -92,6 +92,102 @@ Seed rows never count as connected: a `seed-token` placeholder (from
 `scripts/seed_demo.py`) is treated as absent, so `connect` re-imports and
 replaces it instead of answering `already_connected` forever.
 
+#### Browser-driven OAuth: `connect <provider> --browser`
+
+`--browser` completes the WHOLE login — the agent does not have to read a
+URL, drive a browser by hand, or poll:
+
+```sh
+switchpost connect linkedin --browser --pretty
+# -> {"status":"connected","provider":"linkedin","account":"…",...}
+```
+
+What it does, in order:
+
+1. Mints the provider's authorization URL (state + code_verifier stored in
+   `oauth_states`) — the same URL the web UI mints.
+2. Opens it in the operator's real browser through **browseros-neo**
+   (`http://127.0.0.1:9012/mcp` by default; override with
+   `--browser-endpoint`). The browser may already hold the platform
+   session, so most providers skip the login form entirely.
+3. Waits for the provider's redirect to `{APP_URL}/api/auth/callback`.
+   browseros-neo preserves the requested URL even when the navigation
+   fails, so the code is recoverable whether or not the server is running.
+4. **Redeems the authorization code in-process** via the same
+   `IntegrationService::complete_connect` the server's callback uses, and
+   writes the encrypted token through the one shared writer.
+
+The server does **not** need to be running for `--browser`. `--wait` does
+need it (it polls for the row the callback writes); `--browser` does not.
+
+The browser tab is left open on the provider's page so the operator can
+finish any step the CLI cannot (a CAPTCHA, a 2FA code, a password).
+
+#### Deckmill autopost: `switchpost autopost`
+
+One command that renders a carousel with
+[Deckmill](https://github.com/ishan-parihar/deckmill) and posts it — no
+copy-paste of image paths between tools:
+
+```sh
+switchpost autopost --slides slides.json --platforms instagram --content "Three things we learned shipping agents" --brand-name "Acme" --brand-handle "@acme" --topic "Release" --url "https://example.com" --hashtags "ai,automation" --publish --pretty
+```
+
+`slides.json` is a JSON array of Deckmill's own slide contract:
+
+```json
+[
+  {"type": "hero", "params": {"headline": "Ship slides in minutes", "subheadline": "Deckmill + switchpost"}},
+  {"type": "split_features", "params": {"title": "Why it works", "features": ["One pipeline", "Token-efficient", "Autonomous"]}},
+  {"type": "qr_destination", "params": {"heading": "Start now", "destination_url": "https://example.com", "cta_text": "Scan to sign up"}}
+]
+```
+
+Run `deckmill slide-info <type>` for a slide type's required params.
+
+The command renders the slides, uploads every PNG through the same media
+path the dashboard uses, and then calls switchpost's own staging service —
+so the readiness checks, the provider settings and the publish pipeline
+are the ones the dashboard uses. `--publish` publishes immediately;
+without it the post is staged as a draft. `--schedule <ISO8601>` queues it.
+
+`--url` and `--hashtags` are REQUIRED by Deckmill's renderer (they draw
+the slide overlays); pass them even when the brand does not use them.
+
+**Recurring / autonomous posting.** `--repeat-days N --repeat-until <ISO8601>`
+turns the post into a RECURRING SERIES:
+
+```sh
+switchpost autopost --slides slides.json --platforms instagram --content "Weekly release notes" --schedule 2026-11-01T09:00:00Z --repeat-days 7 --repeat-until 2026-12-01T09:00:00Z
+```
+
+This creates the spaced copies in the DATABASE and lets the switchpost
+scheduler publish them. It is deliberately NOT a loop process:
+
+- the series is visible in the dashboard (the calendar shows every copy),
+- it obeys the single-writer rule — no second publisher can race it,
+- it cannot double-post against another scheduler the way a
+  `while true; do …; sleep …; done` loop can,
+- and nothing stays running when the series ends.
+
+`--repeat-days` needs both `--schedule` (the series counts from the first
+due time) and `--repeat-until`. At most 100 copies per series.
+
+For a feed-driven loop instead of a fixed series, use the RSS feeds
+(`switchpost rss add <url> <integration-id>`): each new feed item
+becomes a post, which can then be made recurring with the same
+`--repeat-days` mechanism.
+
+#### `switchpost agent`
+
+One command that reports what an agent can do here: the command list, the
+two workflows above, every provider with its auth kind, and which
+accounts are connected. It is the cheapest possible orientation call.
+
+```sh
+switchpost agent --pretty
+```
+
 ---
 
 ### Supported Platforms
@@ -156,7 +252,7 @@ Providers are tiered: **Tier-1** gets full depth (analytics, engagement, comment
 switchpost/
 ├── src/
 │   ├── main.rs              # Entry point, CLI dispatch
-│   ├── cli/                 # CLI subcommands (clap, 56 commands)
+│   ├── cli/                 # CLI subcommands (clap, 63 commands)
 │   │   ├── mod.rs           # Command definitions
 │   │   ├── run.rs           # Cross-platform handler implementations
 │   │   └── platforms/       # 31 thin shims (call shared MCP handlers)

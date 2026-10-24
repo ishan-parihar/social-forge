@@ -113,6 +113,7 @@ Does `switchpost <provider> <action>` exist in the recipes below?
 ```bash
 switchpost --help                    # See all top-level commands
 switchpost <command> --help          # See args for a specific command
+switchpost agent --pretty            # One call: commands, workflows, connected accounts
 switchpost providers --pretty        # See what accounts are connected
 switchpost doctor                    # Check health of all providers
 ```
@@ -121,6 +122,26 @@ If no providers are connected, run:
 ```bash
 switchpost connect <provider> --pretty   # Shows the URL to visit
 ```
+
+**OAuth with a real browser** — `connect --browser` drives the platform's
+consent page in the operator's signed-in browser (browseros-neo) and
+completes the login end to end. The server does NOT need to be running:
+
+```bash
+switchpost connect linkedin --browser --pretty
+```
+
+**Deckmill carousel autopost** — one command renders the slides, uploads
+them and posts them:
+
+```bash
+switchpost autopost --slides slides.json --platforms instagram --content "Three things we learned" --url https://example.com --hashtags "ai,automation" --publish --pretty
+```
+
+`slides.json` is a JSON array of Deckmill slide specs:
+`[{"type": "hero", "params": {"headline": "…"}}]`. Run
+`deckmill slide-info <type>` for a type's required params. `--url` and
+`--hashtags` are required by Deckmill's renderer.
 
 **Never guess command names.** Always check `--help` first.
 
@@ -201,6 +222,86 @@ switchpost x timeline --count 5 --pretty    # X home timeline (flag is --count, 
 ```
 
 Other platforms' feed and read commands are in `references/recipes-extended.md`.
+
+### Log in through the browser (`connect --browser`)
+
+Drives the platform's OWN consent page in the operator's signed-in browser
+(browseros-neo) and redeems the code in-process. The switchpost server
+does NOT need to be running.
+
+```bash
+switchpost connect <provider> --browser --pretty
+```
+
+`<provider>` is the provider id (`x`, `linkedin`, `reddit`, `instagram`, …).
+The operator completes the consent screen in the browser window. The
+command returns when the callback carries a code.
+
+If the account is already connected the command says so and opens no
+browser — so it is safe to run as a probe first.
+
+### Deckmill carousel → post (`autopost`)
+
+Renders slides with the local deckmill binary, uploads the PNGs, and
+stages or publishes the post through switchpost's own services.
+
+```bash
+DECKMILL_BIN=/path/to/deckmill switchpost autopost --slides slides.json --platforms instagram --content "Weekly release notes" --brand-name "Acme" --brand-handle "@acme" --topic "Release" --url "https://example.com" --hashtags "ai,automation" --pretty
+```
+
+`slides.json` is an array of `{"type": "<deckmill slide type>", "params": {...}}`.
+`--url` and `--hashtags` are REQUIRED by the renderer.
+
+**Recurring / autonomous:** add `--repeat-days N --repeat-until <ISO8601>`
+(with `--schedule`). This creates the spaced copies in the DATABASE and
+lets the scheduler publish them — no loop process, no double-posting
+against another scheduler, and the series is visible in the dashboard.
+
+```bash
+switchpost autopost --slides slides.json --platforms x --content "Weekly notes" --schedule 2026-11-01T09:00:00Z --repeat-days 7 --repeat-until 2026-12-01T09:00:00Z --brand-name "Acme" --brand-handle "@acme" --topic "Release" --url "https://example.com" --hashtags "ai" --pretty
+```
+
+**Feed-driven instead of a fixed series:** RSS feeds turn each new item
+into a post.
+
+```bash
+switchpost rss add https://example.com/feed.xml <UUID> --pretty
+switchpost rss list --pretty
+switchpost rss poll <FEED_ID> --pretty
+```
+
+### AI writing helpers
+
+```bash
+switchpost ai generate "Rust error handling" --tone professional --length short --pretty
+switchpost ai bulk "Rust tips" --format one_short --count 3 --pretty
+switchpost ai improve "some rough text" --pretty
+switchpost ai summarize "a long paragraph" --pretty
+switchpost ai hashtags "a post about Rust" --pretty
+switchpost ai tone "some text" casual --pretty
+```
+
+### Campaigns, signatures, streak
+
+```bash
+switchpost campaigns list --pretty
+switchpost campaigns create "Launch week" --goal "Ship v1" --start-date 2026-11-01 --pretty
+switchpost campaigns update <CAMPAIGN_ID> --status paused --pretty
+switchpost campaigns update <CAMPAIGN_ID> --clear-goal --pretty
+switchpost signatures list --pretty
+switchpost signatures create "Standard sign-off" "— Acme" --provider x --pretty
+switchpost streak --tz America/New_York --pretty
+```
+
+### Orientation (one call)
+
+```bash
+switchpost agent --json
+```
+
+Answers "what can I do here": the connected accounts, the provider
+catalogue, and the commands available. Cheaper than `--help` for a
+first-time agent.
 
 ## Error Recovery
 

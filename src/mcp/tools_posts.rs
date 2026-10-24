@@ -1004,8 +1004,14 @@ pub async fn stage_post(
 
     crate::services::staging::validate_staging_request(&request)?;
 
-    let result =
-        crate::services::staging::stage_post(&state.db, &state.providers, user_id, request).await?;
+    let result = crate::services::staging::stage_post(
+        &state.db,
+        &state.providers,
+        &state.config.app_url,
+        user_id,
+        request,
+    )
+    .await?;
 
     let staged = result
         .staged

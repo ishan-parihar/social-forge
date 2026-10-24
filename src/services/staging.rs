@@ -109,6 +109,7 @@ fn publish_readiness(
     provider_id: &str,
     post: &PostContent,
     registry: &ProviderRegistry,
+    app_url: &str,
 ) -> Vec<String> {
     let Some(provider) = registry.get(provider_id) else {
         return vec![format!(
@@ -123,8 +124,15 @@ fn publish_readiness(
     if let Err(e) = social::validate_media_limits(provider_id, post) {
         out.push(format!("{provider_id}: {e}"));
     }
+    // Readiness must see EXACTLY what would be published. The publish path
+    // resolves a relative `/api/media/<uuid>` against APP_URL before the
+    // provider sees it (`SocialProvider::resolve_media_url`), so the
+    // readiness check has to resolve it the same way — otherwise a stored
+    // media row was reported as "neither an http(s) URL nor an existing
+    // local file" and a post that would have published was rejected.
     for attachment in &post.media {
-        if let Some(problem) = social::media_url_problem(provider_id, &attachment.url) {
+        let resolved = provider.resolve_media_url(attachment, app_url);
+        if let Some(problem) = social::media_url_problem(provider_id, &resolved.url) {
             let url = &attachment.url;
             out.push(format!("{provider_id}: media `{url}` — {problem}"));
         }
@@ -160,6 +168,7 @@ struct IntegrationPlan {
 pub async fn stage_post(
     pool: &SqlitePool,
     registry: &ProviderRegistry,
+    app_url: &str,
     user_id: Uuid,
     request: StagingRequest,
 ) -> Result<StagingResult, String> {
@@ -225,7 +234,7 @@ pub async fn stage_post(
             idempotency_key: None,
             delay_minutes: None,
         };
-        let whole_readiness = publish_readiness(&provider, &preflight, registry);
+        let whole_readiness = publish_readiness(&provider, &preflight, registry, app_url);
 
         let limit = registry
             .get(&provider)
@@ -254,6 +263,7 @@ pub async fn stage_post(
                     delay_minutes: None,
                 },
                 registry,
+                app_url,
             )
             .is_empty()
         });
@@ -596,6 +606,7 @@ mod tests {
         let result = stage_post(
             &pool,
             &registry,
+            "https://localhost:6544",
             user.id,
             StagingRequest {
                 content: long,
@@ -682,6 +693,7 @@ mod tests {
         let err = stage_post(
             &pool,
             &registry,
+            "https://localhost:6544",
             user.id,
             StagingRequest {
                 content: "hello".into(),
@@ -742,6 +754,7 @@ mod tests {
         let result = stage_post(
             &pool,
             &registry,
+            "https://localhost:6544",
             user.id,
             StagingRequest {
                 content: "slot me".into(),

@@ -14,8 +14,8 @@ use crate::realtime::Broadcaster;
 use crate::social::registry::ProviderRegistry;
 
 use super::{
-    AutomationAction, Cli, Command, CommentAction, ConfigAction, DmAction, IntegrationsAction,
-    MediaAction, PostsAction,
+    AiAction, AutomationAction, CampaignAction, Cli, Command, CommentAction, ConfigAction,
+    DmAction, IntegrationsAction, MediaAction, PostsAction, RssAction, SignatureAction,
 };
 use crate::db::models::Integration;
 use crate::social::TargetInfo;
@@ -1243,7 +1243,7 @@ APP_URL=https://localhost:6543
 /// are fixtures, not accounts). Recognizing them here lets `connect x`
 /// replace the stub with the real browser/env cookies instead of answering
 /// `already_connected` for a row whose token is `{"auth_token":"seed"}`.
-fn is_credential_row(i: &crate::db::models::Integration) -> bool {
+pub(crate) fn is_credential_row(i: &crate::db::models::Integration) -> bool {
     if i.disabled || i.access_token.is_empty() {
         return false;
     }
@@ -3243,6 +3243,249 @@ async fn handle_feed_with_state(
 
 // ── Comment Handler ──────────────────────────────────────────
 
+/// Campaigns, signatures, AI helpers and the posting streak.
+///
+/// All of them call the SAME handlers the MCP tools call, so the CLI and
+/// the MCP surface cannot drift — the repo's rule for a second surface
+/// over one operation (§9.21).
+async fn handle_campaigns_with_state(
+    state: &AppState,
+    action: CampaignAction,
+) -> anyhow::Result<()> {
+    use crate::mcp::tools_campaigns as c;
+
+    let value = match action {
+        CampaignAction::List => {
+            c::handle_campaign_list(state, &c::CampaignListInput {})
+                .await
+                .map(|r| r.0)
+        }
+        CampaignAction::Create {
+            name,
+            description,
+            color,
+            start_date,
+            end_date,
+            goal,
+            status,
+            progress_metric,
+            progress_target,
+        } => {
+            let input = c::CampaignCreateInput {
+                name,
+                description,
+                color,
+                start_date,
+                end_date,
+                goal,
+                status,
+                progress_metric,
+                progress_target,
+                audience_persona: None,
+                content_pillars: None,
+                budget_cents: None,
+                kpi_targets: None,
+            };
+            c::handle_campaign_create(state, &input).await.map(|r| r.0)
+        }
+        CampaignAction::Update {
+            campaign_id,
+            name,
+            description,
+            clear_description,
+            goal,
+            clear_goal,
+            status,
+        } => {
+            let input = c::CampaignUpdateInput {
+                campaign_id,
+                name,
+                description: double_state(description, clear_description),
+                color: None,
+                start_date: None,
+                end_date: None,
+                goal: double_state(goal, clear_goal),
+                status,
+                progress_metric: None,
+                progress_target: None,
+                audience_persona: None,
+                content_pillars: None,
+                budget_cents: None,
+                kpi_targets: None,
+            };
+            c::handle_campaign_update(state, &input).await.map(|r| r.0)
+        }
+        CampaignAction::Delete { campaign_id } => {
+            let input = c::CampaignDeleteInput { campaign_id };
+            c::handle_campaign_delete(state, &input).await.map(|r| r.0)
+        }
+    };
+    output_json(&truncate_json_strings(&value.map_err(|e| anyhow::anyhow!("{e}"))?, 500));
+    Ok(())
+}
+
+/// Turn a `--field value` / `--clear-field` pair into the three-state
+/// shape the update handler needs: absent = keep, `null` = clear.
+fn double_state(value: Option<String>, clear: bool) -> Option<Option<String>> {
+    if clear {
+        Some(None)
+    } else {
+        value.map(Some)
+    }
+}
+
+async fn handle_signatures_with_state(
+    state: &AppState,
+    action: SignatureAction,
+) -> anyhow::Result<()> {
+    use crate::mcp::tools_admin as a;
+
+    let value = match action {
+        SignatureAction::List => {
+            a::handle_signatures_list(state, &a::SignatureListInput {})
+                .await
+                .map(|r| r.0)
+        }
+        SignatureAction::Create {
+            name,
+            content,
+            provider,
+        } => {
+            let input = a::SignatureCreateInput {
+                name,
+                content,
+                provider,
+            };
+            a::handle_signatures_create(state, &input).await.map(|r| r.0)
+        }
+        SignatureAction::Update {
+            signature_id,
+            name,
+            content,
+            provider,
+        } => {
+            let input = a::SignatureUpdateInput {
+                signature_id,
+                name,
+                content,
+                provider,
+            };
+            a::handle_signatures_update(state, &input).await.map(|r| r.0)
+        }
+        SignatureAction::Delete { signature_id } => {
+            let input = a::SignatureDeleteInput { signature_id };
+            a::handle_signatures_delete(state, &input).await.map(|r| r.0)
+        }
+    };
+    output_json(&truncate_json_strings(&value.map_err(|e| anyhow::anyhow!("{e}"))?, 500));
+    Ok(())
+}
+
+async fn handle_ai_with_state(state: &AppState, action: AiAction) -> anyhow::Result<()> {
+    use crate::mcp::tools_ai as ai;
+
+    let value = match action {
+        AiAction::Generate { topic, tone, length } => {
+            let input = ai::AiGeneratePostInput {
+                topic,
+                tone,
+                length,
+            };
+            ai::handle_ai_generate_post(state, &input).await.map(|r| r.0)
+        }
+        AiAction::Bulk {
+            topic,
+            format,
+            tone,
+            count,
+        } => {
+            let input = ai::AiGenerateBulkInput {
+                topic,
+                format,
+                tone,
+                count: Some(count),
+            };
+            ai::handle_ai_generate_bulk(state, &input).await.map(|r| r.0)
+        }
+        AiAction::Improve { content } => {
+            let input = ai::AiContentInput { content };
+            ai::handle_ai_improve_writing(state, &input).await.map(|r| r.0)
+        }
+        AiAction::Summarize { content } => {
+            let input = ai::AiContentInput { content };
+            ai::handle_ai_summarize(state, &input).await.map(|r| r.0)
+        }
+        AiAction::Hashtags { content } => {
+            let input = ai::AiContentInput { content };
+            ai::handle_ai_suggest_hashtags(state, &input).await.map(|r| r.0)
+        }
+        AiAction::Tone { content, tone } => {
+            let input = ai::AiChangeToneInput { content, tone };
+            ai::handle_ai_change_tone(state, &input).await.map(|r| r.0)
+        }
+    };
+    output_json(&truncate_json_strings(&value.map_err(|e| anyhow::anyhow!("{e}"))?, 500));
+    Ok(())
+}
+
+/// RSS autopost feeds.
+///
+/// These call the SAME handlers the MCP tools call, so the CLI and the
+/// MCP surface cannot drift — that is the repo's rule for a second
+/// surface over one operation (§9.21).
+async fn handle_rss_with_state(state: &AppState, action: RssAction) -> anyhow::Result<()> {
+    use crate::mcp::tools_rss as rss_tools;
+
+    let value = match action {
+        RssAction::List => {
+            rss_tools::handle_rss_feed_list(state, &rss_tools::RssFeedListInput {})
+                .await
+                .map(|r| r.0)
+        }
+        RssAction::Add {
+            feed_url,
+            integration_id,
+            title,
+            ai_summary,
+            disabled,
+        } => {
+            let input = rss_tools::RssFeedCreateInput {
+                feed_url,
+                integration_id,
+                title,
+                use_ai_summary: Some(ai_summary),
+                enabled: Some(!disabled),
+            };
+            rss_tools::handle_rss_feed_create(state, &input)
+                .await
+                .map(|r| r.0)
+        }
+        RssAction::Delete { feed_id } => {
+            rss_tools::handle_rss_feed_delete(state, &rss_tools::RssFeedIdInput { feed_id })
+                .await
+                .map(|r| r.0)
+        }
+        RssAction::Toggle { feed_id } => {
+            rss_tools::handle_rss_feed_toggle(state, &rss_tools::RssFeedIdInput { feed_id })
+                .await
+                .map(|r| r.0)
+        }
+        RssAction::Poll { feed_id } => {
+            rss_tools::handle_rss_feed_poll(state, &rss_tools::RssFeedIdInput { feed_id })
+                .await
+                .map(|r| r.0)
+        }
+        RssAction::Items { feed_id } => {
+            rss_tools::handle_rss_feed_items(state, &rss_tools::RssFeedIdInput { feed_id })
+                .await
+                .map(|r| r.0)
+        }
+    };
+    let value = value.map_err(|e| anyhow::anyhow!("{e}"))?;
+    output_json(&truncate_json_strings(&value, 500));
+    Ok(())
+}
+
 async fn handle_comment_with_state(state: &AppState, action: CommentAction) -> anyhow::Result<()> {
     match action {
         CommentAction::Get {
@@ -3613,10 +3856,15 @@ async fn handle_stage_with_state(
     };
     crate::services::staging::validate_staging_request(&request)
         .map_err(|e| anyhow::anyhow!("Validation failed: {e}"))?;
-    let result =
-        crate::services::staging::stage_post(&state.db, &state.providers, user_id, request)
-            .await
-            .map_err(|e| anyhow::anyhow!("Staging failed: {e}"))?;
+    let result = crate::services::staging::stage_post(
+        &state.db,
+        &state.providers,
+        &state.config.app_url,
+        user_id,
+        request,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("Staging failed: {e}"))?;
     let staged: Vec<serde_json::Value> = result.staged.into_iter().map(|s| {
         serde_json::json!({"post_id": s.post_id.to_string(), "provider": s.provider, "sequence": s.sequence, "total_segments": s.total_segments, "state": s.state})
     }).collect();
@@ -4397,13 +4645,19 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             provider,
             wait,
             timeout_secs,
+            browser,
+            browser_endpoint,
         } => {
-            if wait {
+            if browser {
+                handle_connect_browser(&state, &provider, &browser_endpoint, timeout_secs).await
+            } else if wait {
                 handle_connect_wait(&state, &provider, timeout_secs).await
             } else {
                 handle_connect_with_state(&state, &provider).await
             }
         }
+        Command::Autopost(options) => handle_autopost(&state, &options).await,
+        Command::Agent => handle_agent(&state).await,
         Command::Doctor => handle_doctor_with_state(&state).await,
         Command::Setup => handle_setup().await,
         Command::ConnectAll => handle_connect_all_with_state(&state).await,
@@ -4437,6 +4691,19 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             handle_feed_with_state(&state, provider.as_deref(), limit).await
         }
         Command::Comment { action } => handle_comment_with_state(&state, action).await,
+        Command::Rss { action } => handle_rss_with_state(&state, action).await,
+        Command::Campaigns { action } => handle_campaigns_with_state(&state, action).await,
+        Command::Signatures { action } => handle_signatures_with_state(&state, action).await,
+        Command::Ai { action } => handle_ai_with_state(&state, action).await,
+        Command::Streak { tz } => {
+            use crate::mcp::tools_analytics as an;
+            let input = an::StreakGetInput { tz };
+            let value = an::handle_streak_get(&state, &input)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            output_json(&truncate_json_strings(&value.0, 500));
+            Ok(())
+        }
         Command::Dm { action } => handle_dm_with_state(&state, action).await,
         Command::Automation { action } => handle_automation_with_state(&state, action).await,
         Command::Posts { action } => handle_posts_with_state(&state, action).await,
@@ -4610,6 +4877,274 @@ mod tests {
             "https://localhost:6544/api/auth/callback"
         );
     }
+}
+
+/// `connect --browser`: drive the platform's consent page in the
+/// operator's real browser and complete the login end to end.
+async fn handle_connect_browser(
+    state: &AppState,
+    provider: &str,
+    endpoint: &str,
+    timeout_secs: u64,
+) -> anyhow::Result<()> {
+    let result =
+        crate::cli::oauth_browser::drive_oauth_login(state, provider, endpoint, timeout_secs)
+            .await?;
+    output_json(&serde_json::json!({
+        "status": "connected",
+        "provider": result.provider,
+        "account": result.account_name,
+        "internal_id": result.internal_id,
+        "final_url": result.final_url,
+        "hint": "The credential is stored. Verify with 'switchpost providers'.",
+    }));
+    Ok(())
+}
+
+/// `autopost`: render a Deckmill carousel, upload it, and stage (or
+/// publish) it on the given platforms.
+async fn handle_autopost(
+    state: &AppState,
+    options: &super::AutopostOptions,
+) -> anyhow::Result<()> {
+    // 1. The slide specs — Deckmill's own contract, read verbatim.
+    let raw = tokio::fs::read_to_string(&options.slides)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to read {}: {e}", options.slides))?;
+    let specs: Vec<serde_json::Value> = serde_json::from_str(&raw)
+        .map_err(|e| anyhow::anyhow!("{} is not a JSON array of slide specs: {e}", options.slides))?;
+
+    // 2. The target integrations.
+    let user_id = resolve_user(state).await?;
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+    let integration_ids = resolve_platform_integrations(integrations.iter(), &options.platforms);
+    if integration_ids.is_empty() {
+        return Err(anyhow::anyhow!(
+            "No connected integration for '{}'. Run 'switchpost providers' to see what is connected.",
+            options.platforms
+        ));
+    }
+
+    // 3. Render.
+    let work_dir = match &options.work_dir {
+        Some(dir) => std::path::PathBuf::from(dir),
+        None => std::env::temp_dir().join(format!("switchpost-autopost-{}", uuid::Uuid::new_v4())),
+    };
+    let rendered = crate::cli::autopost::render_carousel(
+        &specs,
+        &options.preset,
+        &options.aspect_ratio,
+        &options.primary_color,
+        &options.brand_name,
+        &options.brand_handle,
+        &options.topic,
+        &options.url,
+        &options.hashtags,
+        &work_dir,
+    )
+    .await?;
+
+    // 4. Upload.
+    let media = crate::cli::autopost::upload_slides(state, &rendered.slides).await?;
+
+    // 5. Stage.
+    let scheduled_at = match &options.schedule {
+        Some(raw) => Some(
+            chrono::DateTime::parse_from_rfc3339(raw)
+                .map_err(|e| anyhow::anyhow!("Invalid --schedule timestamp '{raw}': {e}"))?
+                .with_timezone(&chrono::Utc),
+        ),
+        None => None,
+    };
+    // A recurring series needs a first due time to count from.
+    let repeat_days = options.repeat_days;
+    if repeat_days.is_some() && options.repeat_until.is_none() {
+        return Err(anyhow::anyhow!("--repeat-days also needs --repeat-until"));
+    }
+    if let Some(days) = repeat_days {
+        if days <= 0 {
+            return Err(anyhow::anyhow!("--repeat-days must be positive"));
+        }
+        if scheduled_at.is_none() {
+            return Err(anyhow::anyhow!(
+                "--repeat-days also needs --schedule (the series counts from the first due time)"
+            ));
+        }
+    }
+    let settings = parse_cli_settings(options.settings.as_deref())?;
+    let overrides = serde_json::json!({});
+    let staged = crate::cli::autopost::stage(
+        state,
+        &options.content,
+        media,
+        integration_ids,
+        scheduled_at,
+        settings,
+        overrides,
+    )
+    .await?;
+
+    // 6. Publish now, if asked.
+    let mut published = Vec::new();
+    if options.publish {
+        for post in &staged.staged {
+            match crate::services::posts::PostService::publish(
+                &state.db,
+                &state.providers,
+                &state.broadcast,
+                &state.config,
+                user_id,
+                post.post_id,
+                state.token_key,
+            )
+            .await
+            {
+                Ok(url) => published.push(serde_json::json!({
+                    "post_id": post.post_id.to_string(),
+                    "provider": post.provider,
+                    "url": url,
+                })),
+                Err(e) => published.push(serde_json::json!({
+                    "post_id": post.post_id.to_string(),
+                    "provider": post.provider,
+                    "error": e,
+                })),
+            }
+        }
+    }
+
+    // 7. Recurrence — the DB-backed series, not a loop process.
+    //
+    // The scheduler publishes the spaced copies; nothing stays running.
+    // Reusing `set_post_recurring_with_copies` means the series is
+    // visible in the dashboard, respects the single-writer rule, and
+    // cannot double-publish against another scheduler.
+    let mut recurring = serde_json::Value::Null;
+    if let (Some(days), Some(until_raw)) = (repeat_days, options.repeat_until.as_ref()) {
+        let until = chrono::DateTime::parse_from_rfc3339(until_raw)
+            .map_err(|e| anyhow::anyhow!("Invalid --repeat-until timestamp '{until_raw}': {e}"))?
+            .with_timezone(&chrono::Utc);
+        let first = scheduled_at.expect("checked above");
+        if until <= first {
+            return Err(anyhow::anyhow!(
+                "--repeat-until must be after --schedule"
+            ));
+        }
+        let max_copies = ((until - first).num_days() / days as i64) + 1;
+        if max_copies > 100 {
+            return Err(anyhow::anyhow!(
+                "--repeat-days x --repeat-until would create {max_copies} posts (the limit is 100)"
+            ));
+        }
+        let mut series = Vec::new();
+        for staged in &staged.staged {
+            let (post_ids, dates) = crate::db::queries::set_post_recurring_with_copies(
+                &state.db,
+                staged.post_id,
+                user_id,
+                days,
+                &until,
+                staged.group_id,
+                &first,
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to create the recurring series: {e}"))?;
+            series.push(serde_json::json!({
+                "post_id": staged.post_id.to_string(),
+                "copies": post_ids.len(),
+                "copy_ids": post_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>(),
+                "scheduled_dates": dates,
+            }));
+        }
+        recurring = serde_json::json!({
+            "interval_days": days,
+            "until": until.to_rfc3339(),
+            "series": series,
+            "note": "The scheduler publishes the copies; no loop process is left running.",
+        });
+    }
+
+    output_json(&serde_json::json!({
+        "status": if options.publish { "published" } else { "staged" },
+        "slides": rendered.slides.len(),
+        "html": rendered.html.to_string_lossy(),
+        "group_id": staged.group_id.map(|g| g.to_string()),
+        "staged": staged.staged.iter().map(|s| serde_json::json!({
+            "post_id": s.post_id.to_string(),
+            "provider": s.provider,
+            "state": s.state,
+        })).collect::<Vec<_>>(),
+        "total_posts": staged.total_posts,
+        "warnings": staged.warnings,
+        "errors": staged.errors,
+        "published": published,
+        "recurring": recurring,
+    }));
+    Ok(())
+}
+
+/// `agent`: one command that tells an AI agent what it can do here —
+/// the commands, the MCP tools, and the live connection state.
+async fn handle_agent(state: &AppState) -> anyhow::Result<()> {
+    let user_id = resolve_user(state).await?;
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+
+    let connected: Vec<_> = integrations
+        .iter()
+        .filter(|i| is_credential_row(i))
+        .map(|i| {
+            serde_json::json!({
+                "provider": i.provider_identifier,
+                "name": i.profile_name,
+                "internal_id": i.internal_id,
+            })
+        })
+        .collect();
+
+    // Which providers could be connected, and how each one authenticates.
+    let providers: Vec<_> = state
+        .providers
+        .list()
+        .into_iter()
+        .map(|id| {
+            let provider = state.providers.get(id);
+            serde_json::json!({
+                "id": id,
+                "tier": state.providers.tier(id).as_str(),
+                "oauth": provider.as_ref().map(|p| p.uses_oauth()).unwrap_or(false),
+                "one_time_token": provider.as_ref().map(|p| p.one_time_token()).unwrap_or(false),
+                "connected": integrations
+                    .iter()
+                    .any(|i| i.provider_identifier == id && is_credential_row(i)),
+            })
+        })
+        .collect();
+
+    output_json(&serde_json::json!({
+        "commands": [
+            "connect <provider> --browser      drive the OAuth consent page in a real browser",
+            "connect <provider> --wait        poll until the credential lands",
+            "autopost --slides f.json --platforms x --content '...'   render a Deckmill carousel and post it",
+            "posts list|create|publish         the post lifecycle",
+            "media upload <path>               upload a file",
+            "mcp-call <tool> '<json>'          call any MCP tool in-process",
+            "mcp-tools                         list the MCP tools",
+            "providers                         the connected accounts",
+            "doctor                            health-check every provider",
+        ],
+        "workflows": {
+            "oauth_login": "switchpost connect linkedin --browser",
+            "deckmill_autopost": "switchpost autopost --slides slides.json --platforms instagram --content '...' --url https://example.com --hashtags ai",
+        },
+        "providers": providers,
+        "connected": connected,
+    }));
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests_cli {
+    use super::*;
 
     // ── G-10: --platforms must not fan out to a colliding variant ───────────
 
@@ -4719,5 +5254,23 @@ mod tests {
         let all = [fake_integration("x"), fake_integration("bluesky")];
         assert_eq!(providers(&all, " x , , bluesky ").len(), 2);
         assert!(providers(&all, " , ").is_empty());
+    }
+
+    // ── The three-state update shape ───────────────────────────────────────
+
+    /// `--field value` replaces, `--clear-field` clears, neither keeps.
+    ///
+    /// This is the difference between `Option<T>` and `Option<Option<T>>`:
+    /// a two-state field cannot express "leave it alone" AND "clear it".
+    #[test]
+    fn a_value_replaces_and_a_clear_clears() {
+        assert_eq!(double_state(Some("new".into()), false), Some(Some("new".into())));
+        assert_eq!(double_state(None, true), Some(None));
+    }
+
+    /// Neither flag means "keep" — the field is absent from the request.
+    #[test]
+    fn neither_value_nor_clear_keeps_the_field() {
+        assert_eq!(double_state(None, false), None);
     }
 }

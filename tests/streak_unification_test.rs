@@ -123,11 +123,27 @@ async fn call_as(
     (status, String::from_utf8_lossy(&body).to_string())
 }
 
-fn days_ago_at_midday(n: i64) -> i64 {
-    (chrono::Utc::now() - chrono::Duration::days(n))
-        .with_time(chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap())
+/// A timestamp `n` days BEFORE the most recent midnight that has
+/// already passed in EVERY zone the tests query.
+///
+/// The old helper anchored "today" at MIDDAY UTC. That is only in the
+/// past when the clock is already past 12:00 UTC — at 00:35 UTC the
+/// seed for "today" was 11 hours in the FUTURE, and in New York the
+/// seed landed on a day the zone had not reached yet. `calculate_streak`
+/// only accepts a streak that starts on today or yesterday, so a future
+/// day measured a streak of 0: the suite went red every night and green
+/// every afternoon.
+///
+/// Anchoring on the most recent PAST midnight makes every seeded day a
+/// whole day in the past in every zone, so the measure is the same at
+/// every hour of the day.
+fn days_ago_at_midnight(n: i64) -> i64 {
+    let today_midnight = chrono::Utc::now()
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
         .unwrap()
-        .timestamp()
+        .and_utc();
+    (today_midnight - chrono::Duration::days(n)).timestamp()
 }
 
 /// The badge and the cadence card must return the SAME streak for the
@@ -149,10 +165,10 @@ async fn the_badge_and_the_cadence_card_show_the_same_streak() {
     .await
     .expect("clear scratch published rows");
 
-    // Three consecutive midday UTC days ending today, so both a UTC day
-    // and a New York day (midday UTC is morning in NY) count them.
+    // Three consecutive days ending today (UTC midnight anchor), so both
+    // a UTC day and a New York day count them.
     for d in 0..3 {
-        seed_published(&state, DEFAULT_USER_ID, days_ago_at_midday(d)).await;
+        seed_published(&state, DEFAULT_USER_ID, days_ago_at_midnight(d)).await;
     }
 
     // ("cadence query suffix", "badge query suffix")
@@ -215,7 +231,7 @@ async fn the_badge_counts_the_session_users_own_published_days() {
     assert_eq!(streak, 0, "no published posts for this session's user, no streak");
 
     // Publish today for THIS user: the streak becomes 1 for this user.
-    seed_published(&state, other, days_ago_at_midday(0)).await;
+    seed_published(&state, other, days_ago_at_midnight(0)).await;
     let (status, badge) = call_as(&state, Method::GET, "/api/streak", other).await;
     assert_eq!(status, StatusCode::OK, "badge body: {badge}");
     let streak: i64 = serde_json::from_str::<serde_json::Value>(&badge).unwrap()["streak_days"]

@@ -1,4 +1,7 @@
+pub mod autopost;
+pub mod browser;
 pub mod home;
+pub mod oauth_browser;
 pub mod platforms;
 pub mod run;
 pub use run::run_cli;
@@ -19,6 +22,63 @@ pub struct Cli {
 
     #[command(subcommand)]
     pub command: Command,
+}
+
+/// Options for `switchpost autopost`.
+#[derive(clap::Args, Debug)]
+pub struct AutopostOptions {
+    /// Path to the slide-spec JSON file.
+    #[arg(long)]
+    pub slides: String,
+    /// Comma-separated provider identifiers to post to.
+    #[arg(long)]
+    pub platforms: String,
+    /// The post copy.
+    #[arg(long)]
+    pub content: String,
+    /// Deckmill platform preset (default: instagram_portrait).
+    #[arg(long, default_value = "instagram_portrait")]
+    pub preset: String,
+    /// Deckmill aspect ratio (default: 4:5).
+    #[arg(long, default_value = "4:5")]
+    pub aspect_ratio: String,
+    /// Brand colour for the slides (Deckmill requires one).
+    #[arg(long, default_value = "#2D5BFF")]
+    pub primary_color: String,
+    /// Brand name rendered on every slide.
+    #[arg(long, default_value = "")]
+    pub brand_name: String,
+    /// Brand handle rendered on every slide.
+    #[arg(long, default_value = "")]
+    pub brand_handle: String,
+    /// Topic rendered on every slide.
+    #[arg(long, default_value = "")]
+    pub topic: String,
+    /// URL rendered in the slide overlay (Deckmill requires it).
+    #[arg(long, default_value = "")]
+    pub url: String,
+    /// Hashtags rendered in the slide overlay (Deckmill requires them).
+    #[arg(long, default_value = "")]
+    pub hashtags: String,
+    /// Per-provider settings, e.g. '{"reddit":{"subreddit":"rust"}}'.
+    #[arg(long)]
+    pub settings: Option<String>,
+    /// Publish immediately instead of staging a draft.
+    #[arg(long)]
+    pub publish: bool,
+    /// ISO8601 timestamp to schedule for (implies queued, not draft).
+    #[arg(long)]
+    pub schedule: Option<String>,
+    /// Directory for the rendered slides (default: a temp dir).
+    #[arg(long)]
+    pub work_dir: Option<String>,
+    /// Repeat every N days until --repeat-until. Creates a recurring
+    /// series the scheduler publishes — no loop process needed.
+    #[arg(long)]
+    pub repeat_days: Option<i32>,
+    /// End of the recurring series (ISO8601). Required with --repeat-days.
+    #[arg(long)]
+    pub repeat_until: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -85,7 +145,30 @@ pub enum Command {
         /// Seconds to wait with --wait before giving up (default 300).
         #[arg(long, default_value_t = 300)]
         timeout_secs: u64,
+        /// Drive the platform's consent page in the operator's real browser
+        /// (browseros-neo) and complete the login end to end.
+        ///
+        /// The CLI opens the authorization URL, waits for the provider's
+        /// redirect, and redeems the authorization code IN-PROCESS — the
+        /// server does not have to be running.
+        #[arg(long)]
+        browser: bool,
+        /// browseros-neo MCP endpoint (default: http://127.0.0.1:9012/mcp).
+        #[arg(long, default_value = crate::cli::oauth_browser::DEFAULT_BROWSER_ENDPOINT)]
+        browser_endpoint: String,
     },
+
+    /// Render a carousel with Deckmill and post it — one command, no
+    /// copy-paste between tools.
+    ///
+    /// The slide specs are Deckmill's own contract: a JSON array of
+    /// `{"type": "<slide type>", "params": {...}}` (run
+    /// `deckmill slide-info <type>` for a type's params).
+    Autopost(AutopostOptions),
+
+    /// Print what this CLI can do for an AI agent: every command, the
+    /// MCP tools, the connected providers and their auth state.
+    Agent,
 
     /// Check health of all connected providers and report status
     Doctor,
@@ -190,6 +273,37 @@ pub enum Command {
     Comment {
         #[command(subcommand)]
         action: CommentAction,
+    },
+
+    /// RSS autopost feeds — each new feed item becomes a post
+    Rss {
+        #[command(subcommand)]
+        action: RssAction,
+    },
+
+    /// Campaigns — grouped posts with a goal and a progress metric
+    Campaigns {
+        #[command(subcommand)]
+        action: CampaignAction,
+    },
+
+    /// Post signatures — text appended to posts
+    Signatures {
+        #[command(subcommand)]
+        action: SignatureAction,
+    },
+
+    /// AI writing helpers (generate, improve, summarise, hashtags, tone)
+    Ai {
+        #[command(subcommand)]
+        action: AiAction,
+    },
+
+    /// Current posting streak (consecutive days with a published post)
+    Streak {
+        /// The founder's timezone as an IANA name (e.g. America/New_York)
+        #[arg(long)]
+        tz: Option<String>,
     },
 
     /// Direct message operations
@@ -662,6 +776,213 @@ pub enum MediaAction {
         /// Output file path
         #[arg(long, default_value = "./download")]
         output: String,
+    },
+}
+
+// ─── RSS Actions ──────────────────────────────────────────────────────────
+
+/// RSS autopost feeds.
+///
+/// These are the FEED-DRIVEN half of autonomous auto-posting: the poller
+/// turns each new feed item into a post. The same handlers back the MCP
+/// tools, so the CLI and the MCP surface cannot drift.
+#[derive(Subcommand, Debug)]
+pub enum RssAction {
+    /// List the configured feeds
+    List,
+    /// Add a feed that autoposts to a channel
+    Add {
+        /// Feed URL (RSS or Atom)
+        feed_url: String,
+        /// Channel (integration) ID that receives the posts
+        integration_id: String,
+        /// Display title for the feed
+        #[arg(long)]
+        title: Option<String>,
+        /// Draft an AI summary for each item
+        #[arg(long)]
+        ai_summary: bool,
+        /// Create the feed PAUSED (do not poll it yet)
+        #[arg(long)]
+        disabled: bool,
+    },
+    /// Delete a feed
+    Delete {
+        /// Feed ID
+        feed_id: String,
+    },
+    /// Pause or resume polling a feed
+    Toggle {
+        /// Feed ID
+        feed_id: String,
+    },
+    /// Poll a feed now for new items
+    Poll {
+        /// Feed ID
+        feed_id: String,
+    },
+    /// List the items a feed has produced
+    Items {
+        /// Feed ID
+        feed_id: String,
+    },
+}
+
+// ─── Campaign Actions ─────────────────────────────────────────────────────
+
+/// Campaigns group posts around a goal and track a progress metric.
+#[derive(Subcommand, Debug)]
+pub enum CampaignAction {
+    /// List campaigns (archived ones included)
+    List,
+    /// Create a campaign
+    Create {
+        /// Campaign name
+        name: String,
+        /// What the campaign is for
+        #[arg(long)]
+        description: Option<String>,
+        /// Hex colour
+        #[arg(long)]
+        color: Option<String>,
+        /// Start date (YYYY-MM-DD)
+        #[arg(long)]
+        start_date: Option<String>,
+        /// End date (YYYY-MM-DD)
+        #[arg(long)]
+        end_date: Option<String>,
+        /// The goal the campaign works toward
+        #[arg(long)]
+        goal: Option<String>,
+        /// active | paused | archived | completed
+        #[arg(long)]
+        status: Option<String>,
+        /// posts | engagement | reach | followers | custom
+        #[arg(long)]
+        progress_metric: Option<String>,
+        /// Target value for the progress metric
+        #[arg(long)]
+        progress_target: Option<i32>,
+    },
+    /// Update a campaign. Omitted fields are kept; --clear-<field> clears one.
+    Update {
+        /// Campaign ID
+        campaign_id: String,
+        /// New name
+        #[arg(long)]
+        name: Option<String>,
+        /// New description
+        #[arg(long)]
+        description: Option<String>,
+        /// Clear the description
+        #[arg(long, conflicts_with = "description")]
+        clear_description: bool,
+        /// New goal
+        #[arg(long)]
+        goal: Option<String>,
+        /// Clear the goal
+        #[arg(long, conflicts_with = "goal")]
+        clear_goal: bool,
+        /// active | paused | archived | completed
+        #[arg(long)]
+        status: Option<String>,
+    },
+    /// Delete (archive) a campaign
+    Delete {
+        /// Campaign ID
+        campaign_id: String,
+    },
+}
+
+// ─── Signature Actions ────────────────────────────────────────────────────
+
+/// Signatures are text appended to posts.
+#[derive(Subcommand, Debug)]
+pub enum SignatureAction {
+    /// List signatures
+    List,
+    /// Create a signature
+    Create {
+        /// Name for identification
+        name: String,
+        /// The signature text
+        content: String,
+        /// Provider it applies to (e.g. x). Omit for all providers.
+        #[arg(long)]
+        provider: Option<String>,
+    },
+    /// Update a signature
+    Update {
+        /// Signature ID
+        signature_id: String,
+        /// New name
+        #[arg(long)]
+        name: Option<String>,
+        /// New content
+        #[arg(long)]
+        content: Option<String>,
+        /// New provider scope
+        #[arg(long)]
+        provider: Option<String>,
+    },
+    /// Delete a signature
+    Delete {
+        /// Signature ID
+        signature_id: String,
+    },
+}
+
+// ─── AI Actions ───────────────────────────────────────────────────────────
+
+/// AI writing helpers. They call the same handlers the MCP tools call.
+#[derive(Subcommand, Debug)]
+pub enum AiAction {
+    /// Draft a post from a topic
+    Generate {
+        /// What the post is about
+        topic: String,
+        /// Tone (e.g. casual, professional)
+        #[arg(long, default_value = "professional")]
+        tone: String,
+        /// Length (e.g. short, long)
+        #[arg(long, default_value = "short")]
+        length: String,
+    },
+    /// Generate several posts on one topic
+    Bulk {
+        /// What the posts are about
+        topic: String,
+        /// one_short | one_long | thread_short | thread_long
+        #[arg(long, default_value = "one_short")]
+        format: String,
+        /// personal | company
+        #[arg(long, default_value = "professional")]
+        tone: String,
+        /// How many posts (max 5)
+        #[arg(long, default_value_t = 3)]
+        count: u32,
+    },
+    /// Improve the wording of existing text
+    Improve {
+        /// The text to improve
+        content: String,
+    },
+    /// Summarise text
+    Summarize {
+        /// The text to summarise
+        content: String,
+    },
+    /// Suggest hashtags for text
+    Hashtags {
+        /// The text to work on
+        content: String,
+    },
+    /// Rewrite text in a different tone
+    Tone {
+        /// The text to rewrite
+        content: String,
+        /// The target tone
+        tone: String,
     },
 }
 
