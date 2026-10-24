@@ -72,3 +72,46 @@ Seven further surfaces, all green:
 
 No further corrections required — round 2 found nothing the round-1
 record had wrong.
+
+---
+
+## Validation round 3 (2026-10-24, same hour)
+
+Nine further surfaces — the artifact-internal consistency that rounds
+1 and 2 did not re-derive. All green:
+
+1. **Benchmark internal consistency**: benchmark.json's per-run
+   pass_rates match the grading.json files they were aggregated from,
+   8/8, 0 mismatches.
+2. **Snapshot integrity**: skill-snapshot/ is byte-identical to the
+   claimed v0.6.2 commit (5/5 files EXACT) — the old-skill arm really
+   graded the skill as it existed then, not as it is now.
+3. **Metadata ↔ runs**: all 4 eval_metadata.json files map to the
+   correct run dirs with answer.md + commands.txt + grading.json
+   present, 0 problems.
+4. **benchmark.md ↔ benchmark.json**: the aggregate table's pass
+   rates (79%±25% vs 100%±0%, delta -0.21 = old−with), token means
+   (2,869,225 vs 1,700,000) and time means (2475s vs 2220s) all
+   recompute exactly from the run records.
+5. **Pass-rate arithmetic**: every grading.json's pass_rate equals
+   passed/total, 8/8.
+6. **Regex re-match**: all 18 regex evidence patterns re-executed
+   against the answer texts reproduce the committed verdicts, 0
+   mismatches.
+7. **Answer-claim live reproduction (fresh)**: the causal
+   differentiator was re-executed live on the current binary —
+   date-only end_date fails with "Invalid end_date (use RFC3339):
+   premature end of input" while RFC3339 succeeds ("Post will repeat
+   every 7 days until 2026-11-30T23:59:59+00:00"). Probe cleanup
+   verified: live rows 0, all 7 probe posts soft-deleted.
+8. **Transcript read-only audit (round-3 form)**: all 8 commands.txt
+   re-scanned for write-shaped verbs — 6/8 contain none; the 3
+   write-shaped lines in the remaining two are all `--help` forms,
+   and the one DATABASE_URL-annotated command in eval-failed-recovery/
+   old_skill is explicitly marked as never run. Zero mutations.
+9. **DB residue accounting**: soft-deleted is now 37 (was 29
+   pre-session) — 8 rows created by this session's own regression and
+   causal probes, all soft-deleted after use; live count 0.
+
+No corrections required — rounds 1-3 now cover every artifact,
+every number, every claim.
