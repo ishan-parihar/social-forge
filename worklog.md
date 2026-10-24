@@ -2787,3 +2787,49 @@ Stage Summary:
   context; catalogue contents block if it keeps growing; trigger-
   description optimization loop (skill-creator's run_loop.py) not run
   this pass — the eval queries for it are drafted in the description.
+
+---
+Task ID: skill-behavioral-eval-1 (v0.6.4)
+Agent: Jcode (skill-creator behavioral eval loop, pass 4)
+Task: Prove the pass-3 skill changes causally improve agent behavior; run the full skill-creator eval loop (with-skill vs old-skill baselines, objective grading, benchmark, viewer); refine.
+
+Work Log:
+- Workspace per skill-creator: switchpost-agent-workspace/{skill-snapshot
+  (v0.6.2 from git), iteration-1/{4 eval dirs}}. 8 headless swarm runs
+  spawned same-turn (4 with_skill, 4 old_skill), each read-only.
+- Eval set: analytics-aggregate (eval id 44), posts-repeat (46),
+  reddit-403 (50), failed-recovery (47). Assertions drafted from the
+  pass-3 live-verified contracts while runs executed.
+- Results: with_skill 12/12 (100%), old_skill 9.5/12 (79%). Causal
+  proof on the differentiators: posts-repeat old_skill emitted the
+  date-only end_date that FAILS live; with_skill emitted full
+  RFC3339. analytics old_skill never found the per-post route.
+- Two live bugs the runs surfaced, both fixed and live-verified:
+  1. analytics_summary counted soft-deleted posts (REST + MCP copies
+     both lacked deleted_at IS NULL - the §9.21 second-implementation
+     trap in the wild; the two surfaces disagreed 25 vs 0).
+  2. posts list --state errored SILENTLY LISTS EVERYTHING (state match
+     fell through to list-all; help advertised 'errored'). Fixed:
+     'errored' accepted as synonym in list_posts + count_posts_by_user,
+     help text corrected; live-proven with draft-only DB (0, not 1).
+- Doc refinements from transcripts (live-verified first):
+  analytics post/analytics_get_post reject feed-import ids; 
+  x_get_post_analytics is OAuth-only (403 on cookie auth).
+- Benchmark via skill-creator aggregator (after restructuring to its
+  run-N layout + summary blocks): review.html static viewer generated
+  (browser open suppressed in this env; file is in the workspace).
+- Gates: 521/521 lib; doc_cli 3/3; skill_install 2/2; release rebuilt
+  twice; live DB clean (0 live posts; no mutations by any run -
+  transcripts audited); install-skill synced.
+
+Stage Summary:
+- v0.6.4 pushed as 3513d7c. The behavioral loop both PROVED the pass-3
+  doc changes work (100% vs 79%, causal on the param-trap and the
+  analytics route) and caught two real product bugs the static audits
+  missed - a soft-delete leak in analytics_summary across BOTH
+  surfaces, and a silent list-everything filter fall-through.
+- Timing data is approximate (from observed swarm stats, single run
+  per config); a variance-grade benchmark would need 3 runs per config.
+- Known leftover: the trigger-description optimization loop
+  (run_loop.py) still not run - the description now carries the new
+  trigger classes but they are unmeasured.
