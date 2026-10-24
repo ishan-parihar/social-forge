@@ -1,0 +1,14 @@
+./target/release/switchpost --version
+./target/release/switchpost mcp-call tools_search --args '{"query":"repeat"}'
+./target/release/switchpost posts --help
+./target/release/switchpost mcp-call posts_repeat --args '{"post_id":"nonexistent-schema-probe","interval_days":1,"end_date":"2026-11-30"}'
+./target/release/switchpost mcp-tools --toolset core
+./target/release/switchpost mcp-tools
+./target/release/switchpost mcp-call --help
+./target/release/switchpost mcp-call posts_repeat --args '{"post_id":"00000000-0000-0000-0000-000000000000","interval_days":7,"end_date":"not-a-date"}'
+./target/release/switchpost mcp-tools --help
+./target/release/switchpost mcp-tools --toolset core --json
+./target/release/switchpost posts schedule --help
+./target/release/switchpost posts get --help
+./target/release/switchpost mcp-tools --pretty
+./target/release/switchpost agent --json

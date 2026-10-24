@@ -1,0 +1,24 @@
+{
+ "expectations": [
+  {
+   "text": "uses analytics get x (aggregate route)",
+   "passed": true,
+   "evidence": "regex: switchpost analytics get x|analytics get x"
+  },
+  {
+   "text": "uses analytics post for per-post",
+   "passed": true,
+   "evidence": "regex: analytics post"
+  },
+  {
+   "text": "reached provider analytics",
+   "passed": true,
+   "evidence": "regex: x_get_analytics|x_get_post_analytics"
+  }
+ ],
+ "summary": {
+  "pass_rate": 1.0,
+  "passed": 3,
+  "total": 3
+ }
+}

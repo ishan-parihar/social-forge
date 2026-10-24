@@ -434,7 +434,8 @@ pub async fn handle_analytics_summary(
             COUNT(*) FILTER (WHERE state = 'queued') as queued
            FROM posts
            WHERE user_id = $1
-             AND created_at > unixepoch() - $2 * 86400",
+             AND created_at > unixepoch() - $2 * 86400
+             AND deleted_at IS NULL",
     )
     .bind(user_id)
     .bind(days as f64)

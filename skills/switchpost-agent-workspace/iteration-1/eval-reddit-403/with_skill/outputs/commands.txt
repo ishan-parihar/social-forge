@@ -1,0 +1,17 @@
+./target/release/switchpost agent --json
+./target/release/switchpost providers --json
+./target/release/switchpost doctor
+./target/release/switchpost audit
+./target/release/switchpost mcp-call integrations_list --args '{}'
+./target/release/switchpost reddit browse rust --limit 3
+./target/release/switchpost reddit browse rust --limit 3
+./target/release/switchpost reddit user d3vilzwrld --limit 3
+./target/release/switchpost reddit user d3vilzwrld
+./target/release/switchpost reddit search "rust lang"
+./target/release/switchpost reddit inbox
+./target/release/switchpost mcp-call tools_search --args '{"query":"reddit"}'
+./target/release/switchpost mcp-call reddit_get_saved --args '{"limit": 3}'
+./target/release/switchpost mcp-call reddit_get_karma --args '{}'
+./target/release/switchpost mcp-call reddit_get_karma --args '{}'
+./target/release/switchpost mcp-call reddit_user_info --args '{"username": "d3vilzwrld"}'
+./target/release/switchpost mcp-call reddit_list_friends --args '{}'

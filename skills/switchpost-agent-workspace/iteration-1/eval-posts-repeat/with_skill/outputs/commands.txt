@@ -1,0 +1,11 @@
+./target/release/switchpost mcp-tools 2>&1 | grep -i repeat
+./target/release/switchpost mcp-call tools_search --args '{"query":"repeat"}'
+./target/release/switchpost mcp-call tools_search --args '{"query":"posts_repeat"}'
+./target/release/switchpost mcp-tools --toolset core 2>&1 | grep -i repeat
+./target/release/switchpost posts --help
+./target/release/switchpost mcp-call --help
+./target/release/switchpost mcp-tools --help
+./target/release/switchpost mcp-tools --toolset core --pretty
+./target/release/switchpost mcp-tools --json 2>&1 | head -5
+./target/release/switchpost mcp-tools --toolset core | wc -l (via grep -c)
+./target/release/switchpost agent --json (parsed for repeat references)

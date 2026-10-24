@@ -1,0 +1,58 @@
+# Transcript — every command run for eval-failed-recovery (old_skill)
+# Binary: ./target/release/switchpost
+# Legend: [live] = real DB (read-only), [scratch] = target/sf-eval-scratch/eval.db (throwaway), [nodb] = no DB writes
+
+./target/release/switchpost --help
+./target/release/switchpost posts --help
+./target/release/switchpost posts list --help
+./target/release/switchpost posts get --help
+./target/release/switchpost posts publish --help
+./target/release/switchpost posts schedule --help
+./target/release/switchpost posts update --help
+./target/release/switchpost doctor
+./target/release/switchpost posts list --state errored
+./target/release/switchpost posts list --state error
+./target/release/switchpost posts list
+./target/release/switchpost posts get 00000000-0000-0000-0000-000000000000
+./target/release/switchpost mcp-call tools_search --args '{"query":"posts_get"}'
+./target/release/switchpost mcp-call tools_search --args '{"query":"posts_list"}'
+./target/release/switchpost agent --json
+./target/release/switchpost providers --json
+./target/release/switchpost mcp-call integrations_list --args '{}'
+./target/release/switchpost mcp-call analytics_summary --args '{}'
+./target/release/switchpost notifications list --limit 10
+./target/release/switchpost mcp-call posts_list --args '{"state":"error"}'
+./target/release/switchpost mcp-call posts_list --args '{"limit":50}'
+./target/release/switchpost mcp-call setup_status --args '{}'
+./target/release/switchpost audit
+sqlite3 data/switchpost.db "SELECT COUNT(*) FROM posts;"
+sqlite3 data/switchpost.db "SELECT state, COUNT(*) FROM posts GROUP BY state;"
+sqlite3 data/switchpost.db "SELECT hex(id), state, error_message FROM posts WHERE state='error';"
+sqlite3 data/switchpost.db "SELECT hex(p.id), p.state, i.provider_identifier, substr(p.content,1,60), p.created_at, p.updated_at, p.error_message FROM posts p LEFT JOIN integrations i ON i.id = p.integration_id WHERE p.state='error';"
+sqlite3 data/switchpost.db "PRAGMA table_info(integrations);"
+sqlite3 data/switchpost.db "PRAGMA table_info(publish_attempts);"
+sqlite3 data/switchpost.db "SELECT hex(post_id), attempt_number, status, error_message, started_at FROM publish_attempts ORDER BY started_at DESC LIMIT 12;"
+sqlite3 data/switchpost.db "SELECT hex(p.id), p.state, COALESCE(p.deleted_at,'NULL') FROM posts p WHERE p.state='error';"
+sqlite3 data/switchpost.db "SELECT state, COUNT(*), SUM(CASE WHEN deleted_at IS NULL THEN 1 ELSE 0 END) FROM posts GROUP BY state;"
+sqlite3 data/switchpost.db "SELECT title, body, notification_type, reference_type, hex(COALESCE(reference_id,'')), created_at FROM notifications WHERE notification_type LIKE '%fail%' ORDER BY created_at DESC LIMIT 10;"
+
+# — scratch DB setup (target/sf-eval-scratch/, never data/switchpost.db) —
+DATABASE_URL="sqlite://target/sf-eval-scratch/eval.db?mode=rwc" ./target/release/switchpost doctor
+DATABASE_URL="sqlite://target/sf-eval-scratch/eval.db?mode=rwc" ./target/release/switchpost doctor
+sqlite3 target/sf-eval-scratch/eval.db "INSERT INTO users (id, email, password, name, timezone, streak_since, streak_days) VALUES (x'22222222222222222222222222222222', 'eval-scratch@localhost', 'x', 'Eval Scratch', 0, NULL, 0);"
+DATABASE_URL="sqlite://target/sf-eval-scratch/eval.db" ./target/release/switchpost posts list --state error
+sqlite3 target/sf-eval-scratch/eval.db < target/sf-eval-scratch/seed.sql
+sqlite3 target/sf-eval-scratch/eval.db "UPDATE posts SET idempotency_key = randomblob(16) WHERE idempotency_key NOT NULL;"
+sqlite3 target/sf-eval-scratch/eval.db "INSERT INTO posts (...) VALUES (..., 'draft', 'A draft that should NOT appear in the error list', ...);"
+
+# — DISCOVERY run on the scratch DB (read-only switchpost commands) —
+DATABASE_URL="sqlite://target/sf-eval-scratch/eval.db" ./target/release/switchpost posts list --state error
+DATABASE_URL="sqlite://target/sf-eval-scratch/eval.db" ./target/release/switchpost posts get 10000000-0000-0000-0000-000000000001
+DATABASE_URL="sqlite://target/sf-eval-scratch/eval.db" ./target/release/switchpost posts list --state errored
+DATABASE_URL="sqlite://target/sf-eval-scratch/eval.db" ./target/release/switchpost posts list --state error --json
+DATABASE_URL="sqlite://target/sf-eval-scratch/eval.db" ./target/release/switchpost posts list --state errored --json
+DATABASE_URL="sqlite://target/sf-eval-scratch/eval.db" ./target/release/switchpost posts publish --help
+DATABASE_URL="sqlite://target/sf-eval-scratch/eval.db" ./target/release/switchpost mcp-call tools_search --args '{"query":"analytics_summary"}'
+
+# NOTE: no state-changing switchpost command was run (no posts update/publish/schedule/delete, no connect).
+# All INSERT/UPDATE statements executed only inside target/sf-eval-scratch/eval.db.

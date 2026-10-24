@@ -1,0 +1,19 @@
+{
+  "eval_id": 3,
+  "eval_name": "failed-post-recovery",
+  "prompt": "Three of my scheduled posts failed last night (you don't need to find real ones - assume they exist). Describe the exact switchpost workflow to diagnose and fix them, and run the DISCOVERY part against ./target/release/switchpost (list what's in error state; read-only otherwise). Which command shows each post's failure reason?",
+  "assertions": [
+    {
+      "text": "Workflow includes `posts list --state error` (or --state errored) to find failed posts"
+    },
+    {
+      "text": "Identifies the command that shows each post's failure reason (`posts get <ID>` with error_message)"
+    },
+    {
+      "text": "Recovery loop includes fixing then retrying (posts update/publish or posts schedule), not just listing"
+    },
+    {
+      "text": "Discovery part was actually run against the CLI (transcript shows the error-state list command)"
+    }
+  ]
+}

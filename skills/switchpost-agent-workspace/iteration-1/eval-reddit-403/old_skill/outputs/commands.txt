@@ -1,0 +1,22 @@
+./target/release/switchpost doctor
+./target/release/switchpost reddit browse rust --sort hot --limit 5
+./target/release/switchpost providers --json
+./target/release/switchpost mcp-call integrations_list --args '{}'
+./target/release/switchpost reddit user d3vilzwrld
+./target/release/switchpost reddit search "rust"
+./target/release/switchpost reddit inbox
+./target/release/switchpost mcp-call reddit_get_karma --args '{}'
+./target/release/switchpost mcp-call reddit_get_karma --args '{}' --json
+./target/release/switchpost mcp-call reddit_user_info --args '{"username":"d3vilzwrld"}'
+./target/release/switchpost audit
+./target/release/switchpost mcp-call reddit_get_rules --args '{"subreddit":"rust"}'
+./target/release/switchpost mcp-call reddit_get_saved --args '{}'
+./target/release/switchpost mcp-call reddit_post_detail --args '{"post_id":"1e5b14e"}'
+./target/release/switchpost mcp-call reddit_get_comments --args '{"post_id":"1e5b14e","limit":3}'
+./target/release/switchpost mcp-call reddit_browse --args '{"subreddit":"rust","limit":3,"sort":"hot"}'
+./target/release/switchpost mcp-call reddit_list_friends --args '{}'
+./target/release/switchpost reddit browse algotrading --limit 3
+./target/release/switchpost x timeline --count 2
+./target/release/switchpost doctor
+./target/release/switchpost reddit browse rust --limit 3
+./target/release/switchpost feed --provider reddit

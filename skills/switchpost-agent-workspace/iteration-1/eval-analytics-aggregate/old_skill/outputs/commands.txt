@@ -1,0 +1,21 @@
+./target/release/switchpost providers --json
+./target/release/switchpost mcp-call integrations_list --args '{}'
+./target/release/switchpost mcp-call tools_search --args '{"query":"x_get_analytics"}'
+./target/release/switchpost mcp-call x_get_analytics --args '{}'
+./target/release/switchpost analytics get x --days 7 --json
+./target/release/switchpost analytics get x --days 30 --json
+./target/release/switchpost mcp-call x_get_me --args '{}'
+./target/release/switchpost x user _ishanparihar --json
+./target/release/switchpost mcp-call tools_search --args '{"query":"x_user_tweets"}'
+./target/release/switchpost mcp-call x_user_tweets --args '{"user_id":"3301263462"}'
+./target/release/switchpost mcp-call x_user_tweets --args '{"user_id":"3301263462"}' --json
+./target/release/switchpost mcp-call tools_search --args '{"query":"x_get_post_analytics"}'
+./target/release/switchpost mcp-call x_get_post_analytics --args '{"tweet_id":"<latest own tweet id>"}'
+./target/release/switchpost mcp-call tools_search --args '{"query":"x_tweet_detail"}'
+./target/release/switchpost mcp-call x_tweet_detail --args '{"tweet_id":"<latest own tweet id>"}' --json
+./target/release/switchpost mcp-call analytics_get --args '{"provider":"x","days":30}'
+./target/release/switchpost mcp-call analytics_summary --args '{}'
+./target/release/switchpost posts list --state published --limit 10 --json
+./target/release/switchpost posts list --limit 30 --json
+./target/release/switchpost mcp-call feed_analytics --args '{}'
+./target/release/switchpost doctor

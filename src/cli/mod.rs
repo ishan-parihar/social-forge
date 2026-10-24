@@ -663,7 +663,7 @@ pub enum AutomationAction {
 
 #[derive(Subcommand, Debug)]
 pub enum PostsAction {
-    /// List posts (draft, queued, published, errored)
+    /// List posts (draft, queued, published, error)
     List {
         #[arg(long)]
         state: Option<String>,

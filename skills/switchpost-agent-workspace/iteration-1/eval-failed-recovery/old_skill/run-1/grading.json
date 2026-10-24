@@ -1,0 +1,24 @@
+{
+ "expectations": [
+  {
+   "text": "uses --state error",
+   "passed": true,
+   "evidence": "regex: posts list --state erro?r"
+  },
+  {
+   "text": "error_message as failure reason",
+   "passed": true,
+   "evidence": "regex: error_message"
+  },
+  {
+   "text": "fix+retry loop",
+   "passed": true,
+   "evidence": "regex: posts (update|publish|schedule)"
+  }
+ ],
+ "summary": {
+  "pass_rate": 1.0,
+  "passed": 3,
+  "total": 3
+ }
+}

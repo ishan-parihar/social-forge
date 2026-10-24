@@ -1,0 +1,16 @@
+{
+  "eval_id": 2,
+  "eval_name": "reddit-403-diagnosis",
+  "prompt": "I ran a switchpost Reddit read and got: error: API error: Reddit denied the request (raw: 403 Forbidden ... whoa there, pardner! Your request has been blocked due to a network policy). Is my Reddit connection broken? Should I reconnect my account? Investigate with the switchpost CLI at ./target/release/switchpost (read-only) and give me a verdict.",
+  "assertions": [
+    {
+      "text": "Verdict explicitly says the connection/account is NOT broken or that reconnecting is unnecessary"
+    },
+    {
+      "text": "Ran `switchpost doctor` (or an equivalent health check) to support the verdict"
+    },
+    {
+      "text": "Identifies the cause as Reddit's network-policy/datacenter-IP block (not an auth/token failure)"
+    }
+  ]
+}

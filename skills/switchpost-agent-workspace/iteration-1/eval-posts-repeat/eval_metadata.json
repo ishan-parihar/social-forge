@@ -1,0 +1,19 @@
+{
+  "eval_id": 1,
+  "eval_name": "posts-repeat",
+  "prompt": "I have a hypothetical post with id 550e8400-e29b-41d4-a716-446655440000 that I want to repeat every 7 days until Nov 30 2026. Write the EXACT switchpost command(s) you would run. Use ./target/release/switchpost. DRY-RUN ONLY: you may run help and discovery commands, but DO NOT actually create the repeat (the post id is hypothetical). Show the exact JSON args you would pass.",
+  "assertions": [
+    {
+      "text": "The exact JSON args contain the key `end_date` (not `until`)"
+    },
+    {
+      "text": "The end_date value is a FULL RFC3339 timestamp (matches YYYY-MM-DDTHH:MM:SSZ or offset form; a bare YYYY-MM-DD date is a FAIL)"
+    },
+    {
+      "text": "The command uses mcp-call posts_repeat (the tool exists only over MCP)"
+    },
+    {
+      "text": "No repeat was actually created (no successful posts_repeat call in the transcript)"
+    }
+  ]
+}

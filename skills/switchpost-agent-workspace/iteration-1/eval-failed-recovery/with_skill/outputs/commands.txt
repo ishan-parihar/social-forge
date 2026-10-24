@@ -1,0 +1,10 @@
+./target/release/switchpost posts list --state error
+./target/release/switchpost doctor
+./target/release/switchpost posts list --limit 10
+./target/release/switchpost agent --json
+./target/release/switchpost posts get 00000000-0000-0000-0000-000000000000
+./target/release/switchpost posts list --help
+./target/release/switchpost posts --help
+./target/release/switchpost posts get --help
+./target/release/switchpost posts update --help
+./target/release/switchpost doctor --help

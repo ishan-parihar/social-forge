@@ -1,0 +1,35 @@
+./target/release/switchpost agent --json
+./target/release/switchpost providers --json
+./target/release/switchpost doctor
+./target/release/switchpost analytics get x --days 30
+./target/release/switchpost analytics get x --days 90 --json
+./target/release/switchpost analytics get x --days 365 --json
+./target/release/switchpost mcp-call x_get_analytics --args '{}'
+./target/release/switchpost mcp-call x_get_me --args '{}'
+./target/release/switchpost posts list --state published --limit 10
+./target/release/switchpost posts list --limit 30
+./target/release/switchpost import x --count 20
+./target/release/switchpost feed --provider x --json
+./target/release/switchpost feed --json
+./target/release/switchpost mcp-call x_user_tweets --args '{"user_id": "3301263462", "count": 5}'
+./target/release/switchpost mcp-call x_user_tweets --args '{"user_id": "3301263462", "count": 10}' --json
+./target/release/switchpost mcp-call x_search_tweets --args '{"query": "from:_ishanparihar", "count": 10}' --json
+./target/release/switchpost mcp-call x_get_post_analytics --args '{"tweet_id": "<latest-tweet-id>"}'
+./target/release/switchpost mcp-call x_tweet_detail --args '{"tweet_id": "<latest-tweet-id>"}' --json
+./target/release/switchpost mcp-call x_tweet_detail --args '{"tweet_id": "<oct19-tweet-id>"}' --json
+./target/release/switchpost analytics post 94b0dc93-c939-44f7-9dec-6502fe6d37fa
+./target/release/switchpost mcp-call analytics_get_post --args '{"post_id": "94b0dc93-c939-44f7-9dec-6502fe6d37fa"}'
+./target/release/switchpost mcp-call analytics_summary --args '{}'
+./target/release/switchpost mcp-call feed_analytics --args '{}'
+./target/release/switchpost mcp-call feed_analytics --args '{"provider": "x"}'
+./target/release/switchpost streak --tz Asia/Kolkata
+./target/release/switchpost mcp-call x_followers --args '{"user_id": "3301263462", "count": 5}'
+./target/release/switchpost mcp-call tools_search --args '{"query":"analytics"}'
+./target/release/switchpost mcp-call tools_search --args '{"query":"engagement"}'
+./target/release/switchpost mcp-call tools_search --args '{"query":"tweet"}'
+./target/release/switchpost mcp-call tools_search --args '{"query":"timeline"}'
+./target/release/switchpost mcp-call tools_search --args '{"query":"x user tweets profile"}'
+./target/release/switchpost mcp-tools --toolset x --pretty
+./target/release/switchpost mcp-tools --toolset x --json
+jq -r '.posts[] | .provider + " | " + (.created_at // "?") + " | " + ((.text // "")[0:40] | gsub("\n";" "))' (on feed JSON)
+jq engagement extraction on feed / x_user_tweets / x_search_tweets JSON (read-only post-processing)

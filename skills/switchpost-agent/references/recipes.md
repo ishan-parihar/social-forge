@@ -74,7 +74,7 @@ switchpost posts validate "text" --integrations <UUID>       # check limits w/o 
 ## Failed-post recovery
 
 ```bash
-switchpost posts list --state error            # what failed (also: draft|queued|published)
+switchpost posts list --state error            # what failed. STATE VOCAB: draft|queued|published|error — the CLI's help says "errored" but the filter value is `error`, and a wrong value SILENTLY LISTS EVERYTHING (no error)
 switchpost posts get <POST_ID>                  # read error_message for the cause
 switchpost posts publish <POST_ID>              # retry immediately (editor's fixes first: posts update)
 switchpost posts delete <POST_ID>              # or drop it
@@ -153,8 +153,13 @@ switchpost streak --tz America/New_York      # consecutive-day publishing streak
 
 Per-platform analytics (richer: insights, reach, audience) live in the
 platform shims — see [platform-matrices.md](platform-matrices.md).
-The `analytics post` argument is the INTERNAL post UUID (from `posts
-list`), NOT the platform's post id.
+`analytics post` / `analytics_get_post` take the INTERNAL post UUID
+(from `posts list`), NOT the platform's post id and NOT a feed-import
+row's id — an external_posts id returns "Post not found". For an
+imported/external post's engagement, read the platform directly (e.g.
+`mcp-call x_tweet_detail`). NOTE: `x_get_post_analytics` is OAuth-only
+— on a cookie-auth X account it 403s; use the timeline/tweet-detail
+reads instead.
 
 ## Campaigns / signatures / tags / notifications
 

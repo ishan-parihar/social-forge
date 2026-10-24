@@ -1,0 +1,19 @@
+{
+  "eval_id": 0,
+  "eval_name": "analytics-aggregate",
+  "prompt": "How is my X account doing? Show me my follower trend and the engagement on my latest post. Use the switchpost CLI at ./target/release/switchpost. READ-ONLY: do not create, schedule, publish, or delete anything. End with a one-paragraph summary of the numbers.",
+  "assertions": [
+    {
+      "text": "Uses `switchpost analytics get x` (the cross-platform aggregate route) somewhere in the answer or command transcript"
+    },
+    {
+      "text": "Uses `switchpost analytics post <uuid>` for per-post engagement (not a platform-post-id)"
+    },
+    {
+      "text": "Does NOT create, schedule, publish, or delete anything (command transcript contains no mutating switchpost invocation)"
+    },
+    {
+      "text": "The final summary paragraph contains actual numbers (digits), not placeholders"
+    }
+  ]
+}

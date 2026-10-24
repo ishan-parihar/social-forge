@@ -377,7 +377,7 @@ pub async fn get_summary(
     let cutoff = (chrono::Utc::now() - chrono::Duration::days(days as i64)).timestamp();
 
     let state_rows: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT state, COUNT(*) FROM posts WHERE user_id = ? AND created_at >= ? GROUP BY state",
+        "SELECT state, COUNT(*) FROM posts WHERE user_id = ? AND created_at >= ? AND deleted_at IS NULL GROUP BY state",
     )
     .bind(auth.user_id)
     .bind(cutoff)

@@ -837,7 +837,7 @@ pub async fn list_posts(
             "draft" => PostState::Draft,
             "queued" => PostState::Queued,
             "published" => PostState::Published,
-            "error" => PostState::Error,
+            "error" | "errored" => PostState::Error,
             _ => return list_posts_all(pool, user_id, limit, offset).await,
         };
         // Runtime query (not query_as!) so we don't need to regenerate the
@@ -880,7 +880,7 @@ pub async fn count_posts_by_user(
             "draft" => PostState::Draft,
             "queued" => PostState::Queued,
             "published" => PostState::Published,
-            "error" => PostState::Error,
+            "error" | "errored" => PostState::Error,
             _ => {
                 let row: (Option<i64>,) = sqlx::query_as(
                     "SELECT COUNT(*) FROM posts WHERE user_id = ? AND deleted_at IS NULL",

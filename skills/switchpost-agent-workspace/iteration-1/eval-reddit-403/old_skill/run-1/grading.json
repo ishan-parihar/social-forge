@@ -1,0 +1,24 @@
+{
+ "expectations": [
+  {
+   "text": "verdict: not broken",
+   "passed": true,
+   "evidence": "regex: NOT broken|do not reconnect|no reconnect"
+  },
+  {
+   "text": "ran doctor",
+   "passed": true,
+   "evidence": "regex: switchpost doctor"
+  },
+  {
+   "text": "network-policy cause",
+   "passed": true,
+   "evidence": "regex: network polic|datacenter|IP address|WAF|IP block"
+  }
+ ],
+ "summary": {
+  "pass_rate": 1.0,
+  "passed": 3,
+  "total": 3
+ }
+}
