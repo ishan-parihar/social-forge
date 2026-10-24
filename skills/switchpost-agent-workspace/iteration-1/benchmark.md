@@ -1,8 +1,8 @@
 # Skill Benchmark: switchpost-agent
 
-**Model**: <model-name>
+**Model**: aroute/glm-5.3 (headless swarm workers)
 **Date**: 2026-10-24T20:21:39Z
-**Evals**: 0, 1, 2, 3 (3 runs each per configuration)
+**Evals**: 0, 1, 2, 3 (1 run each per configuration — n=1, point estimates)
 
 ## Summary
 

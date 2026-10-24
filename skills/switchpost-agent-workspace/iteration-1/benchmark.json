@@ -11,7 +11,13 @@
       2,
       3
     ],
-    "runs_per_configuration": 3
+    "runs_per_configuration": 1,
+    "timing_source": "approximate (observed swarm status stats, not per-task notifications)",
+    "notes": [
+      "Single run per configuration (n=1): pass rates are point estimates, not means over 3 runs.",
+      "Timing/token data approximate from observed swarm stats.",
+      "old_skill pass_rate 79% is a weighted mean over evals with different assertion counts (9.5/12)."
+    ]
   },
   "runs": [
     {

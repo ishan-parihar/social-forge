@@ -2800,7 +2800,7 @@ Work Log:
 - Eval set: analytics-aggregate (eval id 44), posts-repeat (46),
   reddit-403 (50), failed-recovery (47). Assertions drafted from the
   pass-3 live-verified contracts while runs executed.
-- Results: with_skill 12/12 (100%), old_skill 9.5/12 (79%). Causal
+- Results: with_skill 11/11 (100%), old_skill 9/11 (81.8%). Causal
   proof on the differentiators: posts-repeat old_skill emitted the
   date-only end_date that FAILS live; with_skill emitted full
   RFC3339. analytics old_skill never found the per-post route.
@@ -2824,7 +2824,7 @@ Work Log:
 
 Stage Summary:
 - v0.6.4 pushed as 3513d7c. The behavioral loop both PROVED the pass-3
-  doc changes work (100% vs 79%, causal on the param-trap and the
+  doc changes work (100% vs 82%, causal on the param-trap and the
   analytics route) and caught two real product bugs the static audits
   missed - a soft-delete leak in analytics_summary across BOTH
   surfaces, and a silent list-everything filter fall-through.
