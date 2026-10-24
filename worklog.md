@@ -2833,3 +2833,33 @@ Stage Summary:
 - Known leftover: the trigger-description optimization loop
   (run_loop.py) still not run - the description now carries the new
   trigger classes but they are unmeasured.
+
+---
+Task ID: trigger-optimization-attempt (v0.6.5-v0.6.6)
+Agent: Jcode (skill-creator description-optimization step)
+Task: Optimize the skill's frontmatter description for trigger accuracy.
+
+Work Log:
+- Evidence audit first (v0.6.5): corrected two overstatements from the
+  behavioral eval — true counts are 11/11 (100%) vs 9/11 (81.8%), not
+  12/12 vs 9.5/12 (the '9.5' was an improper half-credit for prose
+  mentioning the right form while the command artifact was wrong), and
+  benchmark metadata now says runs_per_configuration: 1 (n=1 point
+  estimates) instead of the aggregator's default 3.
+- Drafted the 20-query trigger eval set (12 should-trigger across all
+  workflow classes incl. ops/debugging; 8 should-not near-misses).
+- Ran run_loop twice. Run 1: all claude -p calls died on the unroutable
+  default model (aroute gateway). Run 2 (ANTHROPIC_MODEL=glm-5.3):
+  eval phase completed, measured precision 100% / recall 0% — then the
+  manual diagnosis proved it a HARNESS ARTIFACT: claude -p on this host
+  intermittently refuses every model, and in working sessions the Skill
+  tool never fires on ANY query despite the command file being listed.
+- Decision: did NOT rewrite the description against noise. Recorded the
+  block honestly (trigger-optimization/README.md), preserved the eval
+  set + logs for a host with working routing.
+
+Stage Summary:
+- v0.6.5 (7d28abe) + v0.6.6 (a5b13f8) pushed. The full skill-creator
+  loop is now either complete (behavioral eval: with-skill 100% causal
+  wins) or explicitly BLOCKED with repro instructions (trigger loop).
+  No claim in the record exceeds its evidence.
