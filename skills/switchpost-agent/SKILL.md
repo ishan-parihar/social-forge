@@ -166,7 +166,7 @@ NOT filtered — it names one tool and pays no list cost.
 | `tool not found` (mcp-call) | Tool name typo | `mcp-tools` to list; `tools_search` to find by keyword |
 | `No X/Twitter integration found` etc. | Provider not connected | `switchpost connect <provider>` / `doctor` for health |
 | `csrf_origin_mismatch` (REST only) | Server port ≠ FRONTEND_URL port | run `serve --port` matching FRONTEND_URL, or fix the env |
-| `Rate limit exceeded` / HTTP 429 / `X API rate limit` | Provider quota (X: cookie-path hits the account-level cap; OAuth path is pay-per-post, ~$0.015 each) | wait for reset; `doctor` shows provider health; scheduler retries with exponential backoff automatically |
+| `Rate limit exceeded` / HTTP 429 / `X API rate limit` | Provider quota (X: cookie-path hits the account-level cap; OAuth path is billed per post by X) | wait for reset; `doctor` shows provider health; scheduler retries with exponential backoff automatically |
 | `Token expired` | OAuth token expired | `switchpost connect <provider>` again; auto-refresh usually handles it |
 | `unknown flag` / `invalid value` | CLI syntax | `switchpost <cmd> --help` |
 | `redirect_uri_mismatch` (connect) | Provider app's registered URI differs | register the `redirect_uri` the CLI printed in the provider's developer console |

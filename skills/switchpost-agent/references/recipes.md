@@ -61,8 +61,9 @@ switchpost autopost --slides slides.json --platforms x --content "Weekly notes" 
 
 ```bash
 switchpost posts find-slot                       # next free slot (all accounts)
-switchpost posts find-slot --integration <UUID>  # for one account
+switchpost posts find-slot --integration <UUID>  # for one account → {ok, scheduled_at, integration_id}
 switchpost posts create "text" --integrations <UUID> --schedule "2026-11-01T09:00:00Z"
+switchpost posts get <POST_ID>                   # one post: id, content, state, integration_id, scheduled_at, …
 switchpost posts schedule <POST_ID> "2026-11-02T09:00:00Z"    # reschedule
 switchpost posts update <POST_ID> --content "new text"        # omitted fields kept
 switchpost posts tags <POST_ID> <TAG_ID1> <TAG_ID2>           # replace tags (none = clear)
@@ -104,6 +105,7 @@ switchpost automation delete <RULE_ID>
 ```bash
 switchpost webhooks create https://example.com/hook --name "my-hook"
 switchpost webhooks list
+switchpost webhooks get <WEBHOOK_ID>                # one hook: id, name, url, is_active, created_at
 switchpost webhooks test <WEBHOOK_ID>
 switchpost webhooks update <WEBHOOK_ID>
 switchpost webhooks delete <WEBHOOK_ID>
@@ -137,6 +139,7 @@ switchpost streak --tz America/New_York
 
 switchpost tags create "work" --color "#ff0000"
 switchpost tags list
+switchpost tags get <TAG_ID>                     # one tag: id, name, color, created_at, updated_at
 switchpost tags update <TAG_ID>
 switchpost tags delete <TAG_ID>
 
@@ -154,6 +157,9 @@ switchpost media upload https://example.com/image.png    # from URL
 switchpost media upload-batch ./a.jpg ./b.jpg
 switchpost media list --limit 20
 switchpost media download <URL> --output ./out.jpg
+# No CLI delete subcommand — use the MCP bridge. NOTE the param is
+# media_id (NOT id, unlike most tools):
+switchpost mcp-call media_delete --args '{"media_id":"<UUID>"}'
 ```
 
 ## UTM tagging

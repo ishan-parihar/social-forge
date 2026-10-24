@@ -163,7 +163,8 @@ pub enum Command {
     ///
     /// The slide specs are Deckmill's own contract: a JSON array of
     /// `{"type": "<slide type>", "params": {...}}` (run
-    /// `deckmill slide-info <type>` for a type's params).
+    /// `deckmill slide-info <type>` for a type's params). The
+    /// renderer binary is found on PATH, or via DECKMILL_BIN.
     Autopost(AutopostOptions),
 
     /// Print what this CLI can do for an AI agent: every command, the

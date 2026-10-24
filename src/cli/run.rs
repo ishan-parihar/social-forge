@@ -4875,6 +4875,10 @@ mod tests {
     // print from and fails if it stops honoring the flags.
     #[test]
     fn platform_shim_output_honors_json_flag() {
+        // OUTPUT_FORMAT is a process-global atomic and lib tests run in
+        // parallel threads — snapshot and restore so this test cannot
+        // change what the other format tests observe mid-run.
+        let saved = current_output_format();
         set_output_format(true, false);
         let ok_text = crate::cli::platforms::render_emit(&Ok(serde_json::json!({"a": 1})));
         assert!(ok_text.starts_with('{'), "--json must reach platform shims, got: {ok_text}");
@@ -4886,6 +4890,7 @@ mod tests {
         set_output_format(false, false);
         let toon_text = crate::cli::platforms::render_emit(&Ok(serde_json::json!({"a": 1})));
         assert!(!toon_text.starts_with('{'), "default must stay TOON");
+        OUTPUT_FORMAT.store(saved, std::sync::atomic::Ordering::Relaxed);
     }
 
     // An OAuth provider's auth_url must be the PROVIDER's own consent

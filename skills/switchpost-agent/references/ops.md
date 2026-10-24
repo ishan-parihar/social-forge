@@ -10,6 +10,9 @@ switchpost connect <provider> --wait       # OAuth: prints auth_url, polls until
 switchpost connect <provider> --browser    # drives the consent page in the operator's signed-in browser (browseros-neo); works WITHOUT the server running
 switchpost connect-all                     # cookie-based providers (X, Reddit) all at once
 switchpost setup                           # full guided onboarding
+switchpost integrations disable <UUID>     # pause publishing (keeps tokens + posts); INTEGRATION UUID, not provider name
+switchpost integrations enable <UUID>       # resume a disabled integration
+switchpost audit                           # shows disabled integrations + writer posture
 ```
 
 `--wait` details: prints `{status, auth_url, redirect_uri}`. If the platform
@@ -45,7 +48,7 @@ switchpost config set <KEY> <VALUE>        # writes ~/.switchpost/.env (e.g. BLU
 switchpost config get <KEY>
 switchpost config list                     # redacts secrets
 switchpost config reset-password           # resets the WebUI APP_PASSWORD
-switchpost init                            # create ~/.switchpost/ with default .env
+switchpost init                            # create ~/.switchpost/ with default .env (TOP-LEVEL, not `config init`)
 ```
 
 Env precedence: the repo's `.env` (CWD) wins over `~/.switchpost/.env` for
@@ -54,7 +57,8 @@ keys defined in both.
 ## Install
 
 ```bash
-curl -fsSL https://switchpost.dev/install.sh | sh    # pre-built binary + systemd unit
+# pre-built binary + systemd unit (repo: ishan-parihar/social-forge):
+curl -fsSL https://raw.githubusercontent.com/ishan-parihar/social-forge/master/scripts/install.sh | bash
 # or from source: cargo build --release, then make install-skill for the agent skill
 ```
 

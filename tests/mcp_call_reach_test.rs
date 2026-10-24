@@ -89,3 +89,65 @@ fn an_unknown_tool_still_reports_unknown() {
         "an unknown tool must be reported as unknown: {out}"
     );
 }
+
+// ── The --json/--pretty flags must reach mcp-call's output ──────
+//
+// mcp-call used to print the raw tool text with `print!`, bypassing
+// the global format flags entirely — the same hardcode the platform
+// shims' emit_result had. These drive the REAL binary on a DB-only
+// tool (integrations_list: no provider calls, deterministic).
+
+fn mcp_call_env(args: &[&str]) -> std::process::Output {
+    // A scratch DB so the test never reads the operator's data. The
+    // fresh DB has no user row until the binary initializes it — the
+    // cheapest reliable way to seed one is to boot `serve` briefly
+    // (its startup path calls ensure_local_user + migrations) and
+    // kill it as soon as it prints the listening line.
+    let db = std::env::temp_dir().join(format!("mcpfmt-{}.db", std::process::id()));
+    let _ = std::fs::remove_file(&db);
+    let url = format!("sqlite://{}?mode=rwc", db.display());
+    let mut serve = std::process::Command::new(env!("CARGO_BIN_EXE_switchpost"))
+        .args(["serve", "--port", "47891"])
+        .env("DATABASE_URL", &url)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("serve must spawn");
+    // Give it a moment to run migrations + seed the user, then kill.
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    let _ = serve.kill();
+    let _ = serve.wait();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_switchpost"))
+        .args(args)
+        .env("DATABASE_URL", &url)
+        .output()
+        .expect("the binary must run");
+    let _ = std::fs::remove_file(&db);
+    out
+}
+
+#[test]
+fn json_flag_makes_mcp_call_emit_parseable_json() {
+    let out = mcp_call_env(&["--json", "mcp-call", "integrations_list", "--args", "{}"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let parsed = serde_json::from_str::<serde_json::Value>(stdout.trim())
+        .unwrap_or_else(|e| panic!("--json output must parse as JSON ({e}): {stdout}"));
+    assert!(
+        parsed.get("integrations").is_some(),
+        "the tool payload must survive the render: {stdout}"
+    );
+}
+
+#[test]
+fn mcp_call_defaults_to_toon_not_json() {
+    let out = mcp_call_env(&["mcp-call", "integrations_list", "--args", "{}"]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.trim_start().starts_with('{'),
+        "default must stay TOON (an agent asking for JSON passes --json): {stdout}"
+    );
+    assert!(
+        stdout.contains("integrations"),
+        "the payload keys must still be present in TOON: {stdout}"
+    );
+}

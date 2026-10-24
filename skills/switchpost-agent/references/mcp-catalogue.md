@@ -37,9 +37,10 @@ tool's description; its `set` field is the toolset name.
 | `hn` | hn_ (Hashnode) |
 | `ai` | ai_ |
 
-Live-session budgeting: boot default advertises `core` only (~40 tools).
-`SWITCHPOST_TOOLSETS=x,reddit` pre-enables; `tools_enable {"sets":["x"]}`
-adds at runtime; `tools_search` always searches all 389.
+Live-session budgeting: boot default advertises `core` only (67 tools
+as of this build; `switchpost mcp-tools --toolset core` for the exact
+list). `SWITCHPOST_TOOLSETS=x,reddit` pre-enables; `tools_enable`
+{"sets":["x"]} adds at runtime; `tools_search` always searches all 389.
 
 ## Core (cross-platform lifecycle)
 
@@ -51,12 +52,16 @@ adds at runtime; `tools_search` always searches all 389.
   `posts_delete` (+ `delete_from_platform`), `posts_schedule`,
   `posts_reschedule` (+ `move_group`), `posts_unschedule`, `posts_publish`,
   `posts_find_slot`, `posts_best_times`, `posts_stage` (v2), `posts_thread`,
-  `posts_group`, `posts_validate`, `posts_repeat`
+  `posts_group`, `posts_validate`, `posts_repeat`, `posts_set_tags`
+  (replace a post's tags; CLI: `posts tags <ID> <TAG…>`),
+  `posts_create_carousel` (≥2 media URLs, one integration)
 - **Media**: `posts_media_upload`, `posts_media_upload_from_path`,
   `posts_media_upload_batch`, `posts_media_upload_from_url`,
-  `posts_media_list`
+  `posts_media_list`, `media_delete` (DB row + file on disk)
 - **Feed/calendar/analytics**: `feed_import`, `feed_list`, `calendar_get`,
-  `analytics_get`, `analytics_get_post`
+  `analytics_get`, `analytics_get_post`, `analytics_summary`
+  (aggregate published/failed/draft/queued counts),
+  `feed_analytics` (cross-feed engagement totals)
 - **Tags**: `tag_create`, `tag_list`, `tag_get`, `tag_update`, `tag_delete`
 - **Notifications**: `notif_create`, `notif_list`, `notif_mark_read`,
   `notif_mark_all_read`
@@ -64,8 +69,13 @@ adds at runtime; `tools_search` always searches all 389.
   `comment_resolve`, `send_dm`, `get_dm_messages`, `list_dm_conversations`
 - **Inbox**: `inbox_list`, `inbox_reply`
 - **Sets/templates**: `set_create`, `set_list`, `set_delete`
-- **Setup**: `setup_config_get`, `setup_config_list`
-- **Signatures**: `signatures_create/list/update/delete`
+- **Setup**: `setup_config_get`, `setup_config_list`, `setup_config_set`
+  (writes ~/.switchpost/.env), `setup_guide` (per-provider credential
+  requirements), `setup_import_cookies` (Chrome/Brave/Firefox auto-detect for
+  X and Reddit), `setup_status` (DB, user, connected providers, next actions)
+- **Signatures**: `signatures_create`, `signatures_list`, `signatures_update`,
+  `signatures_delete` (CLI parity: the signatures CLI family exposes the same
+  list, create, update and delete actions)
 - **Streak**: `streak_get`
 - **RSS**: `rss_feed_create`, `rss_feed_list`, `rss_feed_items`,
   `rss_feed_poll`, `rss_feed_toggle`, `rss_feed_delete`

@@ -249,7 +249,11 @@ async fn run_deckmill(bin: &str, args: &[&str]) -> Result<()> {
         .args(args)
         .output()
         .await
-        .with_context(|| format!("Failed to run '{bin}' — is it on PATH?"))?;
+        .with_context(|| {
+            format!(
+                "Failed to run '{bin}' — is it on PATH? Set DECKMILL_BIN=/path/to/deckmill to point at the binary"
+            )
+        })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

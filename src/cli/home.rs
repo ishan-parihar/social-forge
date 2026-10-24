@@ -23,7 +23,7 @@ pub fn handle_home() {
     // AXI §10: Tool identity header
     println!("bin: {}", bin_path);
     println!(
-        "description: Post to 21 social platforms from a single CLI with auto content-splitting"
+        "description: Post to 26 social platforms from a single CLI with auto content-splitting"
     );
     println!();
 
@@ -50,6 +50,10 @@ pub fn handle_home() {
         "medium",
         "devto",
         "skool",
+        "linkedin-page",
+        "instagram-standalone",
+        "google",
+        "google_my_business",
     ];
 
     println!("platforms[{}]{{name}}:", platforms.len());

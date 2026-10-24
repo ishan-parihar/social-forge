@@ -20,6 +20,11 @@ switchpost x dm-list
 switchpost x dm-messages <CONVERSATION_ID>
 ```
 
+**Empty-shape trap**: `x user <bad-username>` and `x delete <bad-tweet-id>`
+do NOT error — they return exit 0 with an empty-shaped `data:` object
+(`id: ""`, `name: ""` / empty `tweet_results`). A missing tweet/user
+looks like success. Check the payload's `id` before trusting the result.
+
 ## Reddit (cookie auth — richest access)
 
 ```bash
