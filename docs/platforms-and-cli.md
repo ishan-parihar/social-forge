@@ -36,7 +36,7 @@ double-publishing. Short CLI reads (`providers`, `posts list`, `audit`) never
 take the lock. `switchpost audit` reports the live `journal_mode` /
 `busy_timeout` alongside the disabled-integration inventory.
 
-Full detail: [`docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md`](docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md).
+Full detail: [`docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md`](planning/TARGETING_AND_WRITER_DISCIPLINE.md).
 
 ### Logging a provider in (for AI agents)
 
@@ -317,6 +317,6 @@ switchpost/
 └── Cargo.toml               # Rust dependencies
 ```
 
-Planning, audit, and decision records are indexed in [`docs/planning/README.md`](docs/planning/README.md).
+Planning, audit, and decision records are indexed in [`docs/planning/README.md`](planning/README.md).
 
 ---
