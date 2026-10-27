@@ -2,6 +2,15 @@
 
 Moved out of the README to keep it short. Content is unchanged.
 
+## Contents
+
+- [Targeting: `--platforms` collisions and `--integrations`](#targeting---platforms-collisions-and---integrations)
+- [Single-writer rule](#single-writer-rule)
+- [Logging a provider in (for AI agents)](#logging-a-provider-in-for-ai-agents)
+- [Toolsets and the shell path](#toolsets-and-the-shell-path)
+- [Supported Platforms](#supported-platforms)
+- [Project Structure](#project-structure)
+
 ### Targeting: `--platforms` collisions and `--integrations`
 
 Two registered providers are a strict prefix of another, so platform **names are
