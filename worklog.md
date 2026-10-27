@@ -2872,3 +2872,4 @@ Stage Summary:
   loop is now either complete (behavioral eval: with-skill 100% causal
   wins) or explicitly BLOCKED with repro instructions (trigger loop).
   No claim in the record exceeds its evidence.
+- **2026-10-27T14:29** — worklog line edits on record: the 4 removed lines (commits 7d28abe, 3e21cbe, 4971851) were the validation rounds' own evidence corrections - the v0.6.5/v0.6.7 sessions re-verified every claim and corrected two overstated entries (behavioral-eval counts 11/11 vs 12/12; mutation wording narrowed to PLATFORM mutations with the two pre-write-error probes named). The pre-correction text remains in git history; doctor's append-only window holds these until 10 commits pass.
