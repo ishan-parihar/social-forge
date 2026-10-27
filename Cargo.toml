@@ -1,6 +1,6 @@
 [package]
 name = "switchpost"
-version = "0.3.0"
+version = "0.7.0"
 edition = "2021"
 description = "Social posting infrastructure that runs on your own hardware — one Rust binary, 26 platforms, driven by CLI, REST, or MCP"
 authors = ["Ishan Parihar"]
