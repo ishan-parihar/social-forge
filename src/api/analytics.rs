@@ -1292,14 +1292,17 @@ mod tests {
             day_with_post.likes, 5,
             "the edge post's engagement is IN the sparkline, not dropped"
         );
-        // The series ends at the zone's TODAY (the window is "up to
-        // now"), and starts at the zone date of the cutoff - every day
-        // between, zeros included.
+        // The series ends at the earlier of the requested window's
+        // inclusive limit and the zone's TODAY, and starts at the zone
+        // date of the cutoff - every day between, zeros included.
         let last = series.last().unwrap();
+        let first_day = super::zone_date(cutoff, Some(ny));
+        let window_limit = first_day + chrono::Duration::days(7);
+        let today = super::zone_date(Utc::now(), Some(ny));
+        let expected_last = window_limit.min(today).format("%Y-%m-%d").to_string();
         assert_eq!(
-            last.date,
-            super::zone_date(Utc::now(), Some(ny)).format("%Y-%m-%d").to_string(),
-            "the last day is the zone's today, not UTC's"
+            last.date, expected_last,
+            "the last day respects both the requested window and the zone's today"
         );
     }
 }

@@ -4,6 +4,7 @@ pub mod home;
 pub mod oauth_browser;
 pub mod platforms;
 pub mod run;
+pub mod update;
 pub use run::run_cli;
 
 use clap::{Parser, Subcommand};
@@ -83,6 +84,10 @@ pub struct AutopostOptions {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    /// Check for and install a verified release update (alias: upgrade)
+    #[command(alias = "upgrade")]
+    Update(update::UpdateArgs),
+
     /// Start the HTTP REST server
     Serve {
         /// Port to listen on. `APP_URL` and `FRONTEND_URL` must use this port,

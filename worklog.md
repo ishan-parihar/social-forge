@@ -2874,3 +2874,23 @@ Stage Summary:
   No claim in the record exceeds its evidence.
 - **2026-10-27T14:29** — worklog line edits on record: the 4 removed lines (commits 7d28abe, 3e21cbe, 4971851) were the validation rounds' own evidence corrections - the v0.6.5/v0.6.7 sessions re-verified every claim and corrected two overstated entries (behavioral-eval counts 11/11 vs 12/12; mutation wording narrowed to PLATFORM mutations with the two pre-write-error probes named). The pre-correction text remains in git history; doctor's append-only window holds these until 10 commits pass.
 - **2026-10-27T16:45** — note
+
+---
+Task ID: native-update-cli
+Agent: Codex
+Task: Add a verified release updater to the Switchpost CLI and installation path.
+
+Work Log:
+- Added `switchpost update` with `upgrade` alias, stable/preview channels, pinned versions, downgrade protection, JSON reporting, bounded download, HTTPS host allowlist, SHA-256 verification, candidate version probe, atomic replacement, and rollback.
+- Added optional `--restart` handling for an active `switchpost.service`; failed restart restores the previous executable.
+- Updated the release workflow to attach `SHA256SUMS`; updated the installer to verify the selected asset and write an ownership receipt.
+- Documented the migration requirement for older installs and the current checksum trust boundary.
+- Corrected the analytics window test's stale fixed-date expectation so it matches the bounded window behavior.
+
+Stage Summary:
+- `cargo check --lib --bin switchpost`, `cargo test --lib` (521 passed), `cd frontend && pnpm build`, and `pnpm exec svelte-check --threshold error` passed.
+- The updater module passed `rustfmt --check --edition 2021`; `git diff --check` passed.
+- `cargo fmt --all -- --check` still reports pre-existing formatting differences across unrelated workspace files; those files were left untouched.
+- The release checksum remains transitional until the suite-wide TUF metadata service and offline signing root are available. Windows self-replacement is not supported by this updater.
+
+---

@@ -220,7 +220,23 @@ switchpost --help                      # All commands
 switchpost x --help                    # X/Twitter operations
 switchpost reddit --help               # Reddit operations
 switchpost reddit mod --help           # Reddit moderation
+switchpost update --check              # Check for a verified stable release
+switchpost update                      # Install the latest stable release
+switchpost --json update               # Emit update status as JSON
 ```
+
+`switchpost update` is available for binaries installed by `scripts/install.sh`.
+It verifies the matching release asset against `SHA256SUMS`, probes the staged binary,
+and atomically replaces the executable. Older installs without an ownership receipt
+must rerun `scripts/install.sh` once before using self-update. It does not restart a
+running process unless `--restart` is supplied; that flag restarts an active
+`switchpost.service` and rolls back the executable if the service does not return to
+active. `--check`, `--channel
+preview`, `--version VERSION`, and `--allow-downgrade` are supported. Cargo or other
+package-manager installs must be updated by their owning manager.
+
+The GitHub checksum path is transitional while the suite's shared TUF metadata service
+is unavailable; it verifies byte consistency, not publisher identity.
 
 ### Examples
 

@@ -137,6 +137,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 rand = "0.8"
 base64 = { version = "0.22", features = ["std"] }
 sha2 = "0.10"
+semver = "1"
 # HMAC-SHA256 for AWS SigV4 request signing (S3/R2 media storage).
 # Hand-rolled rather than aws-sdk-s3: we need PUT/GET/DELETE + signing only,
 # and this keeps the dep tree flat.

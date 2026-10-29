@@ -157,6 +157,7 @@ fi
 log "Version: ${VERSION}"
 
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARTIFACT}"
+SUMS_URL="https://github.com/${REPO}/releases/download/${VERSION}/SHA256SUMS"
 
 # ── Create directory structure ───────────────────────────────────────────────
 head "Creating directories..."
@@ -179,19 +180,38 @@ USER_ENV="${HOME}/.switchpost/.env"
 head "Downloading binary..."
 info "URL: ${DOWNLOAD_URL}"
 TMP_BIN="$(mktemp)"
-trap 'rm -f "${TMP_BIN}"' EXIT
+trap 'rm -f "${TMP_BIN}" "${TMP_SUMS:-}"' EXIT
 
 HTTP_CODE=$(curl -fsSL -w '%{http_code}' -o "${TMP_BIN}" "${DOWNLOAD_URL}" 2>/dev/null || echo "000")
 if [ "$HTTP_CODE" != "200" ]; then
     rm -f "${TMP_BIN}"
     err "Download failed (HTTP ${HTTP_CODE}). Check that release ${VERSION} exists: https://github.com/${REPO}/releases"
 fi
+TMP_SUMS="$(mktemp)"
+curl -fsSL --max-time 30 -o "$TMP_SUMS" "$SUMS_URL" \
+  || err "Release $VERSION has no SHA256SUMS asset; refusing an unverified binary."
+EXPECTED=$(awk -v f="$ARTIFACT" '$2 == f || $2 == "*"f { print $1; exit }' "$TMP_SUMS")
+[ -n "$EXPECTED" ] || err "SHA256SUMS has no entry for $ARTIFACT; refusing an unverified binary."
+if command -v sha256sum >/dev/null 2>&1; then
+    ACTUAL=$(sha256sum "$TMP_BIN" | awk '{print $1}')
+elif command -v shasum >/dev/null 2>&1; then
+    ACTUAL=$(shasum -a 256 "$TMP_BIN" | awk '{print $1}')
+else
+    err "Install sha256sum or shasum to verify the release binary."
+fi
+[ "$EXPECTED" = "$ACTUAL" ] || err "SHA-256 mismatch for $ARTIFACT; nothing was installed."
 chmod +x "${TMP_BIN}"
 log "Downloaded ${ARTIFACT} ($(du -sh "${TMP_BIN}" | cut -f1))"
 
 # ── Install binary ────────────────────────────────────────────────────────────
 $SUDO mkdir -p "${BIN_DIR}"
 $SUDO install -m 755 "${TMP_BIN}" "${BIN_DIR}/${APP_NAME}"
+ORIGIN_TMP="$(mktemp)"
+cat > "$ORIGIN_TMP" <<EOF
+{"schema":1,"application":"switchpost","source":"release-binary","channel":"stable","target":"$ARTIFACT","version":"$VERSION","update_origin":"https://api.github.com/repos/$REPO"}
+EOF
+$SUDO install -m 644 "$ORIGIN_TMP" "${BIN_DIR}/${APP_NAME}.install-origin.json"
+rm -f "$ORIGIN_TMP"
 
 # PATH membership check — system dirs get a note, never a user-rc edit
 case ":$PATH:" in

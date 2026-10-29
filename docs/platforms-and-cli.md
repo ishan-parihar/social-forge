@@ -8,6 +8,7 @@ Moved out of the README to keep it short. Content is unchanged.
 - [Single-writer rule](#single-writer-rule)
 - [Logging a provider in (for AI agents)](#logging-a-provider-in-for-ai-agents)
 - [Toolsets and the shell path](#toolsets-and-the-shell-path)
+- [Updating the binary](#updating-the-binary)
 - [Supported Platforms](#supported-platforms)
 - [Project Structure](#project-structure)
 
@@ -227,6 +228,27 @@ switchpost agent --pretty
 ```
 
 ---
+
+### Updating the binary
+
+```bash
+switchpost update --check
+switchpost update
+switchpost --json update
+switchpost update --restart
+```
+
+The command works for direct release binaries installed by `scripts/install.sh`;
+older installs without an ownership receipt must rerun that script once.
+It selects the matching Linux or macOS release asset, verifies `SHA256SUMS`, probes
+the staged binary, and atomically replaces the executable. `--restart` only restarts
+an active `switchpost.service`; a failed service restart restores the previous binary.
+Without that flag, active processes continue on the old executable image. `--version`
+pins a release, `--channel preview` selects prereleases, and downgrades require
+`--allow-downgrade`. Package-manager installations remain owned by their package manager.
+
+Checksums are a transitional verification path; the suite-wide TUF metadata service
+and offline signing root have not been provisioned yet.
 
 ### Supported Platforms
 

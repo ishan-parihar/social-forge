@@ -4630,6 +4630,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             ));
         }
         Command::Init => return handle_init(),
+        Command::Update(options) => return crate::cli::update::run(options, cli.json).await,
         Command::Service { action } => {
             // No AppState needed — this manages the systemd unit only.
             return match action {
@@ -4649,6 +4650,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
 
     match cli.command {
         Command::Init
+        | Command::Update(_)
         | Command::Config { .. }
         | Command::Service { .. }
         | Command::SplitPreview { .. }
