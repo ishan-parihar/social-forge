@@ -847,3 +847,62 @@ async fn test_linkedin_db_schema_support() {
         println!("   Constraint: {}", name);
     }
 }
+
+/// The `r_member_social` opt-in must work in BOTH directions.
+///
+/// `test_linkedin_scopes_correct` above pins the OFF direction: the scope is
+/// absent by default. Nothing pinned the ON direction, and an opt-in whose
+/// gate never opens is indistinguishable from a shipped feature — the flag
+/// is documented in `.env.example`, the operator sets it, and every read
+/// still 403s. The condition here was a single `== Some("1")` with a
+/// misspelled variable name at one remove from being untestable, so this
+/// asserts the flag actually adds the scope rather than asserting it exists.
+#[tokio::test]
+async fn test_linkedin_member_social_opt_in_adds_the_scope() {
+    let config = get_config();
+    let flag = "LINKEDIN_ENABLE_MEMBER_SOCIAL_READ";
+
+    // ─── OFF (the default the rest of the suite assumes) ───
+    std::env::remove_var(flag);
+    let off = LinkedInProvider::new(&config).scopes();
+    assert!(
+        !off.contains(&"r_member_social".into()),
+        "flag unset: r_member_social must be absent. Found: {off:?}"
+    );
+    let off_len = off.len();
+
+    // ─── ON (the documented switch) ───
+    std::env::set_var(flag, "1");
+    let on = LinkedInProvider::new(&config).scopes();
+    assert!(
+        on.contains(&"r_member_social".into()),
+        "flag set to 1: r_member_social must be added, otherwise the \
+         opt-in is a dead switch and LinkedIn reads stay broken for every \
+         operator who set it. Found: {on:?}"
+    );
+    // Exactly one scope more, not a duplicate and not the whole set again.
+    assert_eq!(
+        on.len(),
+        off_len + 1,
+        "turning the flag on must add exactly one scope (off had {off_len:?}, \
+         on has {on:?})"
+    );
+    // The publish four must be untouched, so enabling reads never costs a write.
+    for s in ["openid", "profile", "email", "w_member_social"] {
+        assert!(on.contains(&s.into()), "flag on must still request {s}: {on:?}");
+    }
+
+    // ─── Values that are NOT the switch ───
+    // A cookie, not a boolean: "true"/"yes"/"1 " must not silently enable it,
+    // because the operator who typed `true` would believe the feature is on.
+    for bogus in ["true", "yes", "0", "", "2", " TRUE"] {
+        std::env::set_var(flag, bogus);
+        let scopes = LinkedInProvider::new(&config).scopes();
+        assert!(
+            !scopes.contains(&"r_member_social".into()),
+            "flag = {bogus:?} must NOT enable r_member_social; only '1' does"
+        );
+    }
+
+    std::env::remove_var(flag);
+}
