@@ -620,7 +620,35 @@ impl SocialProvider for LinkedInProvider {
             .form(&params)
             .send()
             .await?;
-        let json: serde_json::Value = resp.json().await?;
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+
+        // ─── Why this path checks the status when the others could skip ──
+        // This is the ONE call whose failure is reported to the founder at the
+        // moment of a failed connect, and its errors are the ones that name a
+        // fix. A redirect_uri mismatch answers 400 with an `error_description`
+        // that says exactly which URI was wrong. Parsing that body straight
+        // into a JSON value and then reporting "Missing access_token" threw
+        // it away, so the founder saw the same opaque message for a typo'd
+        // client secret, an expired code AND a redirect_uri mismatch - three
+        // different fixes behind one sentence. That is the LinkedIn "login
+        // backend error" report: not a wrong answer, a non-answer.
+        // Reddit's exchange has always done this; compare
+        // `social::reddit`'s equivalent.
+        if !status.is_success() {
+            return Err(ProviderError::Api(format!(
+                "LinkedIn token exchange failed (HTTP {status}): {body}"
+            )));
+        }
+
+        // A 200 with a body we cannot parse is a different failure from a
+        // non-2xx, and it used to surface as a JSON decode panic-ish string
+        // from `.json()` inside the `?` above. Name it instead.
+        let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+            ProviderError::Api(format!(
+                "LinkedIn token response was not JSON ({e}). Body: {body}"
+            ))
+        })?;
 
         let access_token = json["access_token"]
             .as_str()
@@ -673,7 +701,23 @@ impl SocialProvider for LinkedInProvider {
             .form(&params)
             .send()
             .await?;
-        let json: serde_json::Value = resp.json().await?;
+        // Same shape as `exchange_code` above, and for the same reason: a
+        // rotating-refresh failure used to arrive as "Missing access_token",
+        // which is the message the scheduler surfaces when a token dies
+        // mid-flight. LinkedIn answers a revoked refresh token with a body
+        // that says so; name the status and quote it.
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(ProviderError::Api(format!(
+                "LinkedIn token refresh failed (HTTP {status}): {body}"
+            )));
+        }
+        let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+            ProviderError::Api(format!(
+                "LinkedIn token refresh response was not JSON ({e}). Body: {body}"
+            ))
+        })?;
 
         let access_token = json["access_token"]
             .as_str()

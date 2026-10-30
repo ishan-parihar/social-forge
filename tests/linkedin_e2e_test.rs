@@ -906,3 +906,70 @@ async fn test_linkedin_member_social_opt_in_adds_the_scope() {
 
     std::env::remove_var(flag);
 }
+
+/// The LinkedIn token exchange must report WHY LinkedIn refused, not that
+/// a field was missing.
+///
+/// `exchange_code` and `refresh_token` used to do `resp.json().await?` with
+/// no status check and then report `Missing access_token` when the body had
+/// none. That collapsed three different, actionable failures into one
+/// non-answer:
+///
+///   - a redirect_uri mismatch (400 + an `error_description` that NAMES the
+///     URI the app must register - the fix the founder needs)
+///   - a wrong client secret (401)
+///   - an expired or already-used code (400)
+///
+/// The founder's report was "LinkedIn login backend error", which is what a
+/// non-answer looks like from the outside. Reddit's equivalent has always
+/// checked the status; LinkedIn was the outlier, and this is the one call
+/// whose failure reaches the operator at the moment of a failed connect.
+///
+/// The pin is on the shape rather than the wording: both token calls must
+/// read the status and read the body as text before parsing, because that is
+/// the arrangement that makes the body quotable in an error string. A
+/// `resp.json()` followed by a missing-field check is the regression.
+#[tokio::test]
+async fn test_linkedin_token_calls_quote_the_providers_own_error_body() {
+    let src = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/social/linkedin.rs"
+    ))
+    .expect("read linkedin.rs");
+
+    // Both token endpoints: the connect-time exchange and the rotating
+    // refresh. A token that dies mid-flight is reported by the scheduler, so
+    // the same non-answer was reaching the founder on a different code path.
+    for fn_name in ["async fn exchange_code", "async fn refresh_token"] {
+        let start = src
+            .find(fn_name)
+            .unwrap_or_else(|| panic!("{fn_name} not found in linkedin.rs"));
+        // A generous window: the body ends well before the next `async fn`.
+        let end = src[start..]
+            .find("\n    async fn ")
+            .map(|i| start + i)
+            .unwrap_or(src.len());
+        let body = &src[start..end];
+
+        assert!(
+            body.contains("resp.status()"),
+            "{fn_name} does not check the response status. A 400 from LinkedIn \
+             is being parsed as a successful token response and then reported \
+             as 'Missing access_token', which is the LinkedIn 'login backend \
+             error' report - a non-answer instead of LinkedIn's own \
+             error_description. Body:\n{body}"
+        );
+        assert!(
+            body.contains("resp.text()"),
+            "{fn_name} does not read the response body as text, so the \
+             provider's own error message cannot be quoted in the failure. \
+             Read the text, check the status, THEN parse. Body:\n{body}"
+        );
+        assert!(
+            !body.contains("resp.json()"),
+            "{fn_name} parses the response straight into JSON, which discards \
+             the body on a non-2xx and turns a redirect_uri mismatch into \
+             'Missing access_token'. Body:\n{body}"
+        );
+    }
+}
