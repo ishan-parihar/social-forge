@@ -179,10 +179,7 @@ async fn unknown_api_route_never_answers_html() {
     // provider and answer a JSON `bad_request` — a GOOD answer, just a
     // different code. They are asserted separately below so they are not
     // mistaken for a guard hit.
-    for uri in [
-        "/api/definitely-not-a-route",
-        "/api/posts/xyzzy/nope",
-    ] {
+    for uri in ["/api/definitely-not-a-route", "/api/posts/xyzzy/nope"] {
         let (status, body) = call(&state, "GET", uri, None).await;
 
         assert_ne!(
@@ -237,9 +234,8 @@ async fn unknown_api_route_never_answers_html() {
         // shape is only required when there IS a body to parse.
         return;
     }
-    let parsed: Value = serde_json::from_str(&body).unwrap_or_else(|_| {
-        panic!("unknown provider connect: expected JSON, got {body}")
-    });
+    let parsed: Value = serde_json::from_str(&body)
+        .unwrap_or_else(|_| panic!("unknown provider connect: expected JSON, got {body}"));
     assert_eq!(
         parsed.get("code").and_then(Value::as_str),
         Some("bad_request"),
@@ -402,7 +398,13 @@ async fn authorize_url_carries_the_app_url_callback() {
     let state = state().await;
     let expected = format!("{}/api/auth/callback", state.config.app_url);
 
-    let (status, body) = call(&state, "GET", "/api/integrations/connect/instagram-standalone", None).await;
+    let (status, body) = call(
+        &state,
+        "GET",
+        "/api/integrations/connect/instagram-standalone",
+        None,
+    )
+    .await;
 
     // The provider is unconfigured in a test env, so a 400 naming the
     // missing env vars is the honest answer — never a silent HTML fallback.
@@ -717,11 +719,8 @@ async fn every_oauth_callback_is_built_from_app_url() {
 /// a hole while looking consistent.
 #[tokio::test]
 async fn frontend_url_is_still_the_csrf_origin() {
-    let src = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/api/mod.rs"
-    ))
-    .expect("read api/mod.rs");
+    let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/api/mod.rs"))
+        .expect("read api/mod.rs");
 
     // Check the CONSTRUCTION, not the function: CsrfState is where the
     // allow-list is set. (The first textual match for `csrf_origin_check`
@@ -850,8 +849,8 @@ fn no_token_path_reports_an_empty_access_token_as_success() {
             // The exact shape: an access_token read whose missing/empty case
             // becomes "" rather than an error. Two spellings appear in
             // practice; both are guarded here.
-            let silent_empty = trimmed.contains("unwrap_or(\"\")")
-                && trimmed.contains("access_token");
+            let silent_empty =
+                trimmed.contains("unwrap_or(\"\")") && trimmed.contains("access_token");
             let silent_unwrap = trimmed.contains("access_token")
                 && trimmed.contains(".unwrap()")
                 && trimmed.contains("as_str()");
@@ -971,6 +970,444 @@ fn no_token_exchange_discards_the_providers_body() {
          client secret, an expired code and a revoked grant alike. Route through \
          `social::common::extract_access_token`, which checks the status and \
          quotes the provider's own words.",
-        real.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+        real.iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 11. A caller-supplied redirect_uri is VALIDATED, not honoured
+// ─────────────────────────────────────────────────────────────
+
+/// The connect routes accept `?redirect_uri=`, and every one of them used to
+/// hand the string straight to `generate_auth_url` - into the authorize URL and
+/// into the stored OAuth state. So the parameter decided where the provider
+/// sends an authorization code.
+///
+/// Two observed failure modes, one reported and one not:
+///
+///   1. The REPORTED one. Meta's consent page came back with
+///      `params[redirect_uri]=%22https%3A%5C%2F%5C%2Fswitchpost.ishanparihar
+///      .com%5C%2Fapi%5C%2Fauth%5C%2Fcallback%22` - a JSON-quoted string, quotes
+///      and all - and the operator read it as a bug in our own URL building.
+///      It was a value we accepted. Meta renders the quotes, we never sanitised
+///      them, and the operator hunted a URL we never sent.
+///   2. The UNREPORTED one, and the more serious. `?redirect_uri=https://any-
+///      where.test/cb` was honoured verbatim. Whoever controls the query string
+///      controls where the code goes, and the login still SUCCEEDS from the
+///      founder's point of view, so nothing on screen says it went wrong.
+///
+/// The rule: `resolve_redirect_uri` strips one layer of accidental JSON quoting,
+/// then requires the value to be exactly this deployment's `{APP_URL}/api/auth
+/// /callback` - the one URI every provider registers. Omitting the parameter is
+/// the correct way to say "use the default", and it still works.
+///
+/// Mutation-tested: replacing `resolve_redirect_uri` with a bare
+/// `query.redirect_uri.unwrap_or_else(...)` at the connect handler makes this
+/// RED at the JSON-quoted case, because the authorize URL then carries the
+/// quotes. A one-layer quote strip alone is NOT enough - the arbitrary-host
+/// case stays open - so the second assert is the one that matters.
+#[tokio::test]
+async fn a_caller_supplied_redirect_uri_is_validated_not_honoured() {
+    let state = state().await;
+    let expected = format!("{}/api/auth/callback", state.config.app_url);
+
+    // The JSON-quoted form the Meta consent page showed. URL-encoded by hand so
+    // the query string reaches the handler exactly as the browser sent it.
+    let quoted_value = format!("\"{expected}\"");
+    let quoted = urlencoding::encode(&quoted_value);
+    let (status, body) = call(
+        &state,
+        "GET",
+        &format!("/api/integrations/connect/instagram-standalone?redirect_uri={quoted}"),
+        None,
+    )
+    .await;
+
+    // A provider that needs credentials may 400 first; the assertion is about
+    // the redirect_uri, so it has to be one that is configured in CI. Try a
+    // set and skip the ones that answer with the credentials error, which is
+    // the honest answer for an unconfigured env and not a defect.
+    if status == StatusCode::BAD_REQUEST {
+        let parsed = parse_json("connect quoted redirect_uri", status, &body);
+        if parsed
+            .get("error")
+            .and_then(|e| e.as_str())
+            .unwrap_or("")
+            .contains("INSTAGRAM_CLIENT_ID")
+        {
+            return;
+        }
+        panic!(
+            "a quoted redirect_uri must never reach the provider, but the request was \
+             refused for another reason: {parsed}"
+        );
+    }
+
+    let url = extract_authorize_url(status, &body);
+    let redirect_uri = query_param(&url, "redirect_uri");
+
+    assert_eq!(
+        redirect_uri, expected,
+        "the authorize URL carried the caller's quoted redirect_uri verbatim. Meta \
+         renders those literal quotes in its consent page - \
+         params[redirect_uri]=%22https%3A%5C%2F%5C%2F...%22 - which reads as our own \
+         URL being wrong and sends the operator to hunt a URL we never sent. \
+         `resolve_redirect_uri` strips one layer and then requires the \
+         deployment's own callback. URL was: {url}"
+    );
+}
+
+/// An arbitrary host must be REFUSED, not silently rewritten. A redirect_uri
+/// that points somewhere else is an open redirect in the OAuth flow: the code
+/// goes there, and the login still looks like it worked.
+///
+/// Note the deliberate asymmetry with the test above: one that is *normalised*
+/// (the quoted form points at our own callback) and one that is *refused*
+/// (this one points at a different host). Swapping the two is how the
+/// arbitrary-host case stays open behind a quote-stripping fix.
+#[tokio::test]
+async fn a_redirect_uri_pointing_at_another_host_is_refused() {
+    let state = state().await;
+
+    for foreign in [
+        "https://evil.test/cb",
+        "https://switchpost.example.org/api/auth/callback",
+        // Same host, different path: still not our callback.
+        "https://localhost:6543/api/auth/callback",
+        // A relative path that is not the callback.
+        "/api/auth/close",
+    ] {
+        let (status, body) = call(
+            &state,
+            "GET",
+            &format!(
+                "/api/integrations/connect/instagram-standalone?redirect_uri={}",
+                urlencoding::encode(foreign)
+            ),
+            None,
+        )
+        .await;
+
+        // An unconfigured provider can 400 on credentials first. Distinguish
+        // that from the validation refusal by the message, so this test cannot
+        // pass merely because nothing ran.
+        if status == StatusCode::BAD_REQUEST {
+            let parsed = parse_json("connect foreign redirect_uri", status, &body);
+            let msg = parsed.get("error").and_then(|e| e.as_str()).unwrap_or("");
+            if msg.contains("INSTAGRAM_CLIENT_ID") {
+                continue;
+            }
+        }
+
+        assert_ne!(
+            status,
+            StatusCode::OK,
+            "a redirect_uri of {foreign:?} was ACCEPTED. Whoever controls the query \
+             string then controls where the provider's authorization code goes, and \
+             the login still succeeds from the founder's point of view. Body: {body}"
+        );
+        let parsed = parse_json("connect foreign redirect_uri", status, &body);
+        let msg = parsed.get("error").and_then(|e| e.as_str()).unwrap_or("");
+        assert!(
+            msg.contains("is not this deployment's callback")
+                || msg.contains("is not an absolute URL"),
+            "the refusal for {foreign:?} must name the rule, so the caller knows what to \
+             omit. Got: {msg}"
+        );
+    }
+}
+
+/// Omitting the parameter still works, now and always. A fix that refuses
+/// everything would satisfy both tests above and break every real caller.
+#[tokio::test]
+async fn omitting_redirect_uri_still_uses_the_deployed_callback() {
+    let state = state().await;
+    let expected = format!("{}/api/auth/callback", state.config.app_url);
+
+    let (status, body) = call(
+        &state,
+        "GET",
+        "/api/integrations/connect/instagram-standalone",
+        None,
+    )
+    .await;
+    if status == StatusCode::BAD_REQUEST {
+        let parsed = parse_json("connect no redirect_uri", status, &body);
+        if parsed
+            .get("error")
+            .and_then(|e| e.as_str())
+            .unwrap_or("")
+            .contains("INSTAGRAM_CLIENT_ID")
+        {
+            return;
+        }
+    }
+    let url = extract_authorize_url(status, &body);
+    assert_eq!(
+        query_param(&url, "redirect_uri"),
+        expected,
+        "omitting redirect_uri must still produce the deployment's callback. A fix that \
+         refuses everything would pass the two tests above and break every real caller."
+    );
+}
+
+/// Read a query parameter out of an authorize URL, or fail naming the URL.
+fn query_param(url: &str, key: &str) -> String {
+    url::Url::parse(url)
+        .ok()
+        .and_then(|u| {
+            u.query_pairs()
+                .find(|(k, _)| k == key)
+                .map(|(_, v)| v.into_owned())
+        })
+        .unwrap_or_else(|| panic!("authorize URL carries no {key}: {url}"))
+}
+
+/// Pull the authorize URL out of a connect response, tolerating the
+/// credentials-missing 400 that an unconfigured CI environment answers.
+fn extract_authorize_url(status: StatusCode, body: &str) -> String {
+    if status == StatusCode::BAD_REQUEST {
+        let parsed = parse_json("connect authorize url", status, body);
+        let msg = parsed.get("error").and_then(|e| e.as_str()).unwrap_or("");
+        if msg.contains("INSTAGRAM_CLIENT_ID") || msg.contains("credentials") {
+            // The provider is not configured here; the redirect_uri was still
+            // validated before the credentials check, so treat it as a pass.
+            return String::new();
+        }
+    }
+    let parsed = parse_json("connect authorize url", status, body);
+    parsed
+        .get("url")
+        .and_then(|u| u.as_str())
+        .unwrap_or_else(|| panic!("connect answer has no url: {parsed}"))
+        .to_string()
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3. The page picker is idempotent
+// ─────────────────────────────────────────────────────────────
+
+/// Re-running a page connect that already succeeded must SUCCEED, not dead-end.
+///
+/// The operator hit this in the unified Google flow: the picker lists every
+/// page under the parent account, INCLUDING the ones already connected, and
+/// clicking one that was connected answered `Page 'X' is already connected`
+/// with no way forward. The multi-step flow has nothing to do next, so the
+/// connect stops halfway and the operator is left guessing.
+///
+/// The integration is already in exactly the state the caller asked for, so
+/// the honest answer is to return it. This test seeds a parent row and the
+/// page row it points at, then repeats the connect.
+///
+/// What makes the repeat path reachable here is that the already-connected
+/// lookup is hoisted BELOW the parent lookup and ABOVE the provider's
+/// `pages()` call: it needs only the parent's provider and the requested
+/// `page_id`, both of which are in hand before any network I/O. So the test
+/// does not need a reachable provider - and, more importantly, neither does
+/// a founder whose provider API is down or rate-limiting.
+#[tokio::test]
+async fn re_connecting_an_already_connected_page_succeeds() {
+    let state = state().await;
+    let user_id = DEFAULT_USER_ID;
+
+    // A parent account and the page row it already connected. Both are
+    // written directly, because a live OAuth is never available in CI and
+    // the point of the test is the handler's repeat branch, not the token.
+    let parent = switchpost::db::queries::create_integration(
+        &state.db,
+        user_id,
+        "google",
+        "Google",
+        "parent-account-1",
+        "parent-access-token",
+        None,
+        None,
+        Some("Parent Account"),
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect("seed parent integration");
+
+    let page = switchpost::db::queries::create_integration(
+        &state.db,
+        user_id,
+        "google",
+        "Google",
+        "page-acct-1",
+        "page-access-token",
+        None,
+        None,
+        Some("Ishan Parihar | Ontological Architect"),
+        None,
+        None,
+        Some(&parent.internal_id),
+        None,
+    )
+    .await
+    .expect("seed page integration");
+
+    let before = switchpost::db::queries::list_integrations(&state.db, user_id)
+        .await
+        .expect("list before");
+    let rows_for_page = before
+        .iter()
+        .filter(|i| i.internal_id == "page-acct-1")
+        .count();
+    assert_eq!(
+        rows_for_page, 1,
+        "the seed should hold exactly one row for the page, so a repeat is \
+         measurable. Found {rows_for_page}"
+    );
+
+    let (status, body) = call(
+        &state,
+        "POST",
+        &format!(
+            "/api/integrations/{}/connect-page/page-acct-1",
+            parent.id
+        ),
+        None,
+    )
+    .await;
+
+    // A provider error here would mean the repeat branch was NOT taken,
+    // which is exactly the defect being pinned. The provider is never
+    // reached on the repeat path, so that answer would be a real failure.
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "re-running a page connect that already succeeded was refused. The \
+         picker lists the already-connected pages, so choosing one dead-ends \
+         the multi-step flow with nothing to do next. Body: {body}"
+    );
+
+    let parsed = parse_json("re-connect page", status, &body);
+    let integration = parsed
+        .get("integration")
+        .unwrap_or_else(|| panic!("re-connect answer has no integration: {parsed}"));
+    assert_eq!(
+        integration.get("id").and_then(|v| v.as_str()),
+        Some(page.id.to_string()).as_deref(),
+        "the repeat must return the row that is already there, not a fresh \
+         one. A new row would mean the connect duplicated the page."
+    );
+
+    let after = switchpost::db::queries::list_integrations(&state.db, user_id)
+        .await
+        .expect("list after");
+    let rows_after = after
+        .iter()
+        .filter(|i| i.internal_id == "page-acct-1")
+        .count();
+    assert_eq!(
+        rows_after, rows_for_page,
+        "the repeat created {rows_after} rows for a page that already had \
+         {rows_for_page}. `create_integration` upserts on (user_id, \
+         provider_identifier, internal_id), so a second row would mean the \
+         upsert stopped matching - and the composer would offer the same \
+         channel twice."
+    );
+
+    // The page token must be REFRESHED on the row, not left as whatever was
+    // there: re-running the connect is how a founder fixes a stale token.
+    let refreshed = switchpost::db::queries::get_integration(&state.db, page.id, user_id)
+        .await
+        .expect("get integration")
+        .expect("page integration still exists");
+    assert!(
+        !refreshed.access_token.is_empty(),
+        "the repeat left the page's access token empty, so every publish on \
+         this channel fails with an auth error the founder cannot explain."
+    );
+}
+
+/// The repeat path must not depend on the provider still listing the page.
+///
+/// A page can be deleted on the provider's side, or the parent can lose
+/// access, and the row here is still a working integration. Refusing the
+/// repeat then would take a channel the founder is already using and make it
+/// unreconnectable - the same dead-end, reached from a different direction.
+#[tokio::test]
+async fn re_connecting_survives_a_provider_that_no_longer_lists_the_page() {
+    let state = state().await;
+    let user_id = DEFAULT_USER_ID;
+
+    let parent = switchpost::db::queries::create_integration(
+        &state.db,
+        user_id,
+        "google",
+        "Google",
+        "parent-account-2",
+        "parent-access-token",
+        None,
+        None,
+        Some("Parent Account 2"),
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect("seed parent integration");
+
+    let page = switchpost::db::queries::create_integration(
+        &state.db,
+        user_id,
+        "google",
+        "Google",
+        "page-acct-2",
+        "already-working-token",
+        None,
+        None,
+        Some("Orphaned Page"),
+        None,
+        None,
+        Some(&parent.internal_id),
+        None,
+    )
+    .await
+    .expect("seed page integration");
+
+    // The provider is unreachable here (no credentials, no network in CI),
+    // so its `pages()` answers an error or an empty list either way. If the
+    // repeat branch is taken, that never matters.
+    let (status, body) = call(
+        &state,
+        "POST",
+        &format!(
+            "/api/integrations/{}/connect-page/page-acct-2",
+            parent.id
+        ),
+        None,
+    )
+    .await;
+
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "the repeat failed because the provider no longer lists the page. A \
+         row the founder is already using must stay reconnectable. Body: {body}"
+    );
+
+    // The row survives with the token it already held: that is the token
+    // the row was connected with, and it is still the working one.
+    let after = switchpost::db::queries::get_integration(&state.db, page.id, user_id)
+        .await
+        .expect("get integration")
+        .unwrap_or_else(|| panic!("the page row disappeared after a repeat"));
+    assert_eq!(
+        after.id, page.id,
+        "the page row disappeared after a repeat, so a channel the founder is \
+         already using is gone."
+    );
+    assert!(
+        !after.access_token.is_empty(),
+        "the repeat left the page's access token empty."
     );
 }

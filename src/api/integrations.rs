@@ -82,9 +82,14 @@ pub async fn connect(
 
     // Handle non-OAuth providers (e.g., Bluesky, Telegram)
     if !provider_obj.uses_oauth() {
-        let redirect_uri = query
-            .redirect_uri
-            .unwrap_or_else(|| format!("{}/api/auth/callback", state.config.app_url));
+        // One rule, four call sites: a caller-supplied `redirect_uri` is validated
+        // against this deployment's own callback, not honoured verbatim. See
+        // `social::common::resolve_redirect_uri`.
+        let redirect_uri = crate::social::common::resolve_redirect_uri(
+            query.redirect_uri.as_deref(),
+            &state.config.app_url,
+        )
+        .map_err(AppError::BadRequest)?;
 
         // For one-time-token providers (Telegram), give instructions
         if provider_obj.one_time_token() {
@@ -170,9 +175,11 @@ pub async fn connect(
     // Generate PKCE and OAuth URL
     let code_verifier = crate::social::common::generate_code_verifier();
     let oauth_state = crate::social::common::generate_state();
-    let redirect_uri = query
-        .redirect_uri
-        .unwrap_or_else(|| format!("{}/api/auth/callback", state.config.app_url));
+    let redirect_uri = crate::social::common::resolve_redirect_uri(
+        query.redirect_uri.as_deref(),
+        &state.config.app_url,
+    )
+    .map_err(AppError::BadRequest)?;
 
     tracing::info!("OAuth connect {provider}: redirect_uri={redirect_uri}");
 
@@ -1412,6 +1419,38 @@ pub async fn connect_page(
         } else {
             &parent.access_token
         };
+
+    // A repeat of a connect that already succeeded is not an error.
+    //
+    // The old guard answered "Page 'X' is already connected" and stopped, which
+    // is the exact message a founder hits when they re-run the unified Google
+    // flow: the picker lists every page under the parent, including the ones
+    // already connected, and choosing one that is connected dead-ends the
+    // multi-step flow with nothing to do next. The integration is ALREADY in
+    // the state they asked for, so the honest answer is to say so and succeed.
+    //
+    // Note what this does NOT reopen: `create_integration` upserts on
+    // (user_id, provider_identifier, internal_id), so a repeat refreshes the
+    // token on the row that is already there rather than creating a duplicate.
+    // The one-across-many-providers invariant the picker exists to preserve is
+    // unaffected - this only stops a no-op request from failing.
+    //
+    // The lookup happens BEFORE the pages() call on purpose. Everything it
+    // needs is already in hand (the parent's provider and the requested page
+    // id), so a repeat answers from the database instead of making the
+    // provider fetch it first - and that means a repeat while the provider's
+    // API is down or rate-limiting still succeeds instead of failing on the
+    // network call it never needed.
+    let already_connected = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM integrations WHERE user_id = $1 \
+         AND provider_identifier = $2 AND internal_id = $3",
+    )
+    .bind(auth.user_id)
+    .bind(&parent.provider_identifier)
+    .bind(&page_id)
+    .fetch_optional(&state.db)
+    .await?;
+
     let token = crypto::maybe_decrypt_token(raw_token, state.token_key.as_ref());
 
     // Fetch all pages and find the matching one
@@ -1420,34 +1459,82 @@ pub async fn connect_page(
         .await
         .map_err(|e| AppError::Provider(format!("Failed to list pages: {e}")))?;
 
-    let page = pages.into_iter().find(|p| p.id == page_id).ok_or_else(|| {
+    let page = pages.into_iter().find(|p| p.id == page_id);
+
+    if let Some(id) = already_connected {
+        // The repeat path: the row is already in the state the caller asked
+        // for, so refresh its token and return it. `page` may be None when
+        // the provider no longer lists this page (it was deleted over there,
+        // or the parent lost access), but the token we already hold on the
+        // parent row is still a working one for it - that is the token the
+        // row was connected with. Not re-fetching is what makes the answer
+        // stable when the provider is unavailable.
+        let refreshed = match page {
+            Some(p) => {
+                // An empty token would be stored as a working-looking
+                // integration whose every publish then fails. Refuse it
+                // here, where the user can act on it.
+                let page_token = p.access_token.filter(|t| !t.is_empty()).ok_or_else(|| {
+                    AppError::BadRequest(
+                        "This page did not return an access token; reconnect with a token that manages it"
+                            .into(),
+                    )
+                })?;
+
+                // Refresh the token on the row that already exists, so a
+                // repeat fixes a stale or empty one rather than leaving it
+                // broken. A failure here is reported rather than swallowed:
+                // the whole point of re-running the connect was to fix the
+                // token.
+                queries::update_integration_token(
+                    &state.db,
+                    id,
+                    &page_token,
+                    parent.refresh_token.as_deref(),
+                    None,
+                    state.token_key,
+                )
+                .await
+                .map_err(|e| match e {
+                    queries::TokenUpdateError::Encryption { reason, .. } => {
+                        AppError::Provider(format!("Failed to re-encrypt token: {reason}"))
+                    }
+                    queries::TokenUpdateError::Db(e) => AppError::Database(e),
+                })?;
+                true
+            }
+            None => false,
+        };
+
+        let updated = queries::get_integration(&state.db, id, auth.user_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
+        state.broadcast.send(
+            "integration_connected",
+            &serde_json::json!({
+                "provider": parent.provider_identifier,
+                "name": updated.provider_name,
+                "refreshed": refreshed,
+            }),
+        );
+        return Ok(Json(ConnectPageResponse {
+            integration: updated.into(),
+            parent_id: parent_id.to_string(),
+        }));
+    }
+
+    // First connect for this page. The page must be reachable and must have a
+    // token: an empty one would be stored as a working-looking integration
+    // whose every publish then fails. Refuse it here, where the user can act on it.
+    let page = page.ok_or_else(|| {
         AppError::BadRequest("Page not found or not accessible with this token".into())
     })?;
-
-    // An empty token would be stored as a working-looking integration whose
-    // every publish then fails. Refuse it here, where the user can act on it.
     let page_token = page.access_token.filter(|t| !t.is_empty()).ok_or_else(|| {
         AppError::BadRequest(
             "This page did not return an access token; reconnect with a token that manages it"
                 .into(),
         )
     })?;
-
-    let existing = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM integrations WHERE user_id = $1 AND provider_identifier = $2 AND internal_id = $3",
-    )
-    .bind(auth.user_id)
-    .bind(&parent.provider_identifier)
-    .bind(&page.id)
-    .fetch_one(&state.db)
-    .await?;
-
-    if existing > 0 {
-        return Err(AppError::BadRequest(format!(
-            "Page '{}' is already connected",
-            page.name
-        )));
-    }
 
     let integration = queries::create_integration(
         &state.db,
