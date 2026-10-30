@@ -2962,3 +2962,84 @@ Stage Summary:
 - Verification: `cargo test --lib` 527/527; `cargo test --no-fail-fast` exactly one failing binary (the pre-existing `surface_docs_audit` trio); red-team 13/13; linkedin 21/21; frontend build + svelte-check 0 errors. NOTE for future runs: a plain `cargo test` aborts at the `surface_docs_audit` binary and reports far fewer "ok" results than there are binaries, which reads as a regression. `--no-fail-fast` is the honest count.
 - Live end-to-end proof of the redirect_uri fix, with the pre-fix behaviour captured for comparison (recorded above).
 - All scratch servers and stubs stopped; ports 6543 and 9942 freed. Working tree clean apart from the pre-existing unstaged `scripts/genome`.
+---
+Task ID: v10-redteam-token-exchanges
+Agent: Jcode
+Task: Continue the red-team pass over six production defects reported from the VPS
+  (https://switchpost.ishanparihar.com); after the six were closed, red-team the
+  defect CLASS the fixes uncovered rather than stopping.
+
+Work Log:
+- **discord.rs empty-token refresh (696377e).** A tree-wide grep for one shape -
+  substituting an empty access token where an error was owed - found exactly one
+  site: `discord::refresh_token`'s `json["access_token"].as_str().unwrap_or("")`. A
+  refresh Discord answered with `{"error":"invalid_grant"}` therefore SUCCEEDED with
+  an empty token, so the integration stayed "connected", the dashboard showed it
+  healthy, and the real failure surfaced hours later as an opaque publish error.
+  Fixed with a status check, `.filter(|t| !t.is_empty())`, and an error quoting the
+  body. Added `no_token_path_reports_an_empty_access_token_as_success`, a tree-wide
+  guard over all of `src/social/`. Mutation: restoring the original line went RED
+  naming `src/social/discord.rs:629` with the invisible-failure explanation.
+  Recorded honestly, because it cost a cycle: the FIRST mutation attempt I made
+  produced a compile error rather than a failure, which proves nothing. A mutation
+  has to compile to be evidence.
+- **15 discarded token bodies (b1ddd37).** Auditing the same class across the tree
+  found the same four lines in fifteen more places: parse, read `["access_token"]`,
+  report "Missing access_token" on any failure. `error_for_status` was never called
+  and the body was never read, so a redirect_uri mismatch, a wrong client_secret, an
+  expired code and a revoked grant ALL answered "Missing access_token". That is the
+  reported "LinkedIn login backend error": the layer that knew the answer threw it
+  away, and the layer that did not know reported the only thing it could see.
+- One shared helper, `social::common::extract_access_token`, per AGENTS.md 9.21: it
+  checks the status and quotes the provider's own words (clipped to 400 chars so an
+  error page full of markup does not become the message), names the provider,
+  rejects an empty token as an error, and answers distinctly for a non-JSON body
+  using `looks_like_html` to say "an HTML page (check the redirect_uri and
+  client_id)" - the redirect_uri defect's fingerprint. It returns
+  `(access_token, json)` together because every call site reads `refresh_token` and
+  `expires_in` straight after.
+- The helper is generic over a new `TokenResponse` trait, implemented for BOTH HTTP
+  clients, because this crate mixes `reqwest` and `wreq` and they share no response
+  type. `text` returns `Box<dyn Future + Send>` rather than an `async fn` in a
+  trait, so the `Send`ness the scheduler's JoinSet needs is stated, not inferred.
+- Rewired 12 providers to it: google, gmail, drive, calendar, discord, facebook,
+  instagram, instagram-standalone, linkedin-page, pinterest, threads, youtube.
+- `no_token_exchange_discards_the_providers_body` guards all of `src/social/`. Two
+  false positives it deliberately avoids, because a guard that cries wolf on correct
+  code gets deleted rather than obeyed: a `PageInfo` builder and a status poll both
+  call `as_str()` near a `json`, so the matcher requires the `access_token` TOKEN
+  NAME, not merely an `as_str()` in the window.
+- Three mutation attempts, two of which were evidence-free and are recorded as such:
+  (1) reverting calendar.rs produced a COMPILE error, so the test never ran;
+  (2) the second landed in `refresh_token`, which already checks status, while I
+  believed I had hit `exchange_code` - re-reading the function I was mutating is
+  what caught that, and a little more would have recorded a false PASS;
+  (3) even the right site kept passing, for a genuine weakness in the test: the
+  token read is a MULTI-LINE chain here, so `"access_token"` and `as_str()` are
+  never on the same physical line, and a per-line predicate exempts every
+  correctly-formatted offender - which is what a mutation produces. After joining
+  the window and requiring the token name, the same mutation went RED naming
+  calendar.rs:309, and an independent mutation on youtube.rs - a site this commit
+  fixes, so no chance of collision - went RED naming youtube.rs:807. Both restored
+  and re-verified green.
+- `git checkout -- src/social/calendar.rs` discarded a good unstaged version
+  mid-session (the exact failure mode flagged in an earlier session). The `cp`
+  backup restored it. The rule stands: never `git checkout` a file you have edited,
+  only `cp` back.
+
+Stage Summary:
+- Two defects closed in this stretch: a Discord refresh that succeeded with an empty
+  token, and a 15-site defect class that collapsed four distinct OAuth failures into
+  one useless sentence.
+- One shared helper replaces fifteen copies of the rule, with a tree-wide guard
+  against the next copy.
+- Three mutation-result failures of the discipline were caught and recorded rather
+  than reported as passes: a non-compiling mutation, a mutation in the wrong
+  function, and a test whose predicate exempted the very shape it was meant to catch.
+- Verification for b1ddd37: `cargo check --lib --bin switchpost` 0 errors;
+  `cargo test --lib` 527/527; red-team 15/15; `cargo test --no-fail-fast` exactly one
+  failing binary (the pre-existing `surface_docs_audit` trio); clippy clean on all
+  13 changed files, the only two remaining errors being the pre-existing ones in
+  `src/cli/autopost.rs` and `src/cli/oauth_browser.rs`.
+- Known open items, unchanged: `docs/providers.md` still missing (surface_docs_audit
+  trio), README `length_in_band` rubric, unstaged `scripts/genome`.
