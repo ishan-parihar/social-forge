@@ -43,6 +43,15 @@
   const PROVIDER_LABEL_OVERRIDES: Record<string, string> = {
     x: "X (Twitter)",
     "instagram-standalone": "Instagram (Standalone)",
+    // The setup guide and the AI-agent onboarding call this one "Instagram
+    // (Business)" - it is the business-mode account reached through the
+    // Facebook login flow, and the standalone variant is the card above.
+    // The grid used to say "Instagram", which is the name the operator was
+    // never given, so they reported the business option as missing. Same
+    // product, same qualification, one spelling across surfaces: this
+    // mirrors the LinkedIn pair, where `linkedin-page` is labelled
+    // "LinkedIn Page" rather than a bare "LinkedIn".
+    instagram: "Instagram (Business)",
     "linkedin-page": "LinkedIn Page",
     "telegram-bot": "Telegram Bot",
     "telegram-user": "Telegram User",

@@ -185,9 +185,20 @@ pub fn setup_guide(
         },
         ProviderGuide {
             identifier: "instagram".into(),
-            name: "Instagram Business".into(),
+            // "Instagram Business" is what the MCP guide used to call this,
+            // and it is the name that made the founder report the option as
+            // MISSING: the onboarding text and the AI-agent guide said
+            // "Instagram Business", the Channels grid card says "Instagram",
+            // so the name they were sent to find does not exist in the place
+            // they were sent to look. Follow the LinkedIn pair instead, where
+            // the personal mode is "LinkedIn Personal" and the card in the
+            // grid is the same company's product: this entry is the
+            // business-mode Instagram reached through the Facebook login
+            // flow, and the standalone variant is its own card. Same
+            // product, same qualification, one spelling across surfaces.
+            name: "Instagram (Business)".into(),
             auth_method: "oauth".into(),
-            description: "Instagram Business accounts: media, reels, stories, insights, comments, hashtags, mentions.".into(),
+            description: "Instagram Business/Creator accounts, connected through the Facebook login flow: media, reels, stories, insights, comments, hashtags, mentions.".into(),
             env_vars: vec![
                 EnvVarInfo { name: "INSTAGRAM_CLIENT_ID".into(), description: "Meta App ID (same as Facebook)".into(), required: true },
                 EnvVarInfo { name: "INSTAGRAM_CLIENT_SECRET".into(), description: "Meta App Secret (same as Facebook)".into(), required: true },
