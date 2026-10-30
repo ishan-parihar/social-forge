@@ -610,51 +610,106 @@ async fn dashboard_provider_grid_matches_the_backend_registry() {
 ///
 /// Pin the rule across every non-test call site that constructs the
 /// callback. A new site that reaches for `frontend_url` fails here.
+/// Every "/api/auth/callback" literal in the tree must be built from APP_URL.
+///
+/// This scans the WHOLE of `src/`, not an allowlist of files. The list form
+/// was what hid the original defect: three sites were fixed while eleven in
+/// `src/mcp/tools_setup.rs` and one in `src/cli/run.rs` sat outside the
+/// list, unprotected and unchecked. They happened to be correct — which is
+/// exactly the case a reviewer must never rely on, because the next added
+/// file is the one that regresses.
+///
+/// The check is POSITIVE: each line must name `app_url`. A negative check
+/// ("must not name frontend_url") passes on a line that names neither,
+/// and the setting omitted is the one that matters.
 #[tokio::test]
 async fn every_oauth_callback_is_built_from_app_url() {
-    let files = [
-        "src/api/integrations.rs",
-        "src/api/onboard.rs",
-        "src/mcp/tools_integrations.rs",
-        "src/social/registry.rs",
-    ];
-    for f in files {
-        // Build the path at runtime: `concat!` only accepts literals,
-        // and a loop over filenames does not get them.
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(f);
-        let src = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {f}: {e}"));
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
+    let mut stack = vec![std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src")];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else if p.extension().and_then(|x| x.to_str()) == Some("rs") {
+                files.push(p);
+            }
+        }
+    }
+    files.sort();
+
+    let mut constructions = 0usize;
+    for path in &files {
+        let f = path
+            .strip_prefix(env!("CARGO_MANIFEST_DIR"))
+            .unwrap()
+            .display()
+            .to_string();
+        let src = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {f}: {e}"));
         for (idx, _) in src.match_indices("/api/auth/callback") {
-            // Inspect the whole LINE, then strip comments.
-            //
-            // Two traps this loop already fell into, both worth writing down:
-            // (a) a window of `idx + 1` stops in the MIDDLE OF THE NEEDLE —
-            //     `format!("{}` — so `state.config.frontend_url`, which sits
-            //     after the path on the same line, is never in the window and
-            //     a reverted site passes.
-            // (b) the sites carry a deliberate "APP_URL, NOT frontend_url"
-            //     comment, so a look-behind wide enough to catch a reverted
-            //     site also catches that comment and fails on FIXED code.
-            // Taking the full line and stripping trailing comments does
-            // neither.
             let line_start = src[..idx].rfind('\n').map_or(0, |i| i + 1);
-            let line_end = src[idx..]
-                .find('\n')
-                .map_or(src.len(), |rel| idx + rel);
-            let line = &src[line_start..line_end];
-            let code = match line.find("//") {
-                Some(c) => &line[..c],
-                None => line,
-            };
-            if code.contains("frontend_url") {
+            let line_end = src[idx..].find('\n').map_or(src.len(), |rel| idx + rel);
+            let whole_line = &src[line_start..line_end];
+            let trimmed = whole_line.trim_start();
+
+            // Skip DOCUMENTATION. The path appears in doc comments
+            // ("redirects back to `{app_url}/api/auth/callback`") and those
+            // lines have NO code at all, so a positive check on the stripped
+            // line reads an empty string and fails on a file that is correct.
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            // Skip NON-CONSTRUCTIONS. The path is a router literal
+            // (`src/api/mod.rs`) and appears in test fixtures as a
+            // hard-coded `https://localhost:6544/...` string. Those are not
+            // the redirect_uri the provider is sent, and asserting on them
+            // would name a string literal instead of the setting at fault.
+            // Only a line that BUILDS the URL is subject to the rule.
+            let code = whole_line.split("//").next().unwrap_or(whole_line);
+            let builds = code.contains("format!")
+                || code.contains("{app_url}")
+                || code.contains("{APP_URL}");
+            if !builds {
+                continue;
+            }
+
+            constructions += 1;
+            // This check is LEXICAL, and that is a deliberate, recorded
+            // limit rather than an oversight. A binding still *named*
+            // `app_url` but sourced from `state.config.frontend_url`
+            // cannot be seen from the use line — mutation-tested against
+            // `src/mcp/tools_setup.rs`, where all eleven sites bind that
+            // way, and confirmed to pass. Two things bound the exposure:
+            // the only two files with a real defect
+            // (`api/integrations.rs`, `mcp/tools_integrations.rs`) inline
+            // `state.config.app_url`, so the setting is on the asserted
+            // line, and the realistic regression there goes RED; and
+            // renaming a binding without renaming its uses is a
+            // compile error, so the compiler catches the clumsy version.
+            // If a file here ever becomes a redirect_uri source for a
+            // provider, inline the field on the construction line.
+            let lower = code.to_ascii_lowercase();
+            let names_app_url = lower.contains("app_url");
+            let names_frontend = lower.contains("frontend_url");
+            if !names_app_url || names_frontend {
                 panic!(
-                    "{f} builds an OAuth callback from `frontend_url`; the \
-                     callback comes from APP_URL. FRONTEND_URL is the CORS/CSRF \
-                     origin and is a different setting. Code: {}",
+                    "{f} builds an OAuth callback from something other than APP_URL. \
+                     The callback comes from APP_URL; FRONTEND_URL is the CORS \
+                     allow-list entry and the CSRF origin check, a different \
+                     setting. Code: {}",
                     code.trim()
                 );
             }
         }
     }
+    // A zero here means the walk or the filters are broken, not that the
+    // codebase is clean. The count is real: it is the number of construction
+    // sites across `src/`, counted on the tree this test ships with.
+    assert!(
+        constructions >= 20,
+        "found {constructions} callback construction sites, expected 20+ - \
+         is the src/ walk or the filter working?"
+    );
 }
 
 /// The mirror of the above: `frontend_url` must still be used for what it
