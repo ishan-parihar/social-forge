@@ -2917,3 +2917,25 @@ Stage Summary:
 - Commit `ee2ab25`, pushed to `github/master`.
 - Verification: cargo check 0 errors; cargo test --lib 527/527; red-team 10/10; frontend build + svelte-check 0 errors; live check on 127.0.0.1:3942 confirmed 404-JSON for unknown /api/* and 401-JSON for connect/gmail|calendar|drive.
 - Pre-existing, NOT touched: `surface_docs_audit` (3 failures, missing docs/providers.md — fails identically on parent `851d2cc`), clippy errors in `src/cli/autopost.rs` + `src/cli/oauth_browser.rs`, README rubric length_in_band warning, unstaged `scripts/genome` MODULES edit.
+
+---
+Task ID: vps-batch-seventh-redirect-uri
+Agent: Jcode
+Task: Finish the red-team pass by re-verifying the six-defect fixes, and fix whatever the re-verification surfaces.
+
+Work Log:
+- The six reported defects were fixed and pushed as `ee2ab25`. Re-verification rather than field reports surfaced a SEVENTH: the OAuth `redirect_uri` was built from `state.config.frontend_url` at three sites. `.env.example` documents APP_URL as "Used for OAuth redirect URIs"; FRONTEND_URL is the CORS allow-list plus the CSRF Origin check. They coincide only when the operator never sets FRONTEND_URL, so the defect is invisible in a default install and appears as Meta error 1349168 ("Redirect URI is not whitelisted for the app") the moment the SPA is served from a different origin than the app is addressed by - reverse proxy rewriting Host, a CDN for the SPA, or a path-prefixed APP_URL.
+- This corrects my earlier summary: `instagram_standalone.rs` was never modified, and the historical Threads/IG redirect_uri notes in `.memsearch` are a *symptom* of this same setting confusion, not a separate issue. Recording it because the earlier summary overstated the redirect_uri fix.
+- Three wrong sites, not one: `src/api/integrations.rs` start_flow, `src/mcp/tools_integrations.rs` status (~114) and exchange_code (~182). All three now build from `app_url` and carry a comment naming the setting they mean, because the fixing instinct is to "normalise" back to frontend_url.
+- Added `every_oauth_callback_is_built_from_app_url` plus its mirror `frontend_url_is_still_the_csrf_origin`, which fails if someone overcorrects and drops the half of the rule that is load-bearing.
+- The callback test was itself broken and PASSED on the broken code - the exact failure mode this suite exists to prevent. Python debug showed why: the window was `&src[line_start..idx + 1]`, which stops mid-needle at the end of `format!("{}`, so a `frontend_url` appearing *after* the needle on the same line was never in the window. Fixed by taking the full line (to the next `\n`) and stripping the trailing comment before inspecting it. The comments are deliberate, so the naive fix of deleting them only relocates the false failure.
+- Mutation-tested all three sites individually. Reverted `integrations.rs` -> RED; reverted the MCP status site -> RED; reverted the MCP exchange_code site -> RED. Restored -> 12/12 green. No false pass anywhere in that set now.
+- Restored with `cp` backups per the lesson from `ee2ab25`, not `git checkout --`.
+- Confirmed the `surface_docs_audit` trio is pre-existing by stashing this diff and re-running on the clean parent: identical 3 failures, so they are not mine. Clippy clean on all three of my files; the 4 remaining errors are the pre-existing cli/autopost.rs + cli/oauth_browser.rs ones.
+
+Stage Summary:
+- Commit `7cac3f9` pushed to `github/master`. Red-team suite now 12 tests (was 10) and, more importantly, all of them proven to fail on their pre-fix code.
+- Fix: OAuth redirect_uri built from APP_URL at all three callback sites. Meta error 1349168 in the original report is this bug, not the SPA fallback.
+- Tests: `every_oauth_callback_is_built_from_app_url`, `frontend_url_is_still_the_csrf_origin`.
+- Verification: cargo test --lib 527/527; full suite 49 binaries ok (only the pre-existing docs trio failing); clippy clean on changed files; frontend untouched so no rebuild.
+- Working tree is clean apart from the pre-existing unstaged `scripts/genome` MODULES edit.
