@@ -4,8 +4,8 @@
 
 use async_trait::async_trait;
 
-use super::*;
 use super::common::extract_access_token;
+use super::*;
 use crate::config::Config;
 
 pub struct CalendarProvider {
@@ -369,6 +369,18 @@ impl SocialProvider for CalendarProvider {
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
+            // The calendar endpoint carries the calendar's name and id and no
+            // photo, but the Google ACCOUNT behind it has one at the OpenID
+            // userinfo endpoint - the same one the fallback branch below and
+            // this provider's own `exchange_code` read. Hardcoding `None`
+            // here left the success path (the normal one) avatar-less while
+            // the failure path beside it had a photo, which is the same
+            // provider answering "who is this channel" two different ways.
+            //
+            // A photo is not worth failing a calendar lookup over: the
+            // helper returns `None` when userinfo is unavailable and the
+            // channel keeps working.
+            let picture = super::google_oauth::profile_picture(&self.http, access_token).await;
             Ok(PageInfo {
                 id: json["id"].as_str().unwrap_or("primary").to_string(),
                 name: json["summary"]
@@ -376,7 +388,7 @@ impl SocialProvider for CalendarProvider {
                     .unwrap_or("My Calendar")
                     .to_string(),
                 access_token: Some(access_token.to_string()),
-                picture: None,
+                picture,
                 username: json["id"].as_str().map(String::from),
             })
         } else {

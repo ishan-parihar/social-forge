@@ -67,6 +67,46 @@ pub async fn refresh(
     })
 }
 
+/// The Google account's profile photo, as an absolute URL.
+///
+/// Every Google-family provider has the same problem: the resource
+/// endpoint it identifies a channel by (gmail's `users/me/profile`,
+/// calendar's `users/me/calendarList/primary`, GMB's account management)
+/// carries the resource's NAME and no photo, because a mailbox and a
+/// calendar are not things with faces. The ACCOUNT behind them has a photo,
+/// published at the OpenID userinfo endpoint.
+///
+/// Several providers had been hardcoding `picture: None` on that path while
+/// their own `exchange_code` read the very same endpoint for the initial
+/// connect - so one provider answered "who is this channel" two different
+/// ways, and the answer used at CONNECT time had an avatar while the answer
+/// used to REFRESH the row never could. A channel connected before the
+/// avatar existed stayed avatar-less for good, because refresh is the only
+/// repair path and `profile_picture = COALESCE(?, profile_picture)` keeps a
+/// NULL when the provider hands back nothing.
+///
+/// Returns `None` rather than an error: a Google account may have no photo,
+/// the OpenID scopes may not have been granted, or userinfo may simply
+/// fail. None of that makes the channel unusable - it still reads mail and
+/// still shows events - so failing the whole profile lookup over a photo
+/// would trade a cosmetic gap for a broken channel.
+pub async fn profile_picture(http: &reqwest::Client, access_token: &str) -> Option<String> {
+    let resp = http
+        .get("https://www.googleapis.com/oauth2/v2/userinfo")
+        .header("Authorization", format!("Bearer {access_token}"))
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let json: serde_json::Value = resp.json().await.ok()?;
+    json["picture"]
+        .as_str()
+        .filter(|p| !p.is_empty())
+        .map(String::from)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

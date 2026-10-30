@@ -4,8 +4,8 @@
 
 use async_trait::async_trait;
 
-use super::*;
 use super::common::extract_access_token;
+use super::*;
 use crate::config::Config;
 
 pub struct GmailProvider {
@@ -218,6 +218,14 @@ impl GmailProvider {
             Err(ProviderError::Api(msg))
         }
     }
+
+    /// The Google account's profile photo. Delegates to the ONE shared
+    /// implementation for the whole Google family (see
+    /// `super::google_oauth::profile_picture`) so that gmail, calendar,
+    /// drive, GMB and youtube cannot drift on the same rule.
+    pub async fn get_profile_picture(&self, access_token: &str) -> Option<String> {
+        super::google_oauth::profile_picture(&self.http, access_token).await
+    }
 }
 
 #[async_trait]
@@ -343,15 +351,37 @@ impl SocialProvider for GmailProvider {
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
         let profile = self.get_profile(access_token).await?;
+        // The Gmail profile endpoint answers `emailAddress` and `historyId`
+        // and nothing else - it has NO picture field. Hardcoding `None`
+        // here meant the only repair path for a connected Gmail channel
+        // (refresh, whose default reconnect() delegates to this) could
+        // never fill one in, so a channel connected before the avatar
+        // existed stayed avatar-less forever and the dashboard showed a
+        // generic icon where every other Google-family channel showed a
+        // photo.
+        //
+        // The picture is on the SAME Google account, published at the
+        // OpenID userinfo endpoint that `exchange_code` already reads for
+        // the initial connect - so the two paths now agree, which is the
+        // invariant that was broken (a provider reading its own profile
+        // two different ways). A failure here is NOT an error: the channel
+        // is still perfectly usable, it just has no photo.
+        let email = profile["emailAddress"].as_str().unwrap_or_default();
+        let picture = self.get_profile_picture(access_token).await;
         Ok(PageInfo {
-            id: profile["emailAddress"].as_str().unwrap_or("").to_string(),
-            name: profile["emailAddress"]
-                .as_str()
-                .unwrap_or("Gmail")
-                .to_string(),
+            id: email.to_string(),
+            name: if email.is_empty() {
+                "Gmail".to_string()
+            } else {
+                email.to_string()
+            },
             access_token: Some(access_token.to_string()),
-            picture: None,
-            username: profile["emailAddress"].as_str().map(String::from),
+            picture,
+            username: if email.is_empty() {
+                None
+            } else {
+                Some(email.to_string())
+            },
         })
     }
 

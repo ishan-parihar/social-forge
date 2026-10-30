@@ -341,7 +341,18 @@ impl SocialProvider for GoogleMyBusinessProvider {
                 .unwrap_or("GMB Account")
                 .to_string(),
             access_token: Some(access_token.to_string()),
-            picture: None,
+            // The account-management endpoint answers `accountName` and no
+            // photo - a GMB account is not something with a face. The Google
+            // ACCOUNT behind it has one, published at the same OpenID
+            // userinfo endpoint this provider's own `exchange_code` reads, so
+            // the avatar is available and the failure to return it was not a
+            // limitation of the API.
+            //
+            // It matters more here than it looks: refresh is the only repair
+            // path for a connected row, and it writes
+            // `profile_picture = COALESCE(?, profile_picture)`, so a row that
+            // came back with no photo can never gain one.
+            picture: super::google_oauth::profile_picture(&self.http, access_token).await,
             username: None,
         })
     }
