@@ -353,7 +353,13 @@ pub async fn list_providers(
             has_credentials: has_creds,
             editor_type: format!("{:?}", provider.editor_type()),
             redirect_uri: if provider.uses_oauth() {
-                format!("{}/api/auth/callback", state.config.frontend_url)
+                // APP_URL, NOT frontend_url — see the note in
+                // `mcp::tools_integrations`. `frontend_url` is the CORS/CSRF
+                // origin; the redirect_uri the providers are actually sent is
+                // derived from APP_URL. Reporting the other one means the
+                // operator registers the wrong URL in the Meta/Google console
+                // and then gets 'URL Blocked' for a flow that looks correct.
+                format!("{}/api/auth/callback", state.config.app_url)
             } else {
                 "N/A (non-OAuth)".into()
             },

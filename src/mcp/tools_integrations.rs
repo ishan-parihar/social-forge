@@ -102,7 +102,16 @@ pub async fn list_providers(
                 has_credentials: has_creds,
                 editor_type: format!("{:?}", p.editor_type()),
                 redirect_uri: if p.uses_oauth() {
-                    format!("{}/api/auth/callback", state.config.frontend_url)
+                    // APP_URL, NOT frontend_url. `frontend_url` controls the
+                    // CORS allow-list and the CSRF origin check; the OAuth
+                    // callback the providers redirect to is built from
+                    // APP_URL (see `api::integrations`' connect handler and
+                    // `.env.example`, which documents APP_URL as "Used for
+                    // OAuth redirect URIs"). Reporting the frontend value
+                    // here makes Meta answer 'URL Blocked' (error 1349168)
+                    // for a redirect_uri the connect flow never actually
+                    // sent, so the operator chases a URL that looks right.
+                    format!("{}/api/auth/callback", state.config.app_url)
                 } else {
                     "N/A (non-OAuth)".into()
                 },
@@ -170,7 +179,13 @@ pub async fn connect_integration(
         let redirect_uri = input
             .redirect_uri
             .clone()
-            .unwrap_or_else(|| format!("{}/api/auth/callback", state.config.frontend_url));
+            // APP_URL, NOT frontend_url: this value is handed to
+            // `exchange_code`, which sends it back to the provider as the
+            // redirect_uri it authorized. A mismatch is a hard failure
+            // (Meta: 'URL Blocked'; Google: redirect_uri_mismatch), and
+            // `frontend_url` is a different setting for a different purpose
+            // (CORS + CSRF). See `.env.example`.
+            .unwrap_or_else(|| format!("{}/api/auth/callback", state.config.app_url));
 
         let token = provider_obj
             .exchange_code("", "", &redirect_uri)

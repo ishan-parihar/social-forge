@@ -588,3 +588,105 @@ async fn dashboard_provider_grid_matches_the_backend_registry() {
          {extra:?}. The connect button would 404 or draw an error page."
     );
 }
+
+// ─────────────────────────────────────────────────────────────
+// 10. Every OAuth redirect_uri is built from APP_URL, not FRONTEND_URL
+// ─────────────────────────────────────────────────────────────
+
+/// `APP_URL` and `FRONTEND_URL` are two settings with two purposes, and
+/// `.env.example` says so: APP_URL is "Used for OAuth redirect URIs",
+/// FRONTEND_URL controls "CORS allowed origins AND the CSRF allow-list".
+/// They default to the same value, which is why a deployment behind a
+/// reverse proxy (APP_URL = the public host, FRONTEND_URL = the local
+/// origin) is where the confusion bites.
+///
+/// Three sites built the callback from `frontend_url` instead: two that
+/// only REPORT the redirect_uri to the operator, and one that hands it to
+/// `exchange_code`. The reporting ones are worse than useless — they tell
+/// the founder to register a URL in the Meta console that the connect flow
+/// never sends, and Meta then answers "URL Blocked" (error 1349168) for a
+/// flow the founder has every reason to believe is correct. The
+/// `exchange_code` one fails outright with a redirect_uri mismatch.
+///
+/// Pin the rule across every non-test call site that constructs the
+/// callback. A new site that reaches for `frontend_url` fails here.
+#[tokio::test]
+async fn every_oauth_callback_is_built_from_app_url() {
+    let files = [
+        "src/api/integrations.rs",
+        "src/api/onboard.rs",
+        "src/mcp/tools_integrations.rs",
+        "src/social/registry.rs",
+    ];
+    for f in files {
+        // Build the path at runtime: `concat!` only accepts literals,
+        // and a loop over filenames does not get them.
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(f);
+        let src = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {f}: {e}"));
+        for (idx, _) in src.match_indices("/api/auth/callback") {
+            // Inspect the whole LINE, then strip comments.
+            //
+            // Two traps this loop already fell into, both worth writing down:
+            // (a) a window of `idx + 1` stops in the MIDDLE OF THE NEEDLE —
+            //     `format!("{}` — so `state.config.frontend_url`, which sits
+            //     after the path on the same line, is never in the window and
+            //     a reverted site passes.
+            // (b) the sites carry a deliberate "APP_URL, NOT frontend_url"
+            //     comment, so a look-behind wide enough to catch a reverted
+            //     site also catches that comment and fails on FIXED code.
+            // Taking the full line and stripping trailing comments does
+            // neither.
+            let line_start = src[..idx].rfind('\n').map_or(0, |i| i + 1);
+            let line_end = src[idx..]
+                .find('\n')
+                .map_or(src.len(), |rel| idx + rel);
+            let line = &src[line_start..line_end];
+            let code = match line.find("//") {
+                Some(c) => &line[..c],
+                None => line,
+            };
+            if code.contains("frontend_url") {
+                panic!(
+                    "{f} builds an OAuth callback from `frontend_url`; the \
+                     callback comes from APP_URL. FRONTEND_URL is the CORS/CSRF \
+                     origin and is a different setting. Code: {}",
+                    code.trim()
+                );
+            }
+        }
+    }
+}
+
+/// The mirror of the above: `frontend_url` must still be used for what it
+/// is actually for. A fix that swapped it out of the CSRF check would open
+/// a hole while looking consistent.
+#[tokio::test]
+async fn frontend_url_is_still_the_csrf_origin() {
+    let src = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/api/mod.rs"
+    ))
+    .expect("read api/mod.rs");
+
+    // Check the CONSTRUCTION, not the function: CsrfState is where the
+    // allow-list is set. (The first textual match for `csrf_origin_check`
+    // is a doc-comment mention, so searching from there is how this test
+    // first passed a false failure.)
+    let construction = src
+        .find("CsrfState {")
+        .expect("CsrfState construction not found");
+    let window = &src[construction..(construction + 200).min(src.len())];
+    assert!(
+        window.contains("frontend_url"),
+        "CsrfState's allowed_origin no longer comes from FRONTEND_URL — that \
+         is the setting's one job (CORS allow-list + CSRF origin). Window: {window}"
+    );
+
+    // And the mirror, so a future edit cannot "fix" the inconsistency by
+    // pointing the CSRF check at APP_URL instead.
+    assert!(
+        !window.contains("app_url"),
+        "CsrfState's allowed_origin now reads APP_URL; FRONTEND_URL is the \
+         CORS/CSRF origin and must stay so"
+    );
+}
