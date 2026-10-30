@@ -2540,15 +2540,32 @@ async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {
     }
 
     // Check for missing providers that have env vars configured
-    let missing_providers: Vec<serde_json::Value> = vec![
-        ("linkedin", "LinkedIn Personal", state.config.linkedin_client_id.is_some() && state.config.linkedin_client_secret.is_some()),
-        ("facebook", "Facebook Pages", state.config.facebook_client_id.is_some() && state.config.facebook_client_secret.is_some()),
-        ("instagram", "Instagram", state.config.facebook_client_id.is_some() && state.config.facebook_client_secret.is_some()),
+    //
+    // The check is `provider_credentials(id).is_some()` for ALL THREE, not a
+    // per-provider hand-written pair of fields. It was three copies of a rule
+    // and one of them had drifted: `instagram` was gated on
+    // `facebook_client_id`/`facebook_client_secret`, which is the OTHER
+    // provider's credential (the backend's `provider_credentials("instagram")`
+    // reads `instagram_client_id`/`instagram_client_secret`). Two failure
+    // modes, both silent and both in an audit whose entire job is telling the
+    // operator what is configured:
+    //   - configured Instagram only -> never told Instagram needs connecting
+    //   - configured Facebook only  -> told Instagram needs connecting, and
+    //     `switchpost connect instagram` then fails with "not configured"
+    // One call, one source of truth. `linkedin` and `facebook` below were
+    // already correct; the rule is now enforced by construction rather than by
+    // remembering to keep three copies in step.
+    let missing_providers: Vec<serde_json::Value> = [
+        ("linkedin", "LinkedIn Personal"),
+        ("facebook", "Facebook Pages"),
+        ("instagram", "Instagram"),
     ]
     .into_iter()
-    .filter(|(id, _, _)| !integrations.iter().any(|i| i.provider_identifier == *id))
-    .filter(|(_, _, has_creds)| *has_creds)
-    .map(|(id, name, _)| serde_json::json!({
+    .filter(|(id, _)| !integrations.iter().any(|i| i.provider_identifier == *id))
+    // `provider_credentials` answers presence for every provider in one table,
+    // so a new provider is correct the day it is added to `config.rs`.
+    .filter(|(id, _)| state.config.provider_credentials(id).is_some())
+    .map(|(id, name)| serde_json::json!({
         "provider": id,
         "name": name,
         "status": "needs_oauth",

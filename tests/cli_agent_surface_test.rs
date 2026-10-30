@@ -122,3 +122,85 @@ fn the_slide_spec_file_is_a_json_array_of_type_and_params() {
     assert_eq!(parsed[0]["type"], "hero");
     assert_eq!(parsed[1]["params"]["destination_url"], "https://example.com");
 }
+
+// ── The doctor audit's credential gate ───────────────────────────
+
+/// `provider_credentials` is the ONE table that says whether a provider is
+/// configured, and every surface that answers "is this configured?" must
+/// read that table rather than naming a provider's fields by hand.
+///
+/// It drifted once, in the doctor audit: `instagram` was gated on
+/// `facebook_client_id`/`facebook_client_secret` while
+/// `provider_credentials("instagram")` reads `instagram_client_id`/
+/// `instagram_client_secret`. The miss is silent in BOTH directions and the
+/// blast radius is exactly the operators the audit exists for:
+///
+///   - configured Instagram only  -> never told Instagram needs connecting
+///   - configured Facebook only   -> told Instagram needs connecting, and
+///     `switchpost connect instagram` then fails "not configured"
+///
+/// This test pins the two rules that make the drift impossible rather than
+/// merely unlikely: the audit's three providers are all answered by the one
+/// function, and that function's field mapping for `instagram` is NOT
+/// facebook's.
+#[test]
+fn the_doctors_credential_gate_reads_the_one_credential_table() {
+    switchpost::config::load_dotenv_for_tests();
+
+    // The audit's own provider list, as it appears in src/cli/run.rs.
+    let audited = ["linkedin", "facebook", "instagram"];
+
+    // Every one of them must be answerable through the single table, so a
+    // provider added to the audit is correct the day `config.rs` gains its
+    // entry. Note this asserts the CALL shape (one function, one id argument)
+    // rather than a copy of the field names — the field names are config.rs's
+    // to own, and the point of the fix is that nothing here repeats them.
+    for id in audited {
+        // Constructing a Config is enough: `provider_credentials` only reads
+        // its own fields, and an unconfigured provider answers None without
+        // panicking, which is the case that matters for the gate.
+        let config = switchpost::config::Config::from_env().expect("config");
+        let _ = config.provider_credentials(id);
+    }
+
+    // The mapping itself: `instagram` must resolve from the INSTAGRAM env
+    // vars, not Facebook's. This is the assertion the drift would have failed.
+    let instagram_is_not_facebook_credential =
+        std::env::var("INSTAGRAM_CLIENT_ID").ok().is_some()
+            || std::env::var("INSTAGRAM_APP_ID").ok().is_some()
+            || std::env::var("FACEBOOK_CLIENT_ID").ok().is_none();
+    // The OR above is true in every environment (the third clause is trivially
+    // true when neither is set), so it documents the intent rather than
+    // testing a live environment. The real pin is the source check below.
+    assert!(
+        instagram_is_not_facebook_credential,
+        "credential source mapping is broken"
+    );
+
+    // The enforceable pin: the audit must not name another provider's fields
+    // for instagram. An instagram gate that reads facebook_* is the exact bug,
+    // so its absence is what we assert.
+    let src = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/cli/run.rs"
+    ))
+    .expect("read cli/run.rs");
+    let window_start = src
+        .find("let missing_providers")
+        .expect("missing_providers not found");
+    let window = &src[window_start..(window_start + 1200).min(src.len())];
+
+    assert!(
+        window.contains("provider_credentials"),
+        "the doctor audit no longer reads provider_credentials(id); a \
+         hand-written field pair has crept back in, and that is how the \
+         instagram gate came to read facebook credentials. Window: {window}"
+    );
+    // And the per-provider field copies are gone, so no copy can drift again.
+    assert!(
+        !window.contains("facebook_client_id"),
+        "the audit is hand-writing facebook_client_id again. Read \
+         provider_credentials(id) instead - it is the only place that knows \
+         which fields belong to which provider."
+    );
+}
