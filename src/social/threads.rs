@@ -215,7 +215,7 @@ impl SocialProvider for ThreadsProvider {
 
         Ok(AuthToken {
             access_token: access_token.clone(),
-            refresh_token: Some(access_token),
+            refresh_token: Some(access_token.to_string()),
             expires_in,
             provider_user_id: user["id"].as_str().unwrap_or("").to_string(),
             name: user["username"].as_str().unwrap_or("").to_string(),
