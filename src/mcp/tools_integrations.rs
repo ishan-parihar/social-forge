@@ -176,16 +176,22 @@ pub async fn connect_integration(
             }));
         }
 
-        let redirect_uri = input
-            .redirect_uri
-            .clone()
-            // APP_URL, NOT frontend_url: this value is handed to
-            // `exchange_code`, which sends it back to the provider as the
-            // redirect_uri it authorized. A mismatch is a hard failure
-            // (Meta: 'URL Blocked'; Google: redirect_uri_mismatch), and
-            // `frontend_url` is a different setting for a different purpose
-            // (CORS + CSRF). See `.env.example`.
-            .unwrap_or_else(|| format!("{}/api/auth/callback", state.config.app_url));
+        // The redirect_uri a tool asks for is VALIDATED, not trusted: a tool
+        // caller controls this string as surely as a query-string caller does,
+        // and an unvalidated redirect_uri sends the provider's authorization
+        // code wherever the string says. One rule with the REST routes -
+        // `social::common::resolve_redirect_uri`.
+        //
+        // APP_URL, NOT frontend_url: this value is handed to `exchange_code`,
+        // which sends it back to the provider as the redirect_uri it
+        // authorized. A mismatch is a hard failure (Meta: 'URL Blocked';
+        // Google: redirect_uri_mismatch), and `frontend_url` is a different
+        // setting for a different purpose (CORS + CSRF). See `.env.example`.
+        let redirect_uri = crate::social::common::resolve_redirect_uri(
+            input.redirect_uri.as_deref(),
+            &state.config.app_url,
+        )
+        .map_err(|e| e.to_string())?;
 
         let token = provider_obj
             .exchange_code("", "", &redirect_uri)

@@ -633,9 +633,14 @@ pub async fn public_connect(
         .get(&provider)
         .ok_or_else(|| AppError::BadRequest(format!("Unknown provider: {provider}")))?;
 
-    let redirect_uri = query
-        .redirect_uri
-        .unwrap_or_else(|| format!("{}/api/auth/callback", state.config.app_url));
+    // One rule, four call sites: a caller-supplied `redirect_uri` is validated
+    // against this deployment's own callback, not honoured verbatim. See
+    // `social::common::resolve_redirect_uri`.
+    let redirect_uri = crate::social::common::resolve_redirect_uri(
+        query.redirect_uri.as_deref(),
+        &state.config.app_url,
+    )
+    .map_err(AppError::BadRequest)?;
 
     if !provider_obj.uses_oauth() {
         if provider_obj.one_time_token() {
