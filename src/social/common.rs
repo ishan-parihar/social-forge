@@ -3,10 +3,7 @@
 
 use rand::{Rng, RngCore};
 use sha2::{Digest, Sha256};
-use std::{
-    future::Future,
-    pin::Pin,
-};
+use std::{future::Future, pin::Pin};
 
 const CODE_VERIFIER_CHARSET: &[u8] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
@@ -82,6 +79,181 @@ pub fn parse_timestamp_opt(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
                 .map_err(|_| ())
         })
         .ok()
+}
+
+/// Resolve a caller-supplied OAuth `redirect_uri` against the deployment, or
+/// refuse it.
+///
+/// The connect endpoints accept `?redirect_uri=` (the REST connect route, the
+/// public `/setup` connect route, the MCP `integrations_connect` tool). Whatever
+/// they receive is passed to `generate_auth_url`, which URL-encodes it into the
+/// authorize URL, and to `save_oauth_state`, which stores it for the callback.
+/// So the value is not cosmetic: it is where the provider sends an
+/// authorization code.
+///
+/// Three ways a raw value goes wrong, all of them observed:
+///
+///   1. A JSON-quoted string. `"https://site/api/auth/callback"` - quotes
+///      included - reaches the authorize URL and the provider answers
+///      `URL Blocked`. Meta then renders its consent page with the quoted value
+///      visible, which reads as OUR bug and sends the operator to hunt a URL we
+///      never sent. Trim the quotes.
+///   2. An arbitrary host. `?redirect_uri=https://evil.test/cb` is honoured
+///      verbatim, so whoever controls the query string controls where the code
+///      goes. An open redirect in an OAuth flow is the worst shape of that bug:
+///      the login SUCCEEDS from the user's point of view.
+///   3. Empty or whitespace. Yields a malformed authorize URL.
+///
+/// The accepted set is DELIBERATELY narrow: `None`, empty, or the callback path
+/// relative to `app_url` (`https://{app_url}/api/auth/callback`). That is the
+/// one URI the deployment registers with every provider, it is what the server
+/// already builds when the caller supplies nothing, and it is the value the
+/// existing tree-wide tests assert on the authorize URL.
+///
+/// NOTE this also closes the divergence between "what we tell the operator"
+/// and "what we send": the MCP guide and `/api/providers` report the
+/// `app_url` callback, so refusing anything else keeps the reported value the
+/// only truthful one.
+pub fn resolve_redirect_uri(provided: Option<&str>, app_url: &str) -> Result<String, String> {
+    let fallback = format!("{}/api/auth/callback", app_url.trim_end_matches('/'));
+    let raw = match provided {
+        Some(r) if !r.trim().is_empty() => r.trim(),
+        // No opinion from the caller: use the deployment's own callback.
+        _ => return Ok(fallback),
+    };
+
+    // Undo ONE layer of accidental JSON quoting. An agent or a curl
+    // caller that round-trips a value through `serde_json::to_string` hands
+    // over the quoted form, and the provider sees literal quotes around the
+    // whole parameter.
+    //
+    // `serde_json` escapes `/` as `\/`, so the form that actually reaches
+    // us from that path is
+    //
+    //     "https:\/\/switchpost.example.com\/api\/auth\/callback"
+    //
+    // which is what `?redirect_uri=%22https%3A%5C%2F%5C%2F...%22` decodes
+    // to. Stripping only the quotes leaves the backslashes in place, the
+    // string is then neither the callback nor a parseable URL, and the
+    // caller gets a refusal instead of a connect - so the escape has to be
+    // undone in the same pass.
+    //
+    // Only `\/`, `\\` and `\"` are undone, and ONLY inside a string that
+    // was actually quoted: an unquoted value is left exactly as it was, so
+    // a URL that legitimately contains a backslash (a Windows-style base,
+    // or a path segment that has one) is not silently rewritten.
+    let unquoted = {
+        let (unquoted, was_quoted) = match raw.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+            Some(inner) => (inner.trim(), true),
+            None => (raw, false),
+        };
+        if was_quoted {
+            unescape_json_slashes(unquoted).trim().to_string()
+        } else {
+            unquoted.to_string()
+        }
+    };
+
+    let unquoted: &str = &unquoted;
+    if unquoted.is_empty() {
+        return Err(
+            "redirect_uri was empty after trimming quotes and whitespace. Omit it to use \
+             the deployment's own callback URI."
+                .to_string(),
+        );
+    }
+
+    // The bare callback path is accepted too: it is the same URI relative,
+    // and a caller that appends it to a configured base has already done the
+    // join correctly.
+    if unquoted == "/api/auth/callback" {
+        return Ok(fallback);
+    }
+
+    // Anything else must be EXACTLY the deployment's callback. A relative path
+    // other than the callback, a query string, a fragment, or any other host is
+    // refused, because none of those is where this deployment receives codes.
+    let parsed = url::Url::parse(unquoted).map_err(|_| {
+        // A relative path is the most likely mistake here (a caller that
+        // knows the callback's path but not its base), so the refusal names
+        // the absolute form the way the "wrong host" one does.
+        format!(
+            "redirect_uri is not an absolute URL: {unquoted:?}. The callback URI every provider \
+             register are {fallback} (built from APP_URL). Omit redirect_uri to use it."
+        )
+    })?;
+    if !same_callback(&parsed, &fallback) {
+        return Err(format!(
+            "redirect_uri {unquoted} is not this deployment's callback. The callback URI \
+             every provider register is {fallback} (built from APP_URL). Omit \
+             redirect_uri to use it."
+        ));
+    }
+    Ok(fallback)
+}
+
+/// Undo the escapes a JSON string adds to a URL.
+///
+/// `serde_json` escapes `/` as `\/`, `\` as `\\` and `"` as `\"`,
+/// so a value that has been through `to_string` is not the URL that was
+/// put in. This reverses exactly those three and nothing else, because a
+/// URL contains nothing else that JSON would change.
+///
+/// The caller decides whether to run this (see `resolve_redirect_uri`):
+/// only a value that was actually quoted is unescaped, so a URL that
+/// contains a real backslash is never rewritten by a path it did not
+/// take.
+fn unescape_json_slashes(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.peek() {
+            Some('/') => {
+                chars.next();
+                out.push('/');
+            }
+            Some('\\') => {
+                chars.next();
+                out.push('\\');
+            }
+            Some('"') => {
+                chars.next();
+                out.push('"');
+            }
+            // An unrecognised escape is left as it was, including the
+            // backslash: this is not a JSON decoder, and guessing at the
+            // rest of the grammar would change values it should not.
+            _ => out.push('\\'),
+        }
+    }
+    out
+}
+
+/// Is `candidate` the same callback the operator configured?
+///
+/// Compared on SCHEME + HOST + PORT + PATH, each normalised, because the
+/// string comparison refuses values that are the same URI spelled
+/// differently - a trailing slash on APP_URL, an uppercase host, an
+/// explicit default port. None of those reach the provider as a
+/// different URI, so none of them is a defect worth failing the connect
+/// over. A query string or a fragment IS a difference: it would be sent
+/// verbatim and land on a URI no provider registered.
+fn same_callback(candidate: &url::Url, fallback: &str) -> bool {
+    let Ok(expected) = url::Url::parse(fallback) else {
+        return false;
+    };
+    if candidate.query().is_some() || candidate.fragment().is_some() {
+        return false;
+    }
+    candidate.scheme() == expected.scheme()
+        && candidate.host_str().map(|h| h.eq_ignore_ascii_case(expected.host_str().unwrap_or("")))
+            == Some(true)
+        && candidate.port_or_known_default() == expected.port_or_known_default()
+        && candidate.path() == expected.path()
 }
 
 /// Does this string contain HTML the stripper should remove?
@@ -238,9 +410,7 @@ where
         .as_str()
         .filter(|t| !t.is_empty())
         .map(|s| s.to_string())
-        .ok_or_else(|| {
-            format!("{provider} token exchange returned no access_token: {body}")
-        })
+        .ok_or_else(|| format!("{provider} token exchange returned no access_token: {body}"))
         .map(|t| (t, json))
 }
 
@@ -569,6 +739,170 @@ fn decode_entity(chars: &[char], at: usize) -> Option<(String, usize)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- resolve_redirect_uri -------------------------------------------------
+    //
+    // The handler used to take `query.redirect_uri` verbatim into the
+    // authorize URL. A JSON-quoted value reached Meta with literal quotes
+    // (the Threads error the operator reported) and an arbitrary host was
+    // honoured too (an open redirect inside the OAuth flow).
+
+    const APP: &str = "https://switchpost.example.com";
+    const CALLBACK: &str = "https://switchpost.example.com/api/auth/callback";
+
+    #[test]
+    fn omitting_redirect_uri_uses_the_deployed_callback() {
+        assert_eq!(resolve_redirect_uri(None, APP).unwrap(), CALLBACK);
+    }
+
+    #[test]
+    fn empty_redirect_uri_falls_back_to_the_deployed_callback() {
+        assert_eq!(resolve_redirect_uri(Some("   "), APP).unwrap(), CALLBACK);
+    }
+
+    #[test]
+    fn the_deployments_own_callback_is_accepted() {
+        assert_eq!(resolve_redirect_uri(Some(CALLBACK), APP).unwrap(), CALLBACK);
+    }
+
+    #[test]
+    fn a_json_quoted_callback_is_unwrapped_not_rejected() {
+        // The reported Threads shape: a caller that round-tripped the value
+        // through serde_json sent `"https://..."` with the quotes in place.
+        // The fix must accept it AND return the unquoted form, because the
+        // quoted form is not a working callback.
+        let quoted = format!("\"{CALLBACK}\"");
+        let resolved = resolve_redirect_uri(Some(&quoted), APP).unwrap();
+        assert_eq!(resolved, CALLBACK);
+        assert!(!resolved.contains('"'));
+    }
+
+    #[test]
+    fn the_serde_json_escaped_slash_form_is_unwrapped_not_rejected() {
+        // The EXACT value from the operator's Threads consent page:
+        //
+        //   params[redirect_uri]=%22https%3A%5C%2F%5C%2Fswitchpost...%22
+        //
+        // `%22` is the quote, `%5C%2F` is a BACKSLASH then a slash. That is
+        // what `serde_json::to_string` emits for `/`, so the value that
+        // reached the handler was
+        //
+        //   "https:\/\/switchpost.example.com\/api\/auth\/callback"
+        //
+        // Stripping the quotes alone leaves the backslashes, the string
+        // is neither the callback nor a parseable URL, and the caller is
+        // refused - so the escape has to be undone in the same pass.
+        let escaped = "\"https:\\/\\/switchpost.example.com\\/api\\/auth\\/callback\"";
+        let resolved = resolve_redirect_uri(Some(escaped), APP).unwrap();
+        assert_eq!(
+            resolved, CALLBACK,
+            "the JSON-escaped form must resolve to the plain callback, not a \
+             string with backslashes in it. Got: {resolved}"
+        );
+        assert!(
+            !resolved.contains('\\'),
+            "the resolved value must not carry backslashes into the authorize \
+             URL. Got: {resolved}"
+        );
+    }
+
+    #[test]
+    fn an_escaped_slash_foreign_host_is_still_refused() {
+        // Unescaping must not become a bypass: a quoted-and-escaped URL
+        // pointing at another host is still an open redirect and must be
+        // refused, which means the unescape runs BEFORE the host check and
+        // not instead of it.
+        let escaped = "\"https:\\/\\/evil.test\\/cb\"";
+        let err = resolve_redirect_uri(Some(escaped), APP).unwrap_err();
+        assert!(
+            err.contains("not this deployment's callback"),
+            "an escaped foreign host was accepted: {err}"
+        );
+    }
+
+    #[test]
+    fn a_double_quoted_callback_is_refused() {
+        // Two layers of quoting: stripping one leaves the inner quotes, so
+        // the value is not the configured callback and is refused with a
+        // message that names it.
+        let double_quoted = format!("\"\"{CALLBACK}\"\"");
+        let err = resolve_redirect_uri(Some(&double_quoted), APP).unwrap_err();
+        assert!(
+            err.contains(CALLBACK),
+            "the refusal must name the correct callback so the caller can act: {err}"
+        );
+    }
+
+    #[test]
+    fn a_foreign_host_is_refused() {
+        let err = resolve_redirect_uri(Some("https://evil.test/cb"), APP).unwrap_err();
+        assert!(err.contains("not this deployment's callback"), "{err}");
+        assert!(err.contains(CALLBACK));
+    }
+
+    #[test]
+    fn a_relative_path_other_than_the_callback_is_refused() {
+        // `/api/auth/close` is a real path in this app, not the callback: it
+        // is refused (it is not a URL, so it cannot be compared to one) and
+        // the message still points the caller at the right URI.
+        let err = resolve_redirect_uri(Some("/api/auth/close"), APP).unwrap_err();
+        assert!(err.contains(CALLBACK), "{err}");
+    }
+
+    #[test]
+    fn the_bare_callback_path_is_accepted() {
+        assert_eq!(
+            resolve_redirect_uri(Some("/api/auth/callback"), APP).unwrap(),
+            CALLBACK
+        );
+    }
+
+    #[test]
+    fn the_callback_with_a_query_string_is_refused() {
+        // A query on the callback is a different URI as far as the provider
+        // is concerned, and it would be sent verbatim.
+        let with_query = format!("{CALLBACK}?next=/drain");
+        let err = resolve_redirect_uri(Some(&with_query), APP).unwrap_err();
+        assert!(err.contains("not this deployment's callback"), "{err}");
+    }
+
+    #[test]
+    fn a_non_url_redirect_uri_is_refused_without_panicking() {
+        let err = resolve_redirect_uri(Some("not a url at all"), APP).unwrap_err();
+        assert!(err.contains("not an absolute URL"), "{err}");
+        assert!(err.contains(CALLBACK), "{err}");
+    }
+
+    #[test]
+    fn the_same_callback_spelled_differently_is_still_accepted() {
+        // An APP_URL with a trailing slash, an uppercase host, or an explicit
+        // default port describe the same URI. Refusing those would fail a
+        // working connect over a spelling difference (see same_callback).
+        for (app_url, provided) in [
+            ("https://switchpost.example.com/", format!("{CALLBACK}")),
+            (APP, "HTTPS://SWITCHPOST.EXAMPLE.COM/api/auth/callback".to_string()),
+            (APP, format!("{CALLBACK}")),
+            (
+                APP,
+                "https://switchpost.example.com:443/api/auth/callback".to_string(),
+            ),
+        ] {
+            assert_eq!(
+                resolve_redirect_uri(Some(&provided), app_url).unwrap(),
+                format!("{}/api/auth/callback", app_url.trim_end_matches('/')),
+                "{provided} against APP_URL {app_url} is the same callback"
+            );
+        }
+    }
+
+    #[test]
+    fn a_scheme_downgrade_is_refused() {
+        // http on the same host is a different URI and a downgrade: the
+        // provider would be told to return the code over plaintext.
+        let http = "http://switchpost.example.com/api/auth/callback";
+        let err = resolve_redirect_uri(Some(http), APP).unwrap_err();
+        assert!(err.contains("not this deployment's callback"), "{err}");
+    }
 
     #[test]
     fn test_generate_code_verifier_length() {
