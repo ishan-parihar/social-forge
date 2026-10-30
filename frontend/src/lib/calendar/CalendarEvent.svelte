@@ -206,6 +206,30 @@
     container-type: inline-size;
   }
 
+  /* The chip is 24px tall in EVERY grid, not just the month one.
+     The week and day chips were 21px, and a 21px target is under the WCAG 2.2
+     "Target Size (Minimum)" floor of 24x24 (2.5.8) - AGENTS.md 9.37: below 24
+     is a FAIL, not a warning. The month grid below had carried the floor all
+     along, in `.event-chip.compact`, with the comment that explains it; the
+     non-compact chip never got the same rule, and the probe measures the
+     rendered box, so the week and day grids were the two that failed.
+
+     `padding: 0.125rem` on an 11px line is what made 21px, so the vertical
+     padding carries the box to 24px and the type size does not move. The week
+     grid's cells are `min-h-24`, so the extra 3px is absorbed by the cell
+     rather than pushing the row apart - the measured acceptance for this
+     change is that the CELL does not grow.
+
+     Do NOT "fix" this by removing anything from the chip: the time, the tag
+     colour bar, the tag name chips and the metric counts were each proposed
+     for deletion by an audit draft that had not rendered the page. They are
+     all present, they all clear contrast, and the 21px box was the only
+     defect. */
+  .event-chip {
+    min-height: 24px;
+    padding: 0.3125rem 0.375rem;
+  }
+
   /* The COMPACT chip - the month grid - is 24px tall.
      It was 21px, and a 21px target is under even the WCAG 2.2
      "Target Size (Minimum)" floor of 24x24 (2.5.8).
