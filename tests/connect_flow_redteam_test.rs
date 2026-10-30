@@ -798,3 +798,74 @@ async fn every_google_scoped_provider_passes_the_scope_guard() {
          drive, gmail, calendar)"
     );
 }
+
+/// No token path anywhere in the tree may report an EMPTY access_token as
+/// success.
+///
+/// This was found by grepping the whole of `src/social/` for the shape rather
+/// than reading one provider. Exactly one site had it: Discord's
+/// `refresh_token` read `json["access_token"].as_str().unwrap_or("")`, so a
+/// refused refresh SUCCEEDED with an empty token. Discord answers a revoked
+/// refresh token with `{"error":"invalid_grant"}` and no `access_token`.
+///
+/// The failure mode is the worst available shape because it is invisible:
+/// the integration stays "connected", the dashboard shows it healthy, the
+/// scheduler writes an empty token without complaint, and the defect only
+/// becomes visible as an opaque publish failure hours later, with nothing
+/// connecting it to the refresh that actually broke. AGENTS.md §6.3 requires
+/// that a refresh path never write a bad token, and an empty string is a bad
+/// token that no guard catches.
+///
+/// The test is over the tree, not a list of providers, for the same reason the
+/// redirect_uri guard is: the file that regresses next is not on anyone's
+/// list.
+#[test]
+fn no_token_path_reports_an_empty_access_token_as_success() {
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
+    let mut stack = vec![std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/social")];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else if p.extension().and_then(|x| x.to_str()) == Some("rs") {
+                files.push(p);
+            }
+        }
+    }
+    files.sort();
+
+    for path in &files {
+        let f = path
+            .strip_prefix(env!("CARGO_MANIFEST_DIR"))
+            .unwrap()
+            .display()
+            .to_string();
+        let src = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {f}: {e}"));
+        for (lineno, line) in src.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            // The exact shape: an access_token read whose missing/empty case
+            // becomes "" rather than an error. Two spellings appear in
+            // practice; both are guarded here.
+            let silent_empty = trimmed.contains("unwrap_or(\"\")")
+                && trimmed.contains("access_token");
+            let silent_unwrap = trimmed.contains("access_token")
+                && trimmed.contains(".unwrap()")
+                && trimmed.contains("as_str()");
+            if silent_empty || silent_unwrap {
+                panic!(
+                    "{f}:{} silently substitutes an empty access_token instead of \
+                     returning an error: {trimmed}. A refused refresh would be \
+                     reported as a SUCCESS, the integration would stay \
+                     'connected' in the dashboard, and the real failure would \
+                     surface hours later as an opaque publish error. Return a \
+                     ProviderError that quotes the provider's own body.",
+                    lineno + 1
+                );
+            }
+        }
+    }
+}

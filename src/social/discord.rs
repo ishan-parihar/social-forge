@@ -597,11 +597,47 @@ impl SocialProvider for DiscordProvider {
             .form(&params)
             .send()
             .await?;
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
 
-        let json: serde_json::Value = resp.json().await?;
+        // ─── Why the empty token is no longer accepted ───────────
+        // This was the one site in the tree that read
+        // `json["access_token"].as_str().unwrap_or("")`, so a refused
+        // refresh SUCCEEDED with an empty token. Discord answers a revoked
+        // refresh token with `{"error":"invalid_grant"}` and no
+        // `access_token`, and the whole body was discarded: the integration
+        // stayed "connected", the dashboard showed it healthy, and the
+        // failure surfaced hours later as an opaque publish error with no
+        // link back to the refresh that actually broke. AGENTS.md §6.3 is
+        // explicit that a refresh path must never write a bad token, and an
+        // empty string is the worst shape of a bad token because it is not
+        // an error at all.
+        if !status.is_success() {
+            return Err(ProviderError::Api(format!(
+                "Discord token refresh failed (HTTP {status}): {body}"
+            )));
+        }
+        let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+            ProviderError::Api(format!(
+                "Discord token refresh response was not JSON ({e}). Body: {body}"
+            ))
+        })?;
+
+        // An empty access_token is a FAILURE, not a value. The old
+        // `unwrap_or("")` here is what made a refused refresh look like a
+        // successful one.
+        let access_token = json["access_token"]
+            .as_str()
+            .filter(|t| !t.is_empty())
+            .ok_or_else(|| {
+                ProviderError::Auth(format!(
+                    "Discord token refresh returned no access_token. Body: {body}"
+                ))
+            })?
+            .to_string();
 
         Ok(AuthToken {
-            access_token: json["access_token"].as_str().unwrap_or("").to_string(),
+            access_token,
             refresh_token: json["refresh_token"].as_str().map(String::from),
             expires_in: json["expires_in"].as_u64().map(|v| v as u32),
             provider_user_id: String::new(),
