@@ -66,6 +66,7 @@ export const PROVIDERS: Record<string, ProviderMeta> = {
   hashnode:             { label: 'Hashnode',   color: '#60a5fa', icon: 'HN',  charLimit: 65536 },
   skool:                { label: 'Skool',      color: '#facc15', icon: 'SK',  charLimit: 65536 },
   gmail:                { label: 'Gmail',      color: '#ea4335', icon: 'GM',  charLimit: 65536 },
+  calendar:             { label: 'Calendar',   color: '#4285f4', icon: 'CA',  charLimit: 65536 },
   drive:                { label: 'Drive',      color: '#1fa463', icon: 'DR',  charLimit: 65536 },
   'google-my-business': { label: 'Google Biz', color: '#4285f4', icon: 'GB',  charLimit: 1500 },
 };

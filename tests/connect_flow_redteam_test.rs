@@ -1,0 +1,590 @@
+// ─── Red-team: provider connect flows against a real router ───
+//
+// Everything here drives `build_router(...)` with a session cookie, the same
+// way the browser does. Each test names the observable defect it pins, so a
+// fix has to make a RED test green rather than a green test stay green.
+//
+// Run: cargo test --test connect_flow_redteam_test
+
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use serde_json::Value;
+use switchpost::api::{build_router, AppState};
+use switchpost::auth::jwt::create_token;
+use switchpost::auth::middleware::{DEFAULT_USER_ID, SESSION_COOKIE};
+use switchpost::config::Config;
+use switchpost::db;
+use switchpost::realtime::Broadcaster;
+use switchpost::social::registry::ProviderRegistry;
+use tower::ServiceExt;
+use uuid::Uuid;
+
+async fn state() -> AppState {
+    switchpost::config::load_dotenv_for_tests();
+    let config = Config::from_env().expect("config");
+    let pool = db::create_pool(&config.database_url).await.expect("pool");
+    db::ensure_local_user(&pool).await.expect("local user");
+    let registry = ProviderRegistry::new(&config, None, None);
+    AppState {
+        db: pool,
+        config: config.clone(),
+        broadcast: Broadcaster::new(),
+        providers: registry,
+        token_key: None,
+        telegram_client_manager: None,
+        wa_client: None,
+        media_http_client: reqwest::Client::new(),
+        media_wreq_client: wreq::Client::new(),
+    }
+}
+
+/// A session cookie the auth middleware accepts, so every request below is
+/// exercised as an AUTHENTICATED browser call.
+fn session_cookie() -> String {
+    let config = Config::from_env().expect("config");
+    let token = create_token(DEFAULT_USER_ID, &config.jwt_secret).expect("token");
+    format!("{SESSION_COOKIE}={token}")
+}
+
+fn json_request(method: &str, uri: &str, body: Option<Value>) -> Request<Body> {
+    let cookie = session_cookie();
+    // The Origin must match the CSRF middleware's expected Frontend origin.
+    // `FRONTEND_URL` defaults to `APP_URL`, and `APP_URL` defaults to
+    // `https://localhost:6543` — the SCHEME matters, so a plain
+    // `http://localhost:6543` here would be refused by the origin check
+    // before the handler ever ran, and the test would report a CSRF failure
+    // as a handler failure. Both are sent so the header set covers the
+    // Referer fallback too.
+    let origin = std::env::var("FRONTEND_URL")
+        .or_else(|_| std::env::var("APP_URL"))
+        .unwrap_or_else(|_| "https://localhost:6543".to_string());
+    let builder = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("cookie", cookie)
+        .header("origin", origin.as_str())
+        .header("referer", format!("{origin}/"));
+    match body {
+        Some(b) => builder
+            .header("content-type", "application/json")
+            .body(Body::from(b.to_string()))
+            .expect("request"),
+        None => builder.body(Body::empty()).expect("request"),
+    }
+}
+
+async fn call(
+    state: &AppState,
+    method: &str,
+    uri: &str,
+    body: Option<Value>,
+) -> (StatusCode, String) {
+    let res = build_router(state.clone())
+        .oneshot(json_request(method, uri, body))
+        .await
+        .expect("router call");
+    let status = res.status();
+    let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .expect("body");
+    (status, String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// Parse a response body as JSON, with the defect named in the panic so a
+/// non-JSON body fails the test instead of silently yielding `null`.
+fn parse_json(what: &str, status: StatusCode, body: &str) -> Value {
+    serde_json::from_str::<Value>(body).unwrap_or_else(|_| {
+        panic!(
+            "{what}: the answer was not JSON (HTTP {status}). \
+             The frontend reports this as `Invalid JSON response from {what}` \
+             and the operator never sees the real reason.\nbody: {body}"
+        )
+    })
+}
+
+/// Every provider identifier the registry knows, so a provider cannot be
+/// silently dropped from the connect surface.
+async fn registered_providers() -> Vec<String> {
+    let config = Config::from_env().expect("config");
+    let registry = ProviderRegistry::new(&config, None, None);
+    registry.list().iter().map(|s| s.to_string()).collect()
+}
+
+// ─────────────────────────────────────────────────────────────
+// 1. The connect surface must cover the registry
+// ─────────────────────────────────────────────────────────────
+
+/// The dashboard's Available Providers grid is a hardcoded TypeScript list
+/// (`frontend/src/routes/channels/+page.svelte`). The registry is the
+/// backend's truth. Every registered provider that is connectable must be
+/// offered in the frontend, or it is unreachable through the WebUI.
+#[tokio::test]
+async fn channels_page_offers_every_registered_connectable_provider() {
+    let ids = registered_providers().await;
+    assert!(ids.len() >= 26, "expected the full registry, got {ids:?}");
+
+    // The frontend's own literal, transcribed. This travels as a string
+    // because the check is about the RENDERED offer list.
+    let source = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/frontend/src/routes/channels/+page.svelte"
+    ))
+    .expect("read channels page");
+
+    let mut missing = Vec::new();
+    for id in &ids {
+        if !source.contains(&format!("\"{id}\"")) {
+            missing.push(id.clone());
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "frontend Available Providers grid omits {missing:?}, \
+         which the backend registers as connectable — a channel the \
+         founder cannot add from the WebUI"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 2. A refused connect must be JSON, not HTML
+// ─────────────────────────────────────────────────────────────
+
+/// The operator's dashboard reported `Invalid JSON response from
+/// /api/integrations/connect/whatsapp/pair`. The route exists in the
+/// backend, so the failing half is the presentation: something between the
+/// browser and the handler answered non-JSON (the SPA HTML fallback, or a
+/// proxy error page), and the API client reports that as a JSON parse error
+/// with the status swallowed.
+///
+/// The fix is on BOTH sides:
+///   - the router must never answer an unknown `/api/*` path with HTML, and
+///   - the API client must surface the status + body when it cannot parse.
+/// This test pins the router half; the client half is pinned in
+/// `frontend` via the `Invalid JSON response` message containing the status.
+#[tokio::test]
+async fn unknown_api_route_never_answers_html() {
+    let state = state().await;
+
+    // NOTE THE PATH SHAPE. An earlier revision of this test used
+    // `/api/integrations/connect/this-route-does-not-exist`, which matches
+    // the REAL `connect/:provider` route and is answered 401 by the auth
+    // middleware — so the test passed without the fallback fix existing. A
+    // test that passes on the broken code proves nothing.
+    //
+    // The paths below match no route at all, so they reach the SPA fallback,
+    // which is exactly where the 200-HTML answer came from.
+    //
+    // `/api/integrations/connect/<unknown>` and `/api/auth/callback/<unknown>`
+    // are a separate case: they match REAL routes, which validate the
+    // provider and answer a JSON `bad_request` — a GOOD answer, just a
+    // different code. They are asserted separately below so they are not
+    // mistaken for a guard hit.
+    for uri in [
+        "/api/definitely-not-a-route",
+        "/api/posts/xyzzy/nope",
+    ] {
+        let (status, body) = call(&state, "GET", uri, None).await;
+
+        assert_ne!(
+            status,
+            StatusCode::OK,
+            "{uri} answered 200 — the SPA fallback swallowed it and handed \
+             the browser HTML where JSON was promised"
+        );
+        assert!(
+            !body.contains("<!doctype html") && !body.contains("<html"),
+            "{uri} answered HTML (HTTP {status}); the browser parses it as a \
+             JSON error and the operator never sees the reason. body: {body}"
+        );
+
+        let parsed: Value = serde_json::from_str(&body).unwrap_or_else(|_| {
+            panic!("{uri}: expected a JSON 404, got HTTP {status} and body {body}")
+        });
+        assert_eq!(
+            parsed.get("code").and_then(Value::as_str),
+            Some("not_found"),
+            "{uri}: the 404 must carry a machine-readable code"
+        );
+        let msg = parsed.get("error").and_then(Value::as_str).unwrap_or("");
+        assert!(
+            msg.contains(uri) || msg.contains("No such endpoint"),
+            "{uri}: the error must name the missing path, got {msg}"
+        );
+    }
+
+    // A connect to a provider the registry does not know is refused by the
+    // handler itself, with the provider NAME — which is the most useful
+    // answer of the three: the founder gets told which card they clicked.
+    let (status, body) = call(
+        &state,
+        "POST",
+        "/api/integrations/connect/not-a-provider-at-all",
+        Some(serde_json::json!({})),
+    )
+    .await;
+    assert!(
+        !body.contains("<!doctype html"),
+        "an unknown provider connect answered HTML (HTTP {status})"
+    );
+    assert_ne!(
+        status,
+        StatusCode::OK,
+        "an unknown provider connect answered 200"
+    );
+    if body.trim().is_empty() {
+        // A 404/405 from the router without a body is still a NON-200,
+        // non-HTML answer, which is what the founder needs. The strict JSON
+        // shape is only required when there IS a body to parse.
+        return;
+    }
+    let parsed: Value = serde_json::from_str(&body).unwrap_or_else(|_| {
+        panic!("unknown provider connect: expected JSON, got {body}")
+    });
+    assert_eq!(
+        parsed.get("code").and_then(Value::as_str),
+        Some("bad_request"),
+        "an unknown provider is a bad request, and must name itself as one"
+    );
+}
+
+/// The counterpart: the SPA's OWN client-routed paths must STILL serve HTML.
+///
+/// The `/api/*` guard is one line inside the SPA fallback, and a guard that
+/// is too broad takes down every route in the app. Pin that a normal
+/// client-routed path does NOT get the API-namespace JSON message.
+#[tokio::test]
+async fn a_client_routed_path_is_not_caught_by_the_api_guard() {
+    let state = state().await;
+    let (status, body) = call(&state, "GET", "/posts/some-id", None).await;
+    assert!(
+        !body.contains("No such endpoint"),
+        "/posts/some-id was answered by the /api/* guard — the guard is too \
+         broad and will take down every client route in the app (HTTP {status})"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3. A 502 from a provider must carry the provider's reason
+// ─────────────────────────────────────────────────────────────
+
+/// `POST /api/integrations/connect/whatsapp/pair` on an instance with no
+/// WhatsApp client configured answers `502 {"error":"WhatsApp client not
+/// configured"}`. That is JSON and the frontend shows it. But the
+/// WhatsAppClient is `Option`ed out in tests only; the real defect class is
+/// a handler that answers a bare string body. Pin the shape.
+#[tokio::test]
+async fn whatsapp_pair_and_telegram_request_code_answer_json_when_unconfigured() {
+    let state = state().await;
+
+    let (status, body) = call(
+        &state,
+        "POST",
+        "/api/integrations/connect/whatsapp/pair",
+        Some(serde_json::json!({"phone_number": "+1234567890"})),
+    )
+    .await;
+    let parsed = parse_json("whatsapp pair", status, &body);
+    assert!(
+        parsed.get("error").is_some(),
+        "an error answer must carry an `error` field, got {parsed}"
+    );
+
+    let (status, body) = call(
+        &state,
+        "POST",
+        "/api/integrations/connect/telegram-user/request-code",
+        Some(serde_json::json!({"phone": "+1234567890"})),
+    )
+    .await;
+    let parsed = parse_json("telegram request-code", status, &body);
+    assert!(
+        parsed.get("error").is_some(),
+        "an error answer must carry an `error` field, got {parsed}"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 4. OAuth scope compatibility (the Google 400)
+// ─────────────────────────────────────────────────────────────
+
+/// The Google provider requested all of YouTube + Gmail + Calendar + Drive
+/// in ONE authorization URL. Google rejects that combination wholesale:
+///
+///   "This request contains scopes that cannot be requested together :
+///    [https://www.googleapis.com/auth/youtube, ... drive.file]"
+///
+/// Nothing in the backend guards against an incompatible combination, so
+/// the founder gets a raw Google error page with no way forward. The
+/// guard belongs in the provider: `generate_auth_url` must either request
+/// only the compatible set, or split the flow per product.
+#[tokio::test]
+async fn google_provider_requests_a_compatible_scope_set() {
+    let config = Config::from_env().expect("config");
+    let registry = ProviderRegistry::new(&config, None, None);
+    let google = registry.get("google").expect("google is registered");
+
+    let scopes = google.scopes();
+
+    // youtube.force-ssl is a YouTube-Data-API scope and drive.file is a
+    // Drive scope. Google's rule: a YouTube Data API scope and a Drive
+    // scope cannot be requested together in one consent.
+    let youtube_scopes = [
+        "https://www.googleapis.com/auth/youtube",
+        "https://www.googleapis.com/auth/youtube.upload",
+        "https://www.googleapis.com/auth/youtube.force-ssl",
+    ];
+    let drive_scopes = [
+        "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/drive.file",
+    ];
+
+    let has_youtube = youtube_scopes.iter().any(|s| scopes.iter().any(|x| x == s));
+    let has_drive = drive_scopes.iter().any(|s| scopes.iter().any(|x| x == s));
+
+    assert!(
+        !(has_youtube && has_drive),
+        "google requests YouTube and Drive scopes together — Google rejects \
+         this combination at the authorize endpoint with 'scopes that cannot \
+         be requested together'. Split the connect flow per product, or \
+         narrow the set."
+    );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 5. LinkedIn: the scope that needs a product nobody has
+// ─────────────────────────────────────────────────────────────
+
+/// LinkedIn's `r_member_social` requires the "Sign In with LinkedIn using
+/// Mobile or the LinkedIn API" product to be enabled on the app. When it is
+/// NOT enabled, LinkedIn answers the authorize request with its own error
+/// page ("Bummer, something went wrong. In five seconds, you will be
+/// redirected to: …") rather than a consent screen. The provider cannot
+/// fix the operator's app configuration, but it MUST NOT request a scope the
+/// product gate will refuse — and it must tell the operator which product
+/// to enable when it does.
+#[tokio::test]
+async fn linkedin_does_not_request_a_product_gated_scope_silently() {
+    let config = Config::from_env().expect("config");
+    let registry = ProviderRegistry::new(&config, None, None);
+    let linkedin = registry.get("linkedin").expect("linkedin is registered");
+
+    let scopes = linkedin.scopes();
+
+    // The defect is that this scope needs a product that is not on by
+    // default, and the OAuth failure gives no hint at all — the founder
+    // has no way to know which product to enable.
+    assert!(
+        !scopes.iter().any(|s| s == "r_member_social"),
+        "linkedin requests `r_member_social`, which needs the LinkedIn \
+         'Sign In with LinkedIn' product to be enabled. Without it LinkedIn \
+         answers 'Bummer, something went wrong'. Either drop the scope or \
+         surface the missing product in the connect error."
+    );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 6. The OAuth redirect_uri must match the deployment origin
+// ─────────────────────────────────────────────────────────────
+
+/// `instagram-standalone` failed on the VPS with a redirect_uri error. The
+/// backend builds the redirect as `{APP_URL}/api/auth/callback`, which is
+/// correct — but nothing asserts the value that actually reaches the
+/// provider equals `APP_URL`. When `APP_URL` is misconfigured (trailing
+/// slash, http vs https, port), Meta refuses the request with
+/// "URL Blocked: This redirect failed because the redirect URI is not
+/// whitelisted" (error 1349168) and the founder cannot see what was sent.
+///
+/// Pin: the authorize URL's `redirect_uri` is byte-identical to
+/// `{APP_URL}/api/auth/callback`, and the API logs it (the operator's only
+/// clue when Meta refuses).
+#[tokio::test]
+async fn authorize_url_carries_the_app_url_callback() {
+    let state = state().await;
+    let expected = format!("{}/api/auth/callback", state.config.app_url);
+
+    let (status, body) = call(&state, "GET", "/api/integrations/connect/instagram-standalone", None).await;
+
+    // The provider is unconfigured in a test env, so a 400 naming the
+    // missing env vars is the honest answer — never a silent HTML fallback.
+    if status == StatusCode::BAD_REQUEST {
+        let parsed = parse_json("connect redirect_uri", status, &body);
+        assert!(
+            parsed.get("error").is_some(),
+            "a 400 must be JSON with an `error` field, got {parsed}"
+        );
+        return;
+    }
+
+    let parsed = parse_json("connect redirect_uri", status, &body);
+    let url = parsed
+        .get("url")
+        .and_then(|u| u.as_str())
+        .unwrap_or_else(|| panic!("connect answer has no url: {parsed}"));
+    let redirect_uri = url::Url::parse(url)
+        .ok()
+        .and_then(|u| {
+            u.query_pairs()
+                .find(|(k, _)| k == "redirect_uri")
+                .map(|(_, v)| v.into_owned())
+        })
+        .unwrap_or_else(|| panic!("authorize URL carries no redirect_uri: {url}"));
+
+    assert_eq!(
+        redirect_uri, expected,
+        "the authorize URL's redirect_uri does not match the configured APP_URL callback — \
+         Meta refuses the request with 'URL Blocked' (error 1349168)"
+    );
+    let _ = Uuid::nil();
+}
+
+// ─────────────────────────────────────────────────────────────
+// 7. The frontend's provider grid must not omit a rendered label
+// ─────────────────────────────────────────────────────────────
+
+/// Facebook-Business and Instagram-Business were absent from the dashboard
+/// while the backend registered their providers (as `facebook` and
+/// `instagram`). The identifiers DO exist and ARE registered — so the
+/// frontend simply never rendered a card for them. Pin that both appear in
+/// the frontend's offer list AND in the backend registry.
+#[tokio::test]
+async fn facebook_and_instagram_are_registered_and_rendered() {
+    let ids = registered_providers().await;
+    for id in ["facebook", "instagram", "instagram-standalone"] {
+        assert!(
+            ids.iter().any(|x| x == id),
+            "{id} is not registered — the dashboard cannot offer it"
+        );
+    }
+
+    let source = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/frontend/src/routes/channels/+page.svelte"
+    ))
+    .expect("read channels page");
+    for id in ["facebook", "instagram", "instagram-standalone"] {
+        assert!(
+            source.contains(&format!("\"{id}\"")),
+            "{id} is registered but absent from the dashboard's Available \
+             Providers grid"
+        );
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 8. The frontend API client must not hide the HTTP status
+// ─────────────────────────────────────────────────────────────
+
+/// `Invalid JSON response from /api/...` was the whole message the operator
+/// saw. It carried no status and no body, so a 502 from the provider, a 404
+/// from a mistyped route and a reverse-proxy error page were
+/// indistinguishable - and six distinct production defects were all reported
+/// to us as that one string.
+///
+/// The client is now fixed to name the status, the content type and a body
+/// excerpt. Pin exactly that: the message must NOT be the old bare form,
+/// and it must carry both the status and a body slice.
+#[tokio::test]
+async fn frontend_api_client_surfaces_status_and_body_on_unparseable_response() {
+    let source = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/frontend/src/lib/api/client.ts"
+    ))
+    .expect("read api client");
+
+    assert!(
+        source.contains("Invalid JSON response") && source.contains("res.status"),
+        "the API client's unparseable-body error must carry the HTTP status \
+         so a bare path-less message is not the operator's only information"
+    );
+
+    // The body excerpt is what tells an HTML error page from a JSON error
+    // page, which is the whole difference between "the route does not exist"
+    // and "the route 500'd".
+    assert!(
+        source.contains("content-type") && source.contains("excerpt"),
+        "the API client must inspect the response's content-type and include \
+         a short body slice, so a proxy error page is visible"
+    );
+
+    // The HTML case is the classic one: the SPA fallback answering an
+    // /api/* path. Say so in words, because "Expected JSON ... 200 text/html"
+    // is still not something a founder can act on without being told what
+    // it means.
+    assert!(
+        source.contains("received HTML, not JSON"),
+        "the client must name the HTML-where-JSON-was-expected case, because \
+         that is the shape produced by the server's SPA fallback masking an \
+         unknown /api/* route"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 9. The dashboard's provider grid must equal the backend registry
+// ─────────────────────────────────────────────────────────────
+
+/// The dashboard's `availableProviders` literal is the only thing standing
+/// between a registered provider and a card on the Channels screen. It is a
+/// hand-maintained list, and it has drifted before: `youtube` was missing
+/// for a release while the registry, `$lib/providers` and the onboarding
+/// modal all had it, so the grid showed 25 cards for a 26-platform product
+/// with no way to connect YouTube.
+///
+/// Pin the whole set both ways. A one-way check ("the grid contains what the
+/// registry has") passes a grid that is MISSING entries; a grid that has an
+/// EXTRA entry is equally broken (a connect button for a provider the
+/// registry will not serve). So the two sets must be equal, excluding the
+/// Tier-3 archive opt-in, which the frontend deliberately leaves out until
+/// `ENABLE_ARCHIVE_PROVIDERS=1` is set.
+#[tokio::test]
+async fn dashboard_provider_grid_matches_the_backend_registry() {
+    let registered = registered_providers().await;
+    let expected: std::collections::HashSet<String> = registered.into_iter().collect();
+
+    // The frontend literals this test reads.
+    let page = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/frontend/src/routes/channels/+page.svelte"
+    ))
+    .expect("read channels page");
+
+    // Pull the ids out of the `availableProviders` array literal rather than
+    // the whole file, so an unrelated mention of "drive" in a comment cannot
+    // satisfy the check.
+    let start = page
+        .find("const availableProviders")
+        .expect("availableProviders not found");
+    let rest = &page[start..];
+    let end = rest
+        .find(']')
+        .map(|i| start + i)
+        .expect("unterminated array");
+    let literal = &page[start..end];
+
+    // Quoted ids, minus the ARCHIVE_PROVIDERS spread the frontend intentionally
+    // leaves empty, and minus HIDDEN_PROVIDERS (kick/vk/whop/lemmy), which the
+    // registry never registers anyway.
+    let hidden = ["kick", "vk", "whop", "lemmy"];
+    let offered: std::collections::HashSet<String> = literal
+        .split('"')
+        .enumerate()
+        .filter(|(i, _)| i % 2 == 1)
+        .map(|(_, s)| s.to_string())
+        .filter(|s| !s.is_empty())
+        .filter(|s| !s.contains("ARCHIVE"))
+        .filter(|s| !hidden.contains(&s.as_str()))
+        .collect();
+
+    let missing: Vec<_> = expected.difference(&offered).cloned().collect();
+    let extra: Vec<_> = offered.difference(&expected).cloned().collect();
+    assert!(
+        missing.is_empty(),
+        "registered but absent from the dashboard grid: {missing:?}. A \
+         hand-maintained list drifts; read the registry's list at \
+         src/social/registry.rs."
+    );
+    assert!(
+        extra.is_empty(),
+        "offered in the dashboard but NOT registered by the backend: \
+         {extra:?}. The connect button would 404 or draw an error page."
+    );
+}

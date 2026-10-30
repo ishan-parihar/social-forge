@@ -109,7 +109,13 @@ async fn test_linkedin_scopes_correct() {
     let config = get_config();
     let registry = get_registry(&config);
 
-    // Personal scopes
+    // Personal scopes. `r_member_social` is NOT in the default set: it is
+    // gated behind LinkedIn's "Read member's social" product, and when that
+    // product is not enabled LinkedIn answers the authorize request with
+    // "Bummer, something went wrong" BEFORE a consent screen — which took
+    // the whole connect flow down on a live deployment (2026-10-30) even
+    // though only the READ path needs the scope. Publishing needs
+    // `openid` + `profile` + `email` + `w_member_social` and nothing more.
     let li = registry.get("linkedin").unwrap();
     let scopes = li.scopes();
     assert!(scopes.contains(&"openid".into()), "Missing openid scope");
@@ -120,13 +126,14 @@ async fn test_linkedin_scopes_correct() {
         "Missing w_member_social scope"
     );
     assert!(
-        scopes.contains(&"r_member_social".into()),
-        "Missing r_member_social scope"
+        !scopes.contains(&"r_member_social".into()),
+        "r_member_social must not be requested by default: without LinkedIn's \
+         'Read member's social' product it breaks the whole authorize flow"
     );
     assert_eq!(
         scopes.len(),
-        5,
-        "Personal LinkedIn should have exactly 5 scopes"
+        4,
+        "Personal LinkedIn should request exactly the 4 publish scopes"
     );
 
     // Page scopes

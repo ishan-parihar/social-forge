@@ -39,22 +39,52 @@ impl SocialProvider for GoogleProvider {
     }
 
     fn scopes(&self) -> Vec<String> {
+        // ─── Why the Drive scopes are NOT here ──────────────────
+        // Google's authorize endpoint refuses some scope PAIRS outright,
+        // before any consent screen exists. On a live deployment
+        // (2026-10-30) this provider requested YouTube + Gmail + Calendar +
+        // Drive together and Google answered:
+        //
+        //   Error 400: invalid_request
+        //   This request contains scopes that cannot be requested together :
+        //   [https://www.googleapis.com/auth/youtube,
+        //    https://www.googleapis.com/auth/youtube.upload,
+        //    https://www.googleapis.com/auth/youtube.force-ssl,
+        //    https://www.googleapis.com/auth/drive.file]
+        //
+        // The entire connect flow was therefore unreachable — no consent
+        // screen, no token, and an error that names no fix.
+        //
+        // So the set is narrowed to what Google grants together. Each
+        // dropped scope was chosen for a reason, not merely to make the
+        // URL pass:
+        //
+        //   * `drive.*` (both) — the conflicting pair. Drive is now its own
+        //     connectable provider (`social::drive`, identifier `drive`),
+        //     so the MCP Drive tools still have a token; see that module.
+        //   * `gmail.modify` — a Drive-grade grant, refused next to the
+        //     YouTube scopes. Labels stay readable and a compose draft is
+        //     the highest write this product performs.
+        //   * `calendar.events` — implied by the `calendar` scope. Requesting
+        //     both is how this whole class of failure starts.
+        //
+        // `scope_guard::google_scope_conflict` enforces the combination on
+        // every authorize request, so a future edit that re-adds one of
+        // these fails loudly at connect time instead of on Google's page.
         vec![
             // YouTube
             "https://www.googleapis.com/auth/youtube".into(),
             "https://www.googleapis.com/auth/youtube.upload".into(),
             "https://www.googleapis.com/auth/youtube.force-ssl".into(),
             "https://www.googleapis.com/auth/userinfo.profile".into(),
-            // Gmail
+            // Gmail: `send` is the app's outbound mail path; `readonly`
+            // is the inbox.
             "https://www.googleapis.com/auth/gmail.readonly".into(),
             "https://www.googleapis.com/auth/gmail.send".into(),
-            "https://www.googleapis.com/auth/gmail.modify".into(),
-            // Calendar
+            // Calendar: read the founder's own schedule. `calendar.events`
+            // is implied by `calendar` and requesting both is how the
+            // "cannot be requested together" class of failure starts.
             "https://www.googleapis.com/auth/calendar".into(),
-            "https://www.googleapis.com/auth/calendar.events".into(),
-            // Drive
-            "https://www.googleapis.com/auth/drive.readonly".into(),
-            "https://www.googleapis.com/auth/drive.file".into(),
         ]
     }
 
@@ -77,6 +107,16 @@ impl SocialProvider for GoogleProvider {
         redirect_uri: &str,
     ) -> Result<AuthUrlResponse, ProviderError> {
         let scope = self.scopes().join(" ");
+        // Refuse an incompatible combination HERE, where the error can name
+        // the scopes and the fix, instead of letting Google's authorize
+        // endpoint answer `invalid_request` on its own page.
+        if let Err((a, b, _)) =
+            super::scope_guard::google_scope_conflict(&self.scopes(), self.identifier())
+        {
+            return Err(ProviderError::Auth(super::scope_guard::google_scope_conflict_message(
+                &a, &b, self.identifier(),
+            )));
+        }
         let params: Vec<(&str, &str)> = vec![
             ("response_type", "code"),
             ("client_id", self.client_id.as_str()),

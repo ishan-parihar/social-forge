@@ -64,17 +64,28 @@ async fn test_provider_registry_has_all_providers() {
         "google",
         "google_my_business",
         "skool",
+        "gmail",
+        "calendar",
+        "drive",
     ];
     expected.sort();
 
     // Registration is unconditional (see `ProviderRegistry::new`): a clean
     // environment must still report the full catalogue, because the /channels
-    // grid and the MCP tool list advertise all 26 regardless of credentials.
+    // grid and the MCP tool list advertise all 29 regardless of credentials.
     // Tier-3 (farcaster) is excluded — it registers only under
     // ENABLE_ARCHIVE_PROVIDERS.
+    //
+    // The catalogue grew from 26 to 29 on 2026-10-30: `gmail`, `calendar`
+    // and `drive` are now their own connectable providers, because Google
+    // refuses `auth/youtube*` and `auth/drive*` in ONE consent and the
+    // unified `google` integration can therefore never carry a Drive grant.
+    // `gmail` was already being OFFERED on the Channels screen without being
+    // registered — its connect button 404'd — which is the drift this list is
+    // here to catch.
     assert_eq!(
         ids, expected,
-        "Provider registry should contain all 26 default providers"
+        "Provider registry should contain all 29 default providers"
     );
     println!("✅ Provider registry: {} providers registered", ids.len());
 }
@@ -599,7 +610,27 @@ async fn test_google_provider_creation() {
     assert!(scopes.contains(&"https://www.googleapis.com/auth/youtube.force-ssl".to_string()));
     assert!(scopes.contains(&"https://www.googleapis.com/auth/gmail.readonly".to_string()));
     assert!(scopes.contains(&"https://www.googleapis.com/auth/calendar".to_string()));
-    assert!(scopes.contains(&"https://www.googleapis.com/auth/drive.readonly".to_string()));
+    // Drive is NOT here, and that is the fix. Google's authorize endpoint
+    // refuses `auth/youtube*` and `auth/drive*` in one consent
+    // ("This request contains scopes that cannot be requested together"),
+    // so the combined set the old provider drew made the whole connect flow
+    // answer `Error 400: invalid_request` before any consent screen.
+    // The Drive grant now comes from the separate `drive` provider, whose
+    // own scopes are asserted below.
+    assert!(
+        !scopes.contains(&"https://www.googleapis.com/auth/drive.readonly".to_string()),
+        "Drive scopes must not be mixed into the unified google provider: \
+         Google refuses them together"
+    );
+
+    let drive = registry
+        .get("drive")
+        .expect("the drive provider must be registered so the MCP Drive tools have a token");
+    let drive_scopes = drive.scopes();
+    assert!(
+        drive_scopes.contains(&"https://www.googleapis.com/auth/drive.readonly".to_string()),
+        "the drive provider must still carry the Drive grant the MCP tools need"
+    );
 
     println!(
         "✅ GoogleSuite: {} scopes configured ({})",

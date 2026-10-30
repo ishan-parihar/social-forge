@@ -68,9 +68,16 @@ pub const TIER_1: &[&str] = &[
     "pinterest",
 ];
 
-/// Tier-2 — publish-maintained (14). Messaging platforms, the blogging/dev
-/// API-key group, and the user-mandated utility keeps (Google My Business,
-/// Gmail/Calendar/Drive via `google`, Skool).
+/// Tier-2 — publish-maintained (17). Messaging platforms, the blogging/dev
+/// API-key group, the user-mandated utility keeps (Google My Business,
+/// Gmail/Calendar/Drive via `google`, Skool), and the Google Suite's
+/// consent-split twins.
+///
+/// `gmail`, `calendar` and `drive` are SEPARATE providers from `google`
+/// and must stay so: Google refuses `auth/youtube*` and `auth/drive*` (and
+/// the same for Gmail) in one consent, so a single `google` integration can
+/// never carry both grants. Merging them back would re-break either the
+/// MCP Google tools or the Hub connect flow.
 pub const TIER_2: &[&str] = &[
     "telegram-bot",
     "telegram-user",
@@ -86,6 +93,9 @@ pub const TIER_2: &[&str] = &[
     "google",
     "google_my_business",
     "skool",
+    "gmail",
+    "calendar",
+    "drive",
 ];
 
 /// Tier-3 — archived (1). Code lives under `src/social/archive/` and is
@@ -236,9 +246,21 @@ mod tests {
     #[test]
     fn tier_counts_match_v25_plan() {
         assert_eq!(TIER_1.len(), 12, "v25 §1 Tier-1 is 12 platforms");
-        assert_eq!(TIER_2.len(), 14, "v25 §1 Tier-2 is 14 platforms");
+        // Tier-2 grew from 14 to 17 on 2026-10-30 when the Google Suite was
+        // split: `gmail`, `calendar` and `drive` are now their own
+        // connectable providers rather than being reachable only through
+        // the unified `google` one. The reason is Google's two-consents
+        // rule (it refuses `auth/youtube*` and `auth/drive*` together), so
+        // one `google` integration can never carry every grant the MCP
+        // Google tools need.
+        assert_eq!(
+            TIER_2.len(),
+            17,
+            "v25 §1 Tier-2 was 14; +gmail +calendar +drive after the \
+             Google consent split (see TIER_2's doc comment)"
+        );
         assert_eq!(TIER_3.len(), 1, "only farcaster is archived in v25 §1");
-        assert_eq!(all_known_identifiers().len(), 27);
+        assert_eq!(all_known_identifiers().len(), 30);
     }
 
     #[test]

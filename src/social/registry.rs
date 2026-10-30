@@ -390,6 +390,46 @@ impl ProviderRegistry {
         // Uses YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET for all Google OAuth scopes
         providers.insert("google", Arc::new(google::GoogleProvider::new(config)));
 
+        // Drive — connectable separately from the unified `google` provider.
+        //
+        // WHY A SECOND GOOGLE PROVIDER EXISTS
+        //
+        // Google refuses `auth/youtube*` and `auth/drive*` in ONE consent
+        // ("This request contains scopes that cannot be requested together"),
+        // so the unified `google` provider can ask for YouTube+Gmail+Calendar
+        // OR for Drive, never both. Drive's MCP tools (list/get/search/export)
+        // need a Drive-scoped token, and the Hub tools need a
+        // YouTube+Gmail one. They cannot share one grant.
+        //
+        // So `drive` is its own connectable provider: the founder connects
+        // it separately, and `find_goog_token` prefers whichever integration
+        // actually carries a Drive grant rather than guessing from the
+        // `google` one. Registering it here (not leaving it reachable only
+        // through `google`) is what keeps the Drive tools working when the
+        // Hub scopes were narrowed to fix the live `invalid_request`.
+        providers.insert("drive", Arc::new(drive::DriveProvider::new(config)));
+
+        // Gmail — connectable in its own right.
+        //
+        // The dashboard's Available Providers grid has offered a Gmail
+        // connect card since the grid was written, but the registry never
+        // registered a `gmail` provider: the card 404'd, and (because the
+        // SPA fallback used to answer unknown /api/* paths with 200 HTML)
+        // it failed as "Invalid JSON response from
+        // /api/integrations/connect/gmail", which reads as a server bug
+        // rather than a missing route.
+        //
+        // Same two-consent rule as Drive: Google refuses `auth/youtube*`
+        // beside `auth/drive*`, so the unified `google` integration and
+        // the Gmail one can not share a grant either.
+        providers.insert("gmail", Arc::new(gmail::GmailProvider::new(config)));
+
+        // Calendar — the third Google Suite surface. Same reasoning.
+        providers.insert(
+            "calendar",
+            Arc::new(calendar::CalendarProvider::new(config)),
+        );
+
         // Chrome extension-based provider (no OAuth credentials needed)
         providers.insert("skool", Arc::new(skool::SkoolProvider::new()));
 
@@ -706,7 +746,12 @@ mod tests {
             "a clean environment must register all {} default providers",
             expected.len()
         );
-        assert_eq!(ids.len(), 26, "v25 §1: 12 Tier-1 + 14 Tier-2");
+        assert_eq!(
+            ids.len(),
+            29,
+            "v25 §1 was 12 Tier-1 + 14 Tier-2 = 26; +gmail +calendar +drive \\
+             after the Google consent split (see TIER_2's doc comment) makes it 29"
+        );
     }
 
     /// Every registered identifier must be a known tier member (drift guard).

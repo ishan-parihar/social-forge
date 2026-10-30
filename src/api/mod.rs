@@ -754,6 +754,43 @@ pub fn build_router(state: AppState) -> Router {
 async fn embedded_frontend_handler(req: Request<Body>) -> Response<Body> {
     let path = req.uri().path().trim_start_matches('/');
 
+    // ─── The /api/* mask ──────────────────────────────────────
+    // A request to an /api/* path that NO route matched used to reach this
+    // SPA fallback and was answered 200 text/html. That single behaviour
+    // made every real backend failure unreadable:
+    //
+    //   - a URL typo in a frontend API client looks exactly like a broken
+    //     provider (the client's JSON.parse fails on HTML)
+    //   - a MISSING route looks exactly like a route that exists and 500s
+    //   - an OAuth callback hitting a mistyped provider path answers 200,
+    //     so the connect flow "succeeds" while nothing was stored
+    //
+    // Six production defects were diagnosed from one message,
+    // "Invalid JSON response from /api/…", and this fallback was the
+    // reason every one of them looked the same.
+    //
+    // So an /api/* path is answered with a JSON 404 that NAMES the
+    // missing path. The HTML fallback is for the app's own client-side
+    // routes and must keep serving index.html for them — this only
+    // fires for the API namespace, which is never client-routed.
+    let is_api_path = req
+        .uri()
+        .path()
+        .split('/')
+        .find(|seg| !seg.is_empty())
+        .map(|seg| seg.eq_ignore_ascii_case("api"))
+        .unwrap_or(false);
+    if is_api_path {
+        return Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .header("content-type", "application/json")
+            .body(Body::from(format!(
+                "{{\"error\":\"No such endpoint: {}\",\"code\":\"not_found\"}}",
+                req.uri().path()
+            )))
+            .expect("static json 404 is valid");
+    }
+
     // Try exact path first, then with index.html appended (for directory routes)
     let asset = FrontendAssets::get(path).or_else(|| {
         if path.is_empty() || path.ends_with('/') {

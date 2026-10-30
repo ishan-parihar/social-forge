@@ -48,6 +48,23 @@ pub struct LinkedInProvider {
 }
 
 impl LinkedInProvider {
+    // ─── The opt-in read scope helper ─────────────────────────
+    // Returns the scope list to chain onto the always-present publish set,
+    // so `scopes()` reads as "what we need" plus "what the operator opted
+    // into".
+    //
+    // The env var is read per call rather than cached in `self` because the
+    // registry builds the provider once at startup: the flag must be settled
+    // before `cargo run`, which is why `.env.example` documents it beside the
+    // connect flow. Reading it here also keeps the helper trivially testable.
+    pub fn member_social_read_scope(&self) -> Vec<String> {
+        if std::env::var("LINKEDIN_ENABLE_MEMBER_SOCIAL_READ").ok().as_deref() == Some("1") {
+            vec!["r_member_social".into()]
+        } else {
+            vec![]
+        }
+    }
+
     pub fn new(config: &Config) -> Self {
         let (client_id, client_secret) =
             config.provider_credentials("linkedin").unwrap_or_default();
@@ -161,6 +178,24 @@ impl LinkedInProvider {
             // can echo the requested Bearer token or URN. Log status only.
             tracing::warn!("LinkedIn get_posts 401 — token expired");
             Err(ProviderError::TokenExpired)
+        } else if status == 403 {
+            // ─── 403 on the READ path ───────────────────────────
+            // The read path is the only consumer of `r_member_social`, which
+            // is now opt-in. A 403 here almost always means the token was
+            // granted WITHOUT that scope (the operator connected before
+            // enabling the LinkedIn product, or never enabled it), so the
+            // raw "Access denied" is replaced with the reconnection the
+            // founder actually has to do. Publishing is unaffected and does
+            // NOT emit this — its scope is always present.
+            tracing::warn!("LinkedIn get_posts 403 — missing r_member_social grant");
+            Err(ProviderError::Api(
+                "LinkedIn could not read this member's posts: the connected account was \
+                 not granted 'r_member_social'. To read your own LinkedIn posts and \
+                 feed, enable the 'Read member's social' product on the LinkedIn app, \
+                 set LINKEDIN_ENABLE_MEMBER_SOCIAL_READ=1 on the server, then \
+                 reconnect LinkedIn from the Channels screen."
+                    .into(),
+            ))
         } else {
             let msg = json["message"]
                 .as_str()
@@ -492,19 +527,35 @@ impl SocialProvider for LinkedInProvider {
     }
 
     fn scopes(&self) -> Vec<String> {
+        // ─── Why `r_member_social` is opt-in ───────────────────────
+        // `r_member_social` requires LinkedIn's "Sign In with LinkedIn using
+        // Mobile or the LinkedIn API" product (and the separate
+        // "Read member's social" grant) to be enabled on the app. When it is
+        // NOT enabled, LinkedIn refuses the authorize request BEFORE any
+        // consent screen, answering with its own error page:
+        //
+        //   "Bummer, something went wrong.
+        //    In five seconds, you will be redirected to: <app_url>"
+        //
+        // That is a dead end with no diagnosable reason on our side, and it
+        // happened on a live deployment (2026-10-30) — so the publishing
+        // path (which needs only `openid` + `w_member_social`) was made
+        // unusable by a scope that only the READ path needs.
+        //
+        // So: the publish path always works, and the read path is opt-in
+        // through `LINKEDIN_ENABLE_MEMBER_SOCIAL_READ=1`. The scope is only
+        // added once the operator has enabled the product, which turns the
+        // same connect button from a dead end into a working consent.
         vec![
             "openid".into(),
             "profile".into(),
             "email".into(),
+            // Publishing (and the profile the connected card shows).
             "w_member_social".into(),
-            // r_member_social is needed for feed import (GET /rest/posts)
-            // and the li_get_posts / li_get_post_comments tools. It requires
-            // the "Read member's social" product enabled on the LinkedIn app;
-            // without it the OAuth flow shows "Bummer, something went wrong"
-            // and the feed refresher marks the integration refresh_needed so
-            // the user can reconnect after enabling the product.
-            "r_member_social".into(),
         ]
+        .into_iter()
+        .chain(self.member_social_read_scope())
+        .collect()
     }
 
     fn max_content_length(&self) -> usize {

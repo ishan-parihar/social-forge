@@ -81,7 +81,7 @@
     "tiktok", "youtube",
     "mastodon",
     "google_my_business", "slack",
-    "gmail", "drive",
+    "gmail", "calendar", "drive",
     "telegram-bot", "telegram-user",
     "whatsapp",
     "wordpress", "medium", "devto", "hashnode",

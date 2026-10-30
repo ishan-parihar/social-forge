@@ -27,6 +27,7 @@ pub mod pinterest;
 pub mod reddit;
 pub mod reddit_cookies;
 pub mod registry;
+pub mod scope_guard;
 pub mod skool;
 pub mod slack;
 pub mod telegram_bot;

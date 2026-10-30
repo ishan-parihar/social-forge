@@ -18,22 +18,56 @@ use crate::social::youtube::YoutubeProvider;
 // SHARED HELPERS
 // ══════════════════════════════════════════════════════════════
 
-/// Find the first integration with provider_identifier = "google"
-/// and decrypt its access token.
-async fn find_goog_token(state: &AppState, user_id: Uuid) -> Result<String, String> {
+/// Resolve a token from the connected integration for `provider_id`.
+///
+/// WHY THIS IS PARAMETERISED, AND WHY DRIVE GETS ITS OWN CALL SITE:
+/// Google refuses `auth/youtube*` and `auth/drive*` in ONE consent
+/// ("This request contains scopes that cannot be requested together"). So
+/// the unified `google` integration carries a YouTube/Gmail/Calendar grant
+/// and never a Drive one. The Drive tools therefore resolve the `drive`
+/// integration, which is connectable separately (see `social::registry`):
+/// sending a Drive call with the `google` token draws a 403 from Google and
+/// an error that names nothing the founder can act on.
+async fn find_token_for(
+    state: &AppState,
+    user_id: Uuid,
+    provider_id: &str,
+) -> Result<String, String> {
     let integrations = crate::db::queries::list_integrations(&state.db, user_id)
         .await
         .map_err(|e| format!("DB error: {e}"))?;
 
-    let goog = integrations
+    let integration = integrations
         .iter()
-        .find(|i| i.provider_identifier == "google")
+        .find(|i| i.provider_identifier == provider_id)
         .ok_or_else(|| {
-            "Google not connected. Connect it via the onboarding page first.".to_string()
+            format!("{provider_id} is not connected. Connect it from the Channels screen first.")
         })?;
 
-    let tok = crypto::maybe_decrypt_token(&goog.access_token, state.token_key.as_ref());
-    Ok(tok)
+    Ok(crypto::maybe_decrypt_token(
+        &integration.access_token,
+        state.token_key.as_ref(),
+    ))
+}
+
+/// Find the first integration with provider_identifier = "google"
+/// and decrypt its access token.
+async fn find_goog_token(state: &AppState, user_id: Uuid) -> Result<String, String> {
+    find_token_for(state, user_id, "google").await
+}
+
+/// The Drive token, with the error that says what to DO.
+///
+/// A 403 from Google does not distinguish "Drive is not connected" from
+/// "the connected token has no Drive grant". This message does, and it
+/// names the Channel screen the founder has to visit.
+async fn find_drive_token(state: &AppState, user_id: Uuid) -> Result<String, String> {
+    find_token_for(state, user_id, "drive").await.map_err(|_| {
+        "Google Drive is not connected. Connect 'Google Drive' from the Channels screen: \
+         Google will not grant Drive access in the same consent as the YouTube and \
+         Calendar scopes, so it is a separate connection."
+            .to_string()
+    })
 }
 
 // F1: one construction site per provider type. The per-tool-call cost is a
@@ -637,7 +671,7 @@ pub async fn handle_goog_list_files(
     input: &DrListFilesInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_goog_token(state, user_id).await?;
+    let token = find_drive_token(state, user_id).await?;
     let provider = drv(state);
     let max_results = input.max_results.unwrap_or(20);
     let result = provider
@@ -652,7 +686,7 @@ pub async fn handle_goog_get_file(
     input: &DrGetFileInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_goog_token(state, user_id).await?;
+    let token = find_drive_token(state, user_id).await?;
     let provider = drv(state);
     let result = provider
         .get_file(&token, &input.file_id)
@@ -666,7 +700,7 @@ pub async fn handle_goog_search_files(
     input: &DrSearchFilesInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_goog_token(state, user_id).await?;
+    let token = find_drive_token(state, user_id).await?;
     let provider = drv(state);
     let max_results = input.max_results.unwrap_or(20);
     let result = provider
@@ -681,7 +715,7 @@ pub async fn handle_goog_list_folders(
     input: &DrListFoldersInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_goog_token(state, user_id).await?;
+    let token = find_drive_token(state, user_id).await?;
     let provider = drv(state);
     let max_results = input.max_results.unwrap_or(50);
     let result = provider
@@ -696,7 +730,7 @@ pub async fn handle_goog_get_file_metadata(
     input: &DrGetFileMetadataInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_goog_token(state, user_id).await?;
+    let token = find_drive_token(state, user_id).await?;
     let provider = drv(state);
     let result = provider
         .get_file_metadata(&token, &input.file_id)
@@ -710,7 +744,7 @@ pub async fn handle_goog_export_file(
     input: &DrExportFileInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_goog_token(state, user_id).await?;
+    let token = find_drive_token(state, user_id).await?;
     let provider = drv(state);
     let result = provider
         .export_file(&token, &input.file_id, &input.mime_type)

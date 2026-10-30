@@ -78,7 +78,38 @@ class ApiClient {
       try {
         data = text ? JSON.parse(text) : {};
       } catch {
-        return { error: `Invalid JSON response from ${path}`, status: res.status };
+        // ─── Why this message names the status and the body ─────
+        // Every distinct server failure used to reach the founder as the
+        // same string, "Invalid JSON response from /api/x". Six different
+        // production defects were reported from that one message: the
+        // WhatsApp pair route, the Telegram request-code route and four
+        // others all looked identical, so the message told the founder
+        // nothing about which one they hit or whether the route even
+        // exists.
+        //
+        // The status and a body excerpt do. A 200 with an HTML body is the
+        // SPA fallback answering an unknown /api/* path (the server must
+        // not do that — see the SPA-fallback rule in src/api/mod.rs), a
+        // 403 is CSRF, a 502 is the reverse proxy. Same status, different
+        // words in the body. The excerpt is capped and newline-stripped
+        // because an HTML body can be thousands of characters.
+        const status = res.status;
+        const ctype = res.headers.get("content-type") ?? "unknown";
+        const excerpt = text.replace(/\s+/g, " ").trim().slice(0, 160);
+        let hint = `${status} ${res.statusText}`.trim();
+        if (/\bhtml\b/i.test(ctype) || /<\s*(!doctype|html|body|div|script)/i.test(text)) {
+          // The classic mask: an HTML page where JSON was expected. This
+          // is almost always the SPA fallback for a path that does not
+          // exist, so name that explicitly — the founder's next question
+          // is "is this a bug in the server", and the answer is usually
+          // "the route does not exist", which is a URL typo in the
+          // frontend's API client.
+          hint += " (received HTML, not JSON — the route likely does not exist or the server is behind a proxy error page)";
+        }
+        return {
+          error: `Expected JSON from ${path} but got ${hint}${excerpt ? `: ${excerpt}` : ""}`,
+          status,
+        };
       }
       if (!res.ok) {
         const errorMsg = typeof data.error === 'string' ? data.error : `HTTP ${res.status}`;
