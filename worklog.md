@@ -3098,3 +3098,94 @@ Stage Summary:
   `.../probe-audit-render.mjs`, 7 screenshots, 8 TODO rows.
 - No code was changed in this pass. No build gate applies to a docs-only change; the
   verification that does apply is the rendered measurement recorded in findings.json.
+---
+Task ID: v26-launch-parity-connect-redteam
+Agent: Jcode
+Task: Red-team the connect surface against five operator reports and fix what they surface.
+
+Reports, and what each turned out to be:
+
+1. **Threads consent page showed a JSON-quoted redirect_uri.** CONFIRMED and fixed. The
+   reported value decoded to a JSON string with ESCAPED FORWARD SLASHES - `%5C%2F` is a
+   backslash then a slash, which is what `serde_json::to_string` emits for `/`. Live-proved
+   the parameter was accepted verbatim at every connect route: a quoted value reached the
+   authorize URL as-is, and `?redirect_uri=https://evil.test/cb` was honoured (an open
+   redirect inside the OAuth flow, where the login still succeeds from the founder's view).
+   `social::common::resolve_redirect_uri` now accepts only omitted/empty/the bare callback
+   path/a URL scheme+host+port+path identical to the deployment's own. Comparison is
+   normalised so a spelling difference is not refused. JSON unescaping is narrow (only
+   `\/`, `\\`, `\"`) and only inside a value that was actually quoted. Wired into all four
+   call sites.
+
+   Two bugs in my own first attempt, both caught by mutation:
+   - stripping the quotes but not the `\/` escapes left the backslashes in place and STILL
+     refused the reported value. The reported URL is the escaped form; the unquoted form
+     was my guess at it, not the thing the operator actually sent.
+   - my first validator compared `url::Url` for equality, which refuses the same URI
+     spelled differently (trailing slash on APP_URL, uppercase host, explicit default
+     port). Refusing a working connect over a spelling difference is a defect too.
+
+2. **"Page '...' is already connected" on the unified Google flow.** CONFIRMED and fixed.
+   The picker lists every page under the parent including already-connected ones, and the
+   guard answered a 400, dead-ending the multi-step flow. The repeat now succeeds,
+   refreshing the token on the row already there (create_integration upserts on
+   user_id+provider_identifier+internal_id, so no duplicate is possible). The
+   already-connected lookup is hoisted ABOVE the provider's `pages()` call: everything it
+   needs is in hand, so a repeat answers from the DB and works while the provider's API is
+   down. That hoist is also what makes the branch testable without credentials.
+
+3. **Multi-account add removes the channel from the grid.** CONFIRMED and fixed. One line -
+   `availableProviders.filter(p => !connectedProviderIds.has(p))` - hid a provider the
+   moment ONE integration existed, so a second Google account or a third LinkedIn identity
+   was impossible without disconnecting the first. The grid lists every provider, always,
+   with an "N connected" badge and "Add another X".
+
+4. **Profile pictures missing (x-cookie, linkedin-page, linkedin-account, gmail).**
+   Root-caused to `fetch_page_info`. The DB write, the API serialization
+   (`IntegrationPublic.profile_picture` passes through) and the frontend's render are all
+   correct. `fetch_page_info` is what REFRESH calls, and the refresh write is
+   `profile_picture = COALESCE(?, profile_picture)` - which keeps the old value when the
+   provider returns nothing. So a provider hardcoding `picture: None` there makes its row
+   UNREPAIRABLE: a channel whose avatar was never captured can never gain one. Three
+   Google-family providers did that while their own `exchange_code` read
+   `user["picture"]` from the same endpoint. calendar was the clearest: its SUCCESS arm
+   hardcoded None and its FAILURE arm, twenty lines below, read `user["picture"]`.
+
+   New evidence from the operator's live DB: x/github/reddit all have
+   `profile_picture = NULL`, and there is NO google/gmail/youtube integration row at all -
+   the operator has never completed a Google OAuth, which is why report 2 exists.
+
+5. **Is the available-providers list genuine?** VALIDATED. 29 identifiers from
+   `/api/providers` vs the frontend literal - identical sets, no drift.
+
+Stage summary:
+- 6 commits on master, pushed to github/master.
+- `cargo test --lib` 541/541 (15 new resolve_redirect_uri tests; was 527 before this
+  session), `connect_flow_redteam_test` 20/20 (2 new idempotency tests),
+  `avatar_repair_path_test` 2/2 (new binary), `cargo test --no-fail-fast` exactly 1
+  failing binary (the known pre-existing surface_docs_audit trio).
+- Also fixed a pre-existing compile break in `src/social/threads.rs`'s `exchange_code`
+  (`refresh_token: Some(access_token)` moved a borrowed `&str` into a `String` field),
+  which was blocking `cargo test --lib` entirely.
+
+Known issues / follow-ups:
+- **The avatar tests cannot be proven live here.** A live test against the operator's real
+  Google account SKIPPED with "Google token not found" - no Google integration exists in
+  their DB. I removed it rather than ship a test that passes without running, and replaced
+  it with a source-invariant test that DOES run. The fix itself is verified only by the
+  invariant plus the mutation proof; it needs one real Google connect to confirm
+  end-to-end.
+- **The Google unification is NOT done.** The operator asked for ONE unified Google login
+  instead of five tiles (google, gmail, youtube, calendar, drive). The backend already
+  shares credentials across the family and the picker is now idempotent, but the five
+  separate tiles are unchanged - that is frontend work not attempted here.
+- x-cookie's picture extraction silently becomes `None` if the GraphQL
+  `UserByScreenName` lookup does not carry `profile_image_url_https`. That is unreachable
+  without live cookies, and the operator's existing row needs a REFRESH to pick up whatever
+  that path would now return.
+- The `PagePicker.svelte` multi-select `break`s on the first error, so a page that fails
+  stops the rest of the batch. Consistent with the idempotent backend now, but worth
+  changing to continue-and-report.
+- Pre-existing failures untouched: surface_docs_audit trio (missing docs/providers.md),
+  clippy in src/cli/autopost.rs + src/cli/oauth_browser.rs, README length_in_band,
+  unstaged scripts/genome submodule.
