@@ -869,3 +869,108 @@ fn no_token_path_reports_an_empty_access_token_as_success() {
         }
     }
 }
+
+/// An OAuth token exchange that discards the provider's body collapses four
+/// different failures into one useless sentence.
+///
+/// The shape, repeated in most of `src/social/`, was:
+///
+/// ```text
+/// let json: Value = resp.json().await?;
+/// let access_token = json["access_token"]
+///     .as_str()
+///     .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
+/// ```
+///
+/// `error_for_status` was never called and the body was never read, so a
+/// redirect_uri mismatch, a wrong client secret, an expired code and a
+/// revoked grant all answered "Missing access_token" - the same sentence for
+/// all four. The one thing the operator can act on, WHICH of those it was,
+/// is exactly what the code threw away. This is the reported "LinkedIn login
+/// backend error".
+///
+/// NOTE the bookkeeping, because a tree-wide test only bites at the edges:
+/// this site-graph check is a majority rule and it cannot police a provider
+/// that was ALREADY correct, which is why `linkedin.rs` carries its own
+/// assertion on the shape (`tests` walk pins the prologue) and `discord.rs`
+/// carries the empty-token one. What this test does own is the next provider
+/// copied from an old one: it stops the spread.
+///
+/// AGENTS.md 9.21: one implementation per rule, with a test pinning it.
+#[test]
+fn no_token_exchange_discards_the_providers_body() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/social");
+    let mut offenders: Vec<String> = Vec::new();
+    let mut stack = vec![root];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else if p.extension().and_then(|s| s.to_str()) == Some("rs") {
+                let contents = std::fs::read_to_string(&p).unwrap();
+                let lines: Vec<&str> = contents.lines().collect();
+                for (idx, line) in lines.iter().enumerate() {
+                    // The discarded-body shape: parse, then read the token,
+                    // with no status check anywhere in the window between
+                    // them and nothing but the missing key to report.
+                    if !line.contains("resp.json().await?") && !line.contains("res.json().await?") {
+                        continue;
+                    }
+                    // The window has to reach BOTH ways. The status capture is
+                    // usually ONE LINE ABOVE the parse (`let status = resp.status();`),
+                    // and the check can be below or beside it. A forward-only
+                    // window silently exempts every site that captures the
+                    // status first - which is the shape a mutation most
+                    // naturally produces.
+                    let lo = idx.saturating_sub(3);
+                    let hi = (idx + 6).min(lines.len());
+                    let window: Vec<&str> = lines[lo..hi].to_vec();
+                    // JOIN the window before matching. The token read is a
+                    // multi-line chain in this tree -
+                    //   let access_token = json["access_token"]
+                    //       .as_str()
+                    //       .ok_or_else(...)
+                    // - so `"access_token"` and `as_str()` are NEVER on the
+                    // same physical line. A per-line match exempts every
+                    // correctly-formatted offender, which is what a mutation
+                    // produces. The predicate has to see the SHAPE, not the
+                    // line breaks.
+                    let joined = window.join("\n");
+                    // AND it has to be a TOKEN read. A `PageInfo` builder and
+                    // a status poll both call `as_str()` a line or two away
+                    // from a `json`, so a loose window flags them, and a
+                    // guard that cries wolf on correct code gets deleted
+                    // rather than obeyed. Require the token name itself.
+                    let has_token_read = joined.contains("[\"access_token\"]")
+                        && joined.contains(".as_str()")
+                        && joined.contains("access_token = ");
+                    let has_status_check = joined.contains("status")
+                        && (joined.contains("if ") || joined.contains("!"));
+                    if has_token_read && !has_status_check {
+                        offenders.push(format!(
+                            "{}:{}",
+                            p.file_name().unwrap().to_string_lossy(),
+                            idx + 1
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    // `common.rs` IS the shared implementation, and it checks the status, so
+    // it cannot offend. Anything that offends is a provider re-deriving it.
+    let real: Vec<&String> = offenders
+        .iter()
+        .filter(|o| !o.starts_with("common.rs"))
+        .collect();
+    assert!(
+        real.is_empty(),
+        "token exchanges that discard the provider's body: {}. Every one of these \
+         reports \"Missing access_token\" for a redirect_uri mismatch, a wrong \
+         client secret, an expired code and a revoked grant alike. Route through \
+         `social::common::extract_access_token`, which checks the status and \
+         quotes the provider's own words.",
+        real.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+    );
+}

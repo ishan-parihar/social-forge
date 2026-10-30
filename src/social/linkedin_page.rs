@@ -5,6 +5,7 @@
 use async_trait::async_trait;
 
 use super::*;
+use super::common::extract_access_token;
 use crate::config::Config;
 use crate::social::linkedin::LINKEDIN_VERSION;
 
@@ -194,12 +195,9 @@ impl SocialProvider for LinkedInPageProvider {
             .form(&params)
             .send()
             .await?;
-        let json: serde_json::Value = resp.json().await?;
-
-        let access_token = json["access_token"]
-            .as_str()
-            .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
-            .to_string();
+        let (access_token, json) = extract_access_token(resp, "linkedin-page")
+            .await
+            .map_err(ProviderError::Auth)?;
 
         let refresh_token = json["refresh_token"].as_str().map(String::from);
         let expires_in = json["expires_in"].as_u64().map(|v| v as u32);
@@ -246,12 +244,9 @@ impl SocialProvider for LinkedInPageProvider {
             .form(&params)
             .send()
             .await?;
-        let json: serde_json::Value = resp.json().await?;
-
-        let access_token = json["access_token"]
-            .as_str()
-            .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
-            .to_string();
+        let (access_token, json) = extract_access_token(resp, "linkedin-page")
+            .await
+            .map_err(ProviderError::Auth)?;
 
         // Fetch profile info so it's not lost on refresh.
         // Use async match — page-scoped tokens may not have openid/profile scope.

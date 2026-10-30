@@ -4,6 +4,7 @@
 use async_trait::async_trait;
 
 use super::*;
+use super::common::extract_access_token;
 use crate::config::Config;
 use crate::social::GRAPH_VERSION;
 
@@ -165,11 +166,9 @@ impl SocialProvider for FacebookProvider {
             .send()
             .await?;
 
-        let token_json: serde_json::Value = token_resp.json().await?;
-        let short_token = token_json["access_token"]
-            .as_str()
-            .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
-            .to_string();
+        let (short_token, _token_json) = extract_access_token(token_resp, "facebook")
+            .await
+            .map_err(ProviderError::Auth)?;
 
         // Exchange short-lived token for long-lived token
         let long_params: Vec<(&str, &str)> = vec![
@@ -189,6 +188,11 @@ impl SocialProvider for FacebookProvider {
             .await?;
 
         let long_json: serde_json::Value = long_resp.json().await?;
+        // Keep the SHORT token only if the long-lived exchange gave
+        // nothing back - but `extract_access_token` already made an
+        // empty token an error, so this fallback is for the
+        // long-exchange returning a differently-named field, not for
+        // a failure.
         let access_token = long_json["access_token"]
             .as_str()
             .unwrap_or(&short_token)

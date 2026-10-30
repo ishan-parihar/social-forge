@@ -3,6 +3,10 @@
 
 use rand::{Rng, RngCore};
 use sha2::{Digest, Sha256};
+use std::{
+    future::Future,
+    pin::Pin,
+};
 
 const CODE_VERIFIER_CHARSET: &[u8] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
@@ -91,7 +95,155 @@ pub fn parse_timestamp_opt(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
 /// tool, from a webhook, or from an API client that was written against
 /// an older contract. So the sanitizer must still remove markup when
 /// markup is really there.
+// ─── Token endpoint responses ─────────────────────────────
+/// The two HTTP clients this crate uses do NOT give the same response
+/// type - `reqwest` and `wreq` each return their own - so a helper that
+/// reads a token endpoint has to accept both or be written twice.
 ///
+/// The seam is what the helper actually needs and nothing else: the
+/// status, and the body as text. Everything above that is the caller's.
+///
+/// `text` returns a boxed future rather than being an `async fn` in a
+/// trait, because an `async fn` in a trait hides its `Send`ness and the
+/// scheduler spawns these onto a JoinSet that requires it. An explicit
+/// bound says it, and a caller that loses a `Send` future is a compile
+/// error rather than a deadlock.
+pub trait TokenResponse {
+    fn status(&self) -> StatusLike;
+    fn text(self) -> Pin<Box<dyn Future<Output = Result<String, String>> + Send>>;
+}
+
+/// A status without dragging in either client's version of the type.
+#[derive(Clone, Copy)]
+pub struct StatusLike {
+    code: u16,
+    is_success: bool,
+}
+
+impl StatusLike {
+    pub fn as_u16(&self) -> u16 {
+        self.code
+    }
+    pub fn is_success(&self) -> bool {
+        self.is_success
+    }
+}
+
+impl TokenResponse for reqwest::Response {
+    fn status(&self) -> StatusLike {
+        let s = self.status();
+        StatusLike {
+            code: s.as_u16(),
+            is_success: s.is_success(),
+        }
+    }
+    fn text(self) -> Pin<Box<dyn Future<Output = Result<String, String>> + Send>> {
+        Box::pin(async move {
+            self.text()
+                .await
+                .map_err(|e| format!("<body unreadable: {e}>"))
+        })
+    }
+}
+
+impl TokenResponse for wreq::Response {
+    fn status(&self) -> StatusLike {
+        let s = self.status();
+        StatusLike {
+            code: s.as_u16(),
+            is_success: s.is_success(),
+        }
+    }
+    fn text(self) -> Pin<Box<dyn Future<Output = Result<String, String>> + Send>> {
+        Box::pin(async move {
+            self.text()
+                .await
+                .map_err(|e| format!("<body unreadable: {e}>"))
+        })
+    }
+}
+
+/// Read an access token out of a token-endpoint response WITHOUT
+/// discarding the provider's error body.
+///
+/// The original shape of this code, repeated in every provider, was:
+///
+/// ```text
+/// let json: Value = resp.json().await?;
+/// let access_token = json["access_token"]
+///     .as_str()
+///     .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?;
+/// ```
+///
+/// `reqwest`'s `error_for_status` was never called, and the body was
+/// never read, so an OAuth failure and a redirect_uri mismatch and an
+/// expired code and a wrong client secret all collapsed into the SAME
+/// sentence: "Missing access_token". The one thing the operator needs -
+/// WHICH of those it was - is the thing the code threw away.
+///
+/// `resp` is moved and converted to a status plus a body string, so
+/// the body survives the status check instead of being dropped by it.
+/// Returns `(access_token, full_json)` on success - the body is handed
+/// back because the call sites read `refresh_token` and `expires_in` out
+/// of it immediately after, and forcing them to re-parse would just move
+/// the same problem. Errors name the provider, the status, and the
+/// provider's own words - which is what the founder can actually act on.
+pub async fn extract_access_token<R>(
+    resp: R,
+    provider: &str,
+) -> Result<(String, serde_json::Value), String>
+where
+    R: TokenResponse,
+{
+    let status = resp.status();
+    // Take the body FIRST: `status()` borrows, `text()` consumes, and a
+    // failure needs the body to be worth reporting.
+    let body = resp
+        .text()
+        .await
+        .unwrap_or_else(|e| format!("<body unreadable: {e}>"));
+    if !status.is_success() {
+        // Quote the provider, but not so much of it that a login page
+        // full of markup becomes the error message.
+        let quoted = if body.chars().count() > 400 {
+            let clipped: String = body.chars().take(400).collect();
+            format!("{clipped}...")
+        } else {
+            body
+        };
+        return Err(format!(
+            "{provider} token exchange failed (HTTP {}) {quoted}",
+            status.as_u16()
+        ));
+    }
+    // A 2xx with no token is still a failure, and an empty token is the
+    // shape that silently "succeeds" everywhere else - see discord.rs.
+    let json: serde_json::Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(_) => {
+            // A char-safe clip: a byte index can slice into the middle of a
+            // multi-byte character and panic.
+            let clipped: String = body.chars().take(200).collect();
+            let why = if looks_like_html(&body) {
+                "an HTML page (check the redirect_uri and client_id)"
+            } else {
+                clipped.as_str()
+            };
+            return Err(format!(
+                "{provider} token exchange returned non-JSON body: {why}"
+            ));
+        }
+    };
+    json["access_token"]
+        .as_str()
+        .filter(|t| !t.is_empty())
+        .map(|s| s.to_string())
+        .ok_or_else(|| {
+            format!("{provider} token exchange returned no access_token: {body}")
+        })
+        .map(|t| (t, json))
+}
+
 /// The evidence of markup is a CLOSING tag, or a tag with an
 /// attribute, or a `<br>`:
 ///   - `</p>` - a closing tag. A sentence never has one.

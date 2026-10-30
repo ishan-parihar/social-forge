@@ -7,6 +7,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 
 use super::*;
+use super::common::extract_access_token;
 use crate::config::Config;
 
 /// How long to wait for a media container to become publishable.
@@ -125,11 +126,9 @@ impl SocialProvider for InstagramProvider {
             .send()
             .await?;
 
-        let json: serde_json::Value = resp.json().await?;
-        let short_token = json["access_token"]
-            .as_str()
-            .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
-            .to_string();
+        let (short_token, _json) = extract_access_token(resp, "instagram")
+            .await
+            .map_err(ProviderError::Auth)?;
 
         // Get long-lived token
         let long_params: Vec<(&str, &str)> = vec![
@@ -149,6 +148,11 @@ impl SocialProvider for InstagramProvider {
             .await?;
 
         let long_json: serde_json::Value = long_resp.json().await?;
+        // Keep the SHORT token only if the long-lived exchange gave
+        // nothing back - but `extract_access_token` already made an
+        // empty token an error, so this fallback is for the
+        // long-exchange returning a differently-named field, not for
+        // a failure.
         let access_token = long_json["access_token"]
             .as_str()
             .unwrap_or(&short_token)

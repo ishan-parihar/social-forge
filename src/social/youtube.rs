@@ -6,6 +6,7 @@
 use async_trait::async_trait;
 
 use super::*;
+use super::common::extract_access_token;
 use crate::config::Config;
 
 /// Read one entry of a `commentThreads`/`replies.comments` list — both share
@@ -804,11 +805,9 @@ impl SocialProvider for YoutubeProvider {
             .send()
             .await?;
 
-        let json: serde_json::Value = resp.json().await?;
-        let access_token = json["access_token"]
-            .as_str()
-            .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
-            .to_string();
+        let (access_token, json) = extract_access_token(resp, "youtube")
+            .await
+            .map_err(ProviderError::Auth)?;
         let refresh_token = json["refresh_token"].as_str().map(String::from);
         let expires_in = json["expires_in"].as_u64().map(|v| v as u32);
 
