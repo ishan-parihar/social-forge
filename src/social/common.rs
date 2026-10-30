@@ -250,7 +250,9 @@ fn same_callback(candidate: &url::Url, fallback: &str) -> bool {
         return false;
     }
     candidate.scheme() == expected.scheme()
-        && candidate.host_str().map(|h| h.eq_ignore_ascii_case(expected.host_str().unwrap_or("")))
+        && candidate
+            .host_str()
+            .map(|h| h.eq_ignore_ascii_case(expected.host_str().unwrap_or("")))
             == Some(true)
         && candidate.port_or_known_default() == expected.port_or_known_default()
         && candidate.path() == expected.path()
@@ -879,9 +881,12 @@ mod tests {
         // default port describe the same URI. Refusing those would fail a
         // working connect over a spelling difference (see same_callback).
         for (app_url, provided) in [
-            ("https://switchpost.example.com/", format!("{CALLBACK}")),
-            (APP, "HTTPS://SWITCHPOST.EXAMPLE.COM/api/auth/callback".to_string()),
-            (APP, format!("{CALLBACK}")),
+            ("https://switchpost.example.com/", CALLBACK.to_string()),
+            (
+                APP,
+                "HTTPS://SWITCHPOST.EXAMPLE.COM/api/auth/callback".to_string(),
+            ),
+            (APP, CALLBACK.to_string()),
             (
                 APP,
                 "https://switchpost.example.com:443/api/auth/callback".to_string(),
