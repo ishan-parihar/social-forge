@@ -2894,3 +2894,26 @@ Stage Summary:
 - The release checksum remains transitional until the suite-wide TUF metadata service and offline signing root are available. Windows self-replacement is not supported by this updater.
 
 ---
+
+---
+Task ID: vps-connect-flow-redteam-2026-10-30
+Agent: Jcode
+Task: Red-team the connect/channel surface against the reference postiz app and fix the six reported VPS defects.
+
+Work Log:
+- Probed the deployed instance (`https://switchpost.ishanparihar.com`, v0.7.0) with curl: all real connect routes answer 401 application/json, so they exist; a bogus POST to an unknown `/api/...` path answered **200 text/html** — the SPA fallback.
+- Reproduced locally (`target/debug/switchpost serve`): `whatsapp/pair` returned 200 with a valid pair code, proving the handler sound and the defect confined to error surfacing.
+- Found prior record of the same Meta error (1349168/1349187, Threads/IG-Standalone redirect_uri) in `.memsearch/memory/2026-05-15.md:319-334`, plus a workaround recorded 2026-05-09 ("deployed via redirectmeto.com (untested)") that fixed nothing.
+- Wrote `tests/connect_flow_redteam_test.rs` (10 tests over the real `build_router` with a session cookie) and confirmed 3 RED before touching source.
+- Fixed all six. The decisive discovery during verification: the SPA-fallback guard used `path.split('/').next()`, which on `/api/x` yields an EMPTY first segment, so the guard never fired. The original red-team test passed anyway because it used `/api/integrations/connect/this-route-does-not-exist`, a path that matches the real `connect/:provider` route and is answered 401 before the fallback. Rewrote the test to use genuinely unmatched paths and verified it FAILS on the reverted fix.
+- Verified every other test the same way: reverted each fix individually (google scopes, linkedin r_member_social, client.ts message) and confirmed its test goes RED, then restored. NOTE: `git checkout -- <file>` restores from HEAD, which discards *good* unstaged work when mutations were already applied on top — this cost a re-apply of three linkedin/google hunks. Use `cp` backups for mutation testing.
+- Two defects surfaced by the tests rather than the report: `gmail` was offered on the Channels screen but never registered (connect button 404'd), and `calendar` was registered but absent from the grid. Fixed both and pinned them with a two-way registry↔grid equality test.
+
+Stage Summary:
+- Six reported defects fixed. Root cause of the reporting confusion: the SPA fallback answered unmatched `/api/*` with 200 HTML, and the API client swallowed status+body. Both halves fixed.
+- `src/social/scope_guard.rs` (new): scope-compatibility preflight, 6 unit tests, 4 of which fail on the old scope set.
+- Google Suite split: `drive` registered separately so the MCP Drive tools still have a Drive-granted token after the unified `google` scope set was narrowed. `gmail` and `calendar` registered too. 29 providers, was 26.
+- LinkedIn `r_member_social` made opt-in (`LINKEDIN_ENABLE_MEMBER_SOCIAL_READ=1`), with an actionable 403 on the read path.
+- Commit `ee2ab25`, pushed to `github/master`.
+- Verification: cargo check 0 errors; cargo test --lib 527/527; red-team 10/10; frontend build + svelte-check 0 errors; live check on 127.0.0.1:3942 confirmed 404-JSON for unknown /api/* and 401-JSON for connect/gmail|calendar|drive.
+- Pre-existing, NOT touched: `surface_docs_audit` (3 failures, missing docs/providers.md — fails identically on parent `851d2cc`), clippy errors in `src/cli/autopost.rs` + `src/cli/oauth_browser.rs`, README rubric length_in_band warning, unstaged `scripts/genome` MODULES edit.
