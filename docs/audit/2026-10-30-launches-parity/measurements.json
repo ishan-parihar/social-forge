@@ -1,0 +1,846 @@
+{
+ "390": {
+  "cal": {
+   "aside": {
+    "w": 224,
+    "h": 844
+   },
+   "asideClass": "w-56 bg-background border-r border-line flex flex-col flex-shrink-0 overflow-y-a",
+   "navItems": [
+    {
+     "t": "Dashboard",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Calendar",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Pipeline",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Posts",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Media",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Tags",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Feed",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Comments",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "DMs",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Automation",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Activity",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Research",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Search",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Analytics",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Channels",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Settings",
+     "w": 207,
+     "h": 44
+    }
+   ],
+   "h1": {
+    "t": "Content Calendar",
+    "size": "20px",
+    "weight": "600"
+   },
+   "shell": {
+    "w": 358,
+    "h": 1227
+   },
+   "viewBtns": [
+    {
+     "t": "Day",
+     "w": 46,
+     "h": 44
+    },
+    {
+     "t": "Week",
+     "w": 56,
+     "h": 44
+    },
+    {
+     "t": "Month",
+     "w": 61,
+     "h": 44
+    },
+    {
+     "t": "List",
+     "w": 44,
+     "h": 44
+    }
+   ],
+   "bodyScroll": 390,
+   "clientW": 390,
+   "chipCount": 1,
+   "chipSamples": [
+    {
+     "w": 18,
+     "h": 18,
+     "bg": "rgb(255, 100, 100)",
+     "txt": "4"
+    }
+   ]
+  },
+  "comp": {
+   "w": 390,
+   "h": 844,
+   "maxH": "844px",
+   "leftCol": {
+    "w": 356,
+    "h": 758
+   },
+   "rightCol": {
+    "w": 0
+   },
+   "headings": [
+    "Post to",
+    "Tags",
+    "Campaign",
+    "Content (shared across all channels)",
+    "Media",
+    "Preview",
+    "Schedule"
+   ],
+   "panelCount": 9,
+   "sections": [
+    {
+     "title": "Post to",
+     "w": 358,
+     "h": 760
+    },
+    {
+     "title": "Post to",
+     "w": 324,
+     "h": 153
+    },
+    {
+     "title": "Tags",
+     "w": 324,
+     "h": 162
+    },
+    {
+     "title": "Campaign",
+     "w": 324,
+     "h": 110
+    },
+    {
+     "title": "Content (shared across all channels)",
+     "w": 324,
+     "h": 449
+    },
+    {
+     "title": null,
+     "w": 324,
+     "h": 46
+    },
+    {
+     "title": "Media",
+     "w": 324,
+     "h": 146
+    },
+    {
+     "title": null,
+     "w": 0,
+     "h": 0
+    },
+    {
+     "title": "Schedule",
+     "w": 0,
+     "h": 0
+    }
+   ],
+   "scrollH": 844,
+   "clientH": 844,
+   "footerBtns": [
+    "Close preview",
+    "Post Sets",
+    "Save Draft",
+    "Post Now",
+    "Schedule"
+   ]
+  }
+ },
+ "768": {
+  "cal": {
+   "aside": {
+    "w": 224,
+    "h": 1024
+   },
+   "asideClass": "w-56 bg-background border-r border-line flex flex-col flex-shrink-0 overflow-y-a",
+   "navItems": [
+    {
+     "t": "Dashboard",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Calendar",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Pipeline",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Posts",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Media",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Tags",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Feed",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Comments",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "DMs",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Automation",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Activity",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Research",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Search",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Analytics",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Channels",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Settings",
+     "w": 207,
+     "h": 44
+    }
+   ],
+   "h1": {
+    "t": "Content Calendar",
+    "size": "20px",
+    "weight": "600"
+   },
+   "shell": {
+    "w": 720,
+    "h": 752
+   },
+   "viewBtns": [
+    {
+     "t": "Day",
+     "w": 46,
+     "h": 44
+    },
+    {
+     "t": "Week",
+     "w": 56,
+     "h": 44
+    },
+    {
+     "t": "Month",
+     "w": 61,
+     "h": 44
+    },
+    {
+     "t": "List",
+     "w": 44,
+     "h": 44
+    }
+   ],
+   "bodyScroll": 768,
+   "clientW": 768,
+   "chipCount": 1,
+   "chipSamples": [
+    {
+     "w": 18,
+     "h": 18,
+     "bg": "rgb(255, 100, 100)",
+     "txt": "4"
+    }
+   ]
+  },
+  "comp": {
+   "w": 768,
+   "h": 1024,
+   "maxH": "1024px",
+   "leftCol": {
+    "w": 734,
+    "h": 920
+   },
+   "rightCol": {
+    "w": 0
+   },
+   "headings": [
+    "Post to",
+    "Tags",
+    "Campaign",
+    "Content (shared across all channels)",
+    "Media",
+    "Preview",
+    "Schedule"
+   ],
+   "panelCount": 9,
+   "sections": [
+    {
+     "title": "Post to",
+     "w": 736,
+     "h": 922
+    },
+    {
+     "title": "Post to",
+     "w": 694,
+     "h": 137
+    },
+    {
+     "title": "Tags",
+     "w": 694,
+     "h": 110
+    },
+    {
+     "title": "Campaign",
+     "w": 694,
+     "h": 110
+    },
+    {
+     "title": "Content (shared across all channels)",
+     "w": 694,
+     "h": 353
+    },
+    {
+     "title": null,
+     "w": 694,
+     "h": 46
+    },
+    {
+     "title": "Media",
+     "w": 694,
+     "h": 146
+    },
+    {
+     "title": null,
+     "w": 0,
+     "h": 0
+    },
+    {
+     "title": "Schedule",
+     "w": 0,
+     "h": 0
+    }
+   ],
+   "scrollH": 1024,
+   "clientH": 1024,
+   "footerBtns": [
+    "Close preview",
+    "Post Sets",
+    "Save Draft",
+    "Post Now",
+    "Schedule"
+   ]
+  }
+ },
+ "1280": {
+  "cal": {
+   "aside": {
+    "w": 224,
+    "h": 800
+   },
+   "asideClass": "w-56 bg-background border-r border-line flex flex-col flex-shrink-0 overflow-y-a",
+   "navItems": [
+    {
+     "t": "Dashboard",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Calendar",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Pipeline",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Posts",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Media",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Tags",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Feed",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Comments",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "DMs",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Automation",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Activity",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Research",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Search",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Analytics",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Channels",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Settings",
+     "w": 207,
+     "h": 44
+    }
+   ],
+   "h1": {
+    "t": "Content Calendar",
+    "size": "20px",
+    "weight": "600"
+   },
+   "shell": {
+    "w": 1008,
+    "h": 578
+   },
+   "viewBtns": [
+    {
+     "t": "Day",
+     "w": 46,
+     "h": 44
+    },
+    {
+     "t": "Week",
+     "w": 56,
+     "h": 44
+    },
+    {
+     "t": "Month",
+     "w": 61,
+     "h": 44
+    },
+    {
+     "t": "List",
+     "w": 44,
+     "h": 44
+    }
+   ],
+   "bodyScroll": 1280,
+   "clientW": 1280,
+   "chipCount": 1,
+   "chipSamples": [
+    {
+     "w": 18,
+     "h": 18,
+     "bg": "rgb(255, 100, 100)",
+     "txt": "4"
+    }
+   ]
+  },
+  "comp": {
+   "w": 1280,
+   "h": 800,
+   "maxH": "800px",
+   "leftCol": {
+    "w": 1246,
+    "h": 718
+   },
+   "rightCol": {
+    "w": 420
+   },
+   "headings": [
+    "Post to",
+    "Tags",
+    "Campaign",
+    "Content (shared across all channels)",
+    "Media",
+    "Preview",
+    "Schedule"
+   ],
+   "panelCount": 9,
+   "sections": [
+    {
+     "title": "Post to",
+     "w": 1248,
+     "h": 720
+    },
+    {
+     "title": "Post to",
+     "w": 786,
+     "h": 137
+    },
+    {
+     "title": "Tags",
+     "w": 786,
+     "h": 110
+    },
+    {
+     "title": "Campaign",
+     "w": 786,
+     "h": 110
+    },
+    {
+     "title": "Content (shared across all channels)",
+     "w": 786,
+     "h": 353
+    },
+    {
+     "title": null,
+     "w": 786,
+     "h": 46
+    },
+    {
+     "title": "Media",
+     "w": 786,
+     "h": 146
+    },
+    {
+     "title": null,
+     "w": 379,
+     "h": 122
+    },
+    {
+     "title": "Schedule",
+     "w": 379,
+     "h": 110
+    }
+   ],
+   "scrollH": 800,
+   "clientH": 800,
+   "footerBtns": [
+    "Close preview",
+    "Post Sets",
+    "Save Draft",
+    "Post Now",
+    "Schedule"
+   ]
+  }
+ },
+ "1440": {
+  "cal": {
+   "aside": {
+    "w": 224,
+    "h": 900
+   },
+   "asideClass": "w-56 bg-background border-r border-line flex flex-col flex-shrink-0 overflow-y-a",
+   "navItems": [
+    {
+     "t": "Dashboard",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Calendar",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Pipeline",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Posts",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Media",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Tags",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Feed",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Comments",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "DMs",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Automation",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Activity",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Research",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Search",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Analytics",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Channels",
+     "w": 207,
+     "h": 44
+    },
+    {
+     "t": "Settings",
+     "w": 207,
+     "h": 44
+    }
+   ],
+   "h1": {
+    "t": "Content Calendar",
+    "size": "20px",
+    "weight": "600"
+   },
+   "shell": {
+    "w": 1104,
+    "h": 678
+   },
+   "viewBtns": [
+    {
+     "t": "Day",
+     "w": 46,
+     "h": 44
+    },
+    {
+     "t": "Week",
+     "w": 56,
+     "h": 44
+    },
+    {
+     "t": "Month",
+     "w": 61,
+     "h": 44
+    },
+    {
+     "t": "List",
+     "w": 44,
+     "h": 44
+    }
+   ],
+   "bodyScroll": 1440,
+   "clientW": 1440,
+   "chipCount": 1,
+   "chipSamples": [
+    {
+     "w": 18,
+     "h": 18,
+     "bg": "rgb(255, 100, 100)",
+     "txt": "4"
+    }
+   ]
+  },
+  "comp": {
+   "w": 1440,
+   "h": 900,
+   "maxH": "900px",
+   "leftCol": {
+    "w": 1398,
+    "h": 808
+   },
+   "rightCol": {
+    "w": 420
+   },
+   "headings": [
+    "Post to",
+    "Tags",
+    "Campaign",
+    "Content (shared across all channels)",
+    "Media",
+    "Preview",
+    "Schedule"
+   ],
+   "panelCount": 9,
+   "sections": [
+    {
+     "title": "Post to",
+     "w": 1400,
+     "h": 810
+    },
+    {
+     "title": "Post to",
+     "w": 938,
+     "h": 137
+    },
+    {
+     "title": "Tags",
+     "w": 938,
+     "h": 110
+    },
+    {
+     "title": "Campaign",
+     "w": 938,
+     "h": 110
+    },
+    {
+     "title": "Content (shared across all channels)",
+     "w": 938,
+     "h": 353
+    },
+    {
+     "title": null,
+     "w": 938,
+     "h": 46
+    },
+    {
+     "title": "Media",
+     "w": 938,
+     "h": 146
+    },
+    {
+     "title": null,
+     "w": 379,
+     "h": 122
+    },
+    {
+     "title": "Schedule",
+     "w": 379,
+     "h": 110
+    }
+   ],
+   "scrollH": 900,
+   "clientH": 900,
+   "footerBtns": [
+    "Close preview",
+    "Post Sets",
+    "Save Draft",
+    "Post Now",
+    "Schedule"
+   ]
+  }
+ }
+}

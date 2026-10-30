@@ -1,0 +1,100 @@
+{
+  "_about": "Rendered re-measurement of the calendar + composer over the RUNNING app. Captured 2026-10-30 by docs/audit/2026-10-30-launches-parity/probe-audit-render.mjs. Every number below is a getBoundingClientRect() or getComputedStyle() read, not an estimate. These are the numbers the 6 CORRECTION rows in PLAN_UI_PARITY_LAUNCHES_CALENDAR_2026-10-30.md are built on.",
+  "setup": {
+    "server": "http://localhost:6543 (target/release/switchpost serve, repo .env)",
+    "seeded": "8 posts on the x integration with two tags, today, 08:00-16:55",
+    "views": ["week", "month", "day"]
+  },
+  "corrections": {
+    "1_preview_below_lg": {
+      "old_claim": "preview column is width 0 / absent below lg",
+      "measured": {
+        "1440": { "w": 420, "h": 674, "display": "block" },
+        "768": { "w": 0, "h": 0, "display": "none", "after_clicking_footer_Preview": { "w": 734, "h": 420, "display": "block" } },
+        "390": { "w": 0, "h": 0, "display": "none", "after_clicking_footer_Preview": { "w": 356, "h": 428, "display": "block" } }
+      },
+      "verdict": "collapseable, not deleted. The defect is the DEFAULT (off), not the mechanism."
+    },
+    "2_composer_shell": {
+      "old_claim": "full-viewport, fills the screen, no page context",
+      "measured": {
+        "1440": { "panel": { "x": 20, "y": 45, "w": 1400, "h": 810 }, "inset": { "l": 20, "r": 20, "t": 45, "b": 45 } },
+        "768": { "panel": { "x": 16, "y": 51, "w": 736, "h": 922 }, "inset": { "l": 16, "r": 16, "t": 51, "b": 51 } },
+        "backdrop": { "class": "bg-overlay-strong", "resolved": "rgba(0, 0, 0, 0.7)", "layers": 1 }
+      },
+      "verdict": "geometry already matches postiz's max-w-[1400px]. It is the 0.7-alpha scrim that removes context."
+    },
+    "3_chip_has_time": {
+      "old_claim": "no time shown on the chip",
+      "measured_times_seen": ["15:00", "03:51", "14:30", "22:15", "19:30", "16:30", "20:31"],
+      "verdict": "the time is the first element on the chip. The plan's 'add the time' is a no-op."
+    },
+    "4_chip_has_tag_colour": {
+      "old_claim": "no tag colour on the chip",
+      "measured": { "leftBorder": "3px solid rgb(16, 185, 129)", "tagChips": [{ "name": "buildinpublic", "bg": "rgb(16, 185, 129)", "ink": "rgb(0, 0, 0)", "w": 69 }, { "name": "launch", "bg": "rgb(99, 102, 241)", "ink": "rgb(0, 0, 0)", "w": 40 }], "monthView": "4px dots instead of name chips" },
+      "verdict": "a 3px bar and solid inkOnFill tag chips already exist. The plan's 'add a 1px left colour bar' is a no-op."
+    },
+    "5_chip_has_hover_actions": {
+      "old_claim": "no hover actions on the chip",
+      "measured": { "toolbar": "PostHoverToolbar", "actions": ["duplicate", "stats", "delete", "view original (published only)"], "chip_content_on_hover": "opacity 0, sibling actions take its place, no overlap" },
+      "verdict": "already implemented."
+    },
+    "6_chip_font_size": {
+      "old_claim": "text-[16px] in a 24px box",
+      "measured": { "week_day": { "height": 21, "fontSize": "0.6875rem = 11px" }, "month": { "height": 24 } },
+      "verdict": "11px, not 16px. The 21px height IS a real WCAG 2.2 2.5.8 FAIL."
+    }
+  },
+  "findings": {
+    "F1_week_day_chip_21px": {
+      "severity": "FAIL (WCAG 2.2 2.5.8, floor 24x24)",
+      "measured": { "week": [21], "day": [21], "month": [24] },
+      "note": "month already has .event-chip.compact { min-height: 24px } with the comment explaining the 24px floor; the non-compact chip was never given the same rule"
+    },
+    "F2_no_chip_cap": {
+      "severity": "defect",
+      "measured": { "totalChips": 23, "chipsInBusiestSlot": 6, "anyMoreAffordance": [], "postiz": "slice(0,3) + Show more (N)" }
+    },
+    "F3_tag_names_truncate": {
+      "severity": "craft",
+      "measured": { "chipWidth": 129, "tagRenderedText": ["buil", "la..."], "titleRenderedText": "Overflow...", "titleOverflow": "hidden" }
+    },
+    "F4_header_chrome": {
+      "severity": "density",
+      "measured_shellTop": { "1440": 218, "768": 270, "390": 350 },
+      "postiz": "one flex-wrap gap-[8px] row, h-[42px] + 20px page padding"
+    },
+    "F5_two_filled_primaries": {
+      "severity": "craft",
+      "measured": { "footerButtons": ["Save Draft", "Post Now", "Schedule"], "postNowClass": "bg-success", "scheduleClass": "bg-accent-fill", "verdict": "both filled, neither is the primary" }
+    },
+    "F6_no_channel_rail": {
+      "severity": "gap vs postiz",
+      "measured": { "calendarChannelSurface": "one native <select> labelled 'All channels'", "railEntries": "Channels (/channels) and Settings (/settings) as two rail links" }
+    },
+    "F7_compose_stack": {
+      "severity": "density",
+      "measured_headings": ["Create Post", "Post to", "Tags", "Campaign", "Content (shared across all channels)", "Media", "Preview", "Schedule"],
+      "note": "the content body - the tallest block - sits seventh of seven cards"
+    },
+    "F8_preview_empty_state": {
+      "severity": "craft",
+      "measured": { "emptyCopy": "Select a channel to see a preview. Every selected channel gets its own frame, in its own chrome." }
+    },
+    "F9_composer_heading_levels": {
+      "severity": "minor",
+      "measured": { "h1": "Content Calendar (page)", "composerHeadings": "h3s inside a dialog" },
+      "note": "no skipped level in practice; the ariaLabel 'Composer' names the dialog (AGENTS.md 9.49)"
+    }
+  },
+  "preserved_advantages": [
+    "SSE live channel state (postiz uses SWR polling)",
+    "bulk-select on the calendar with a selected-count bar (postiz has none)",
+    "the composer's all-blockers-at-once banner (postiz has none)",
+    "askClose + Draft saved + Cmd+Enter / Cmd+S hints (postiz has none)",
+    "chip metrics (likes / impressions) with the shared engagementLabel vocabulary",
+    "chip hover toolbar with no overlap",
+    "providerInk / OnCard / OnChip / OnInput - 4.5:1 on four surfaces",
+    "drag-to-reschedule with the group-move and published-post confirmations"
+  ]
+}

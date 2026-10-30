@@ -1,0 +1,190 @@
+[
+  {
+    "url": "https://localhost:6543/calendar",
+    "width": 1440,
+    "scheme": "light",
+    "fail": [
+      {
+        "k": "text-overlap",
+        "m": "\"Content Calendar\" overlaps \"03:00\" at (280, 90)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Week of October 30\" overlaps \"Welcome to Switchpost\" at (345, 160)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"GMT+5:30\" overlaps \"06:00\" at (319, 227)"
+      }
+    ],
+    "warn": [
+      {
+        "k": "text-size",
+        "m": "\"Publish\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"Engage\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"Insights\" is 10px (< 12)"
+      },
+      {
+        "k": "type-scale",
+        "m": "largest type in the first viewport is 20px (1.3x body); under 48px at desktop reads as a document, not a designed page"
+      },
+      {
+        "k": "color-sprawl",
+        "m": "18 distinct text colors; tokens give about 4-8"
+      },
+      {
+        "k": "cta",
+        "m": "no primary CTA found in <main> (.btn-primary or [data-cta=primary])"
+      }
+    ],
+    "info": {
+      "textNodes": 113,
+      "fonts": [
+        "inter"
+      ],
+      "heroScale": 1.3,
+      "typeSizes": 5,
+      "textColors": 18,
+      "lengthVp": 1,
+      "primaryCtaVp": null,
+      "primaryCtaLabel": null,
+      "pinnedCta": null,
+      "distinctExits": 0,
+      "screenshot": "docs/audit/2026-10-30-launches-parity/probe-calendar/calendar-1440.png"
+    }
+  },
+  {
+    "url": "https://localhost:6543/calendar",
+    "width": 768,
+    "scheme": "light",
+    "fail": [
+      {
+        "k": "text-overlap",
+        "m": "\"Content Calendar\" overlaps \"03:00\" at (24, 90)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Week of October 30\" overlaps \"Welcome to Switchpost\" at (89, 160)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"GMT+5:30\" overlaps \"06:00\" at (39, 227)"
+      }
+    ],
+    "warn": [
+      {
+        "k": "text-size",
+        "m": "\"X\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"Reddit\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"LinkedIn\" is 10px (< 12)"
+      },
+      {
+        "k": "color-sprawl",
+        "m": "17 distinct text colors; tokens give about 4-8"
+      },
+      {
+        "k": "cta",
+        "m": "no primary CTA found in <main> (.btn-primary or [data-cta=primary])"
+      }
+    ],
+    "info": {
+      "textNodes": 88,
+      "fonts": [
+        "inter"
+      ],
+      "heroScale": 1.3,
+      "typeSizes": 5,
+      "textColors": 17,
+      "lengthVp": 1,
+      "primaryCtaVp": null,
+      "primaryCtaLabel": null,
+      "pinnedCta": null,
+      "distinctExits": 0,
+      "screenshot": "docs/audit/2026-10-30-launches-parity/probe-calendar/calendar-768.png"
+    }
+  },
+  {
+    "url": "https://localhost:6543/calendar",
+    "width": 375,
+    "scheme": "light",
+    "fail": [
+      {
+        "k": "text-overlap",
+        "m": "\"Content Calendar\" overlaps \"Welcome to Switchpost\" at (16, 74)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Generate Posts\" overlaps \"1\" at (29, 121)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Generate Posts\" overlaps \"Connect Channels\" at (29, 121)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"+ New Post\" overlaps \"Connect Channels\" at (163, 121)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"←\" overlaps \"Switchpost is your solo-founder \" at (31, 189)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Week of October 30\" overlaps \"Switchpost is your solo-founder \" at (68, 187)"
+      }
+    ],
+    "warn": [
+      {
+        "k": "text-size",
+        "m": "\"X\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"Reddit\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"LinkedIn\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "body paragraph is 14px on mobile (div > p.text-sm.text-muted)"
+      },
+      {
+        "k": "color-sprawl",
+        "m": "17 distinct text colors; tokens give about 4-8"
+      },
+      {
+        "k": "cta",
+        "m": "no primary CTA found in <main> (.btn-primary or [data-cta=primary])"
+      }
+    ],
+    "info": {
+      "textNodes": 89,
+      "fonts": [
+        "inter"
+      ],
+      "heroScale": 1.3,
+      "typeSizes": 5,
+      "textColors": 17,
+      "lengthVp": 1,
+      "primaryCtaVp": null,
+      "primaryCtaLabel": null,
+      "pinnedCta": null,
+      "distinctExits": 0,
+      "screenshot": "docs/audit/2026-10-30-launches-parity/probe-calendar/calendar-375.png"
+    }
+  }
+]

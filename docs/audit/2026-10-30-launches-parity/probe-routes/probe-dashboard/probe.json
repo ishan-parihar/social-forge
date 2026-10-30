@@ -1,0 +1,230 @@
+[
+  {
+    "url": "https://localhost:6543/dashboard",
+    "width": 1440,
+    "scheme": "light",
+    "fail": [
+      {
+        "k": "text-overlap",
+        "m": "\"Page not found\" overlaps \"PIN\" at (767, 528)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Page not found\" overlaps \"Pinterest\" at (767, 528)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Page not found\" overlaps \"DC\" at (767, 528)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Page not found\" overlaps \"Discord\" at (767, 528)"
+      }
+    ],
+    "warn": [
+      {
+        "k": "text-size",
+        "m": "\"Publish\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"Engage\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"Insights\" is 10px (< 12)"
+      },
+      {
+        "k": "type-scale",
+        "m": "largest type in the first viewport is 36px (1x body); under 48px at desktop reads as a document, not a designed page"
+      },
+      {
+        "k": "color-sprawl",
+        "m": "18 distinct text colors; tokens give about 4-8"
+      },
+      {
+        "k": "cta",
+        "m": "no primary CTA found in <main> (.btn-primary or [data-cta=primary])"
+      },
+      {
+        "k": "console",
+        "m": "St: Not found: /dashboard\n    at q (https://localhost:6543/_app/immutable/chunks/DA2Ug06q.js:1:13875)\n    at async Module.Ge (https://localh"
+      }
+    ],
+    "info": {
+      "textNodes": 69,
+      "fonts": [
+        "inter"
+      ],
+      "heroScale": 1,
+      "typeSizes": 6,
+      "textColors": 18,
+      "lengthVp": 1,
+      "primaryCtaVp": null,
+      "primaryCtaLabel": null,
+      "pinnedCta": null,
+      "distinctExits": 1,
+      "screenshot": "docs/audit/2026-10-30-launches-parity/probe-dashboard/dashboard-1440.png"
+    }
+  },
+  {
+    "url": "https://localhost:6543/dashboard",
+    "width": 768,
+    "scheme": "light",
+    "fail": [
+      {
+        "k": "text-overlap",
+        "m": "\"Page not found\" overlaps \"TT\" at (319, 528)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Page not found\" overlaps \"TikTok\" at (319, 528)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Page not found\" overlaps \"PIN\" at (319, 528)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Page not found\" overlaps \"Pinterest\" at (319, 528)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Retry\" overlaps \"Telegram\" at (316, 615)"
+      }
+    ],
+    "warn": [
+      {
+        "k": "tap-target",
+        "m": "\"Retry\" is 36px tall (< 44 recommended on touch)"
+      },
+      {
+        "k": "tap-target",
+        "m": "\"Go home\" is 38px tall (< 44 recommended on touch)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"X\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"Reddit\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"LinkedIn\" is 10px (< 12)"
+      },
+      {
+        "k": "color-sprawl",
+        "m": "18 distinct text colors; tokens give about 4-8"
+      },
+      {
+        "k": "cta",
+        "m": "no primary CTA found in <main> (.btn-primary or [data-cta=primary])"
+      },
+      {
+        "k": "console",
+        "m": "St: Not found: /dashboard\n    at q (https://localhost:6543/_app/immutable/chunks/DA2Ug06q.js:1:13875)\n    at async Module.Ge (https://localh"
+      }
+    ],
+    "info": {
+      "textNodes": 44,
+      "fonts": [
+        "inter"
+      ],
+      "heroScale": 1,
+      "typeSizes": 6,
+      "textColors": 18,
+      "lengthVp": 1,
+      "primaryCtaVp": null,
+      "primaryCtaLabel": null,
+      "pinnedCta": null,
+      "distinctExits": 1,
+      "screenshot": "docs/audit/2026-10-30-launches-parity/probe-dashboard/dashboard-768.png"
+    }
+  },
+  {
+    "url": "https://localhost:6543/dashboard",
+    "width": 375,
+    "scheme": "light",
+    "fail": [
+      {
+        "k": "text-overlap",
+        "m": "\"404\" overlaps \"Threads\" at (153, 427)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"404\" overlaps \"Bluesky\" at (153, 427)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Page not found\" overlaps \"TT\" at (122, 476)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Page not found\" overlaps \"PIN\" at (122, 476)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Not Found\" overlaps \"TikTok\" at (153, 510)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Not Found\" overlaps \"Pinterest\" at (153, 510)"
+      }
+    ],
+    "warn": [
+      {
+        "k": "tap-target",
+        "m": "\"Retry\" is 36px tall (< 44 recommended on touch)"
+      },
+      {
+        "k": "tap-target",
+        "m": "\"Go home\" is 38px tall (< 44 recommended on touch)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"X\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"Reddit\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"LinkedIn\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "body paragraph is 14px on mobile (div > p.text-sm.text-muted)"
+      },
+      {
+        "k": "color-sprawl",
+        "m": "18 distinct text colors; tokens give about 4-8"
+      },
+      {
+        "k": "cta",
+        "m": "no primary CTA found in <main> (.btn-primary or [data-cta=primary])"
+      },
+      {
+        "k": "console",
+        "m": "St: Not found: /dashboard\n    at q (https://localhost:6543/_app/immutable/chunks/DA2Ug06q.js:1:13875)\n    at async Module.Ge (https://localh"
+      }
+    ],
+    "info": {
+      "textNodes": 44,
+      "fonts": [
+        "inter"
+      ],
+      "heroScale": 1,
+      "typeSizes": 6,
+      "textColors": 18,
+      "lengthVp": 1,
+      "primaryCtaVp": null,
+      "primaryCtaLabel": null,
+      "pinnedCta": null,
+      "distinctExits": 1,
+      "screenshot": "docs/audit/2026-10-30-launches-parity/probe-dashboard/dashboard-375.png"
+    }
+  }
+]

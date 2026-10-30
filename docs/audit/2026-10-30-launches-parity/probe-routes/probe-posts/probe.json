@@ -1,0 +1,169 @@
+[
+  {
+    "url": "https://localhost:6543/posts",
+    "width": 1440,
+    "scheme": "light",
+    "fail": [
+      {
+        "k": "text-overlap",
+        "m": "\"Write one and cross-post it to e\" overlaps \"BS\" at (654, 426)"
+      }
+    ],
+    "warn": [
+      {
+        "k": "text-size",
+        "m": "\"Publish\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"Engage\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"Insights\" is 10px (< 12)"
+      },
+      {
+        "k": "type-scale",
+        "m": "largest type in the first viewport is 20px (1.7x body); under 48px at desktop reads as a document, not a designed page"
+      },
+      {
+        "k": "color-sprawl",
+        "m": "18 distinct text colors; tokens give about 4-8"
+      },
+      {
+        "k": "cta",
+        "m": "no primary CTA found in <main> (.btn-primary or [data-cta=primary])"
+      }
+    ],
+    "info": {
+      "textNodes": 75,
+      "fonts": [
+        "inter"
+      ],
+      "heroScale": 1.7,
+      "typeSizes": 5,
+      "textColors": 18,
+      "lengthVp": 1,
+      "primaryCtaVp": null,
+      "primaryCtaLabel": null,
+      "pinnedCta": null,
+      "distinctExits": 0,
+      "screenshot": "docs/audit/2026-10-30-launches-parity/probe-posts/posts-1440.png"
+    }
+  },
+  {
+    "url": "https://localhost:6543/posts",
+    "width": 768,
+    "scheme": "light",
+    "fail": [],
+    "warn": [
+      {
+        "k": "text-size",
+        "m": "\"X\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"Reddit\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"LinkedIn\" is 10px (< 12)"
+      },
+      {
+        "k": "color-sprawl",
+        "m": "17 distinct text colors; tokens give about 4-8"
+      },
+      {
+        "k": "cta",
+        "m": "no primary CTA found in <main> (.btn-primary or [data-cta=primary])"
+      }
+    ],
+    "info": {
+      "textNodes": 50,
+      "fonts": [
+        "inter"
+      ],
+      "heroScale": 1.7,
+      "typeSizes": 5,
+      "textColors": 17,
+      "lengthVp": 1,
+      "primaryCtaVp": null,
+      "primaryCtaLabel": null,
+      "pinnedCta": null,
+      "distinctExits": 0,
+      "screenshot": "docs/audit/2026-10-30-launches-parity/probe-posts/posts-768.png"
+    }
+  },
+  {
+    "url": "https://localhost:6543/posts",
+    "width": 375,
+    "scheme": "light",
+    "fail": [
+      {
+        "k": "text-overlap",
+        "m": "\"Posts\" overlaps \"Welcome to Switchpost\" at (16, 74)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Group by Campaign\" overlaps \"1\" at (49, 125)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"Group by Campaign\" overlaps \"Connect Channels\" at (49, 125)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"+ New Post\" overlaps \"2\" at (214, 125)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"+ New Post\" overlaps \"Quick Tour\" at (214, 125)"
+      },
+      {
+        "k": "text-overlap",
+        "m": "\"No posts found\" overlaps \"TT\" at (136, 487)"
+      }
+    ],
+    "warn": [
+      {
+        "k": "text-size",
+        "m": "\"X\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"Reddit\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "\"LinkedIn\" is 10px (< 12)"
+      },
+      {
+        "k": "text-size",
+        "m": "body paragraph is 14px on mobile (div > p.text-sm.text-muted)"
+      },
+      {
+        "k": "color-sprawl",
+        "m": "17 distinct text colors; tokens give about 4-8"
+      },
+      {
+        "k": "cta",
+        "m": "no primary CTA found in <main> (.btn-primary or [data-cta=primary])"
+      }
+    ],
+    "info": {
+      "textNodes": 50,
+      "fonts": [
+        "inter"
+      ],
+      "heroScale": 1.7,
+      "typeSizes": 5,
+      "textColors": 17,
+      "lengthVp": 1,
+      "primaryCtaVp": null,
+      "primaryCtaLabel": null,
+      "pinnedCta": null,
+      "distinctExits": 0,
+      "screenshot": "docs/audit/2026-10-30-launches-parity/probe-posts/posts-375.png"
+    }
+  }
+]

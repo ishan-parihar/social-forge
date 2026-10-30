@@ -3043,3 +3043,58 @@ Stage Summary:
   `src/cli/autopost.rs` and `src/cli/oauth_browser.rs`.
 - Known open items, unchanged: `docs/providers.md` still missing (surface_docs_audit
   trio), README `length_in_band` rubric, unstaged `scripts/genome`.
+
+---
+Task ID: ui-parity-launches-calendar-2026-10-30-remeasure
+Agent: Jcode
+Task: Audit the postiz `/launches` landing page against switchpost's `/calendar`
+across three aspects (the channel left-rail, the new-post modal, the thin left
+navigation panel), then produce the plan. Route: `website-design` -> `redesign`
+(audit-first, existing site) -> plan only.
+
+Work Log:
+- Read the existing artifacts first (the repo's own rule): a 381-line plan file and
+  a `docs/audit/2026-10-30-launches-parity/` directory from a prior session existed
+  in the working tree. Rather than trusting them, every claim was re-verified.
+- Loaded the `website-design` skill and routed to `redesign` (audit-first) because
+  the site already exists.
+- Read the postiz sources directly: `launches.component.tsx` (the channel rail, the
+  group rename, the reconnect-on-refreshNeeded), `menu.tsx`, `filters.tsx` (the
+  one-row header), `new.post.tsx`, `add.edit.modal.tsx`, `manage.modal.tsx` (the
+  two-column composer shell and the footer), `editor.tsx`, `modal.wrapper.component.tsx`.
+- Read switchpost's own sources: `+layout.svelte` (the 224px rail), `CalendarHeader.svelte`,
+  `calendar/+page.svelte` (the shell constant), `CalendarEvent.svelte`, `ComposerModal.svelte`
+  (1760 lines), `ModalManager.svelte`.
+- Six of the prior plan's claims did not survive the render. Started the release binary
+  on the repo's `.env` (killing a stale debug instance that held the port), seeded 8 tagged
+  posts on the X integration across today, and drove the browser into each state.
+- Measured with `getBoundingClientRect()` and `getComputedStyle()`, not estimates.
+- Rewrote the plan with the corrections preserved rather than deleted, added the findings
+  and a reusable state-driving probe to the audit directory, appended 8 register rows to
+  TODO.md, and deleted 14 stale `.probe-*.mjs` scripts from `frontend/`.
+
+Stage Summary:
+- **Six false claims corrected, all against the rendered app.** The preview column below
+  `lg` is collapseable, not deleted (it renders 734x420 at 768 after the footer button);
+  the composer panel is NOT full-bleed (inset 20/45px at 1440, matching postiz's
+  `max-w-[1400px]`); the chip ALREADY shows the time, a 3px tag-colour bar, solid
+  `inkOnFill` tag chips, metrics and a hover toolbar; and the chip's type is 11px, not 16px.
+- One fabricated citation retracted: the prior plan cited "the AGENTS.md 12.1
+  `overlay-strong` note", which appears nowhere in AGENTS.md. The backdrop observation
+  stands on the measured `rgba(0,0,0,0.7)` alone.
+- **Two real defects found that the prior plan had the wrong fix for.** The week/day chip
+  is **21px tall, a measured WCAG 2.2 2.5.8 FAIL** - the month grid already has the
+  `min-height: 24px` rule with the comment explaining the floor, and the non-compact chip
+  was never given the same rule. And a calendar cell renders every chip with no cap:
+  23 chips for 8 seeded posts, 6 stacked inside one 30-minute slot, no `+N more`.
+- The plan is now 7 phases in the order measure -> fix: C-0 chip floor, C-1 cell cap,
+  C-2 one-row header, M-1 composer reachability + one primary, R-1/R-2 the rails,
+  M-2 per-channel dates, V-1 the measurement gate.
+- The load-bearing constraint on the rails is arithmetic, not taste: an 80px rail plus an
+  always-open 260px channel rail leaves 1100px of calendar at 1440, which is LESS than
+  today's 1104px. So the channel rail is collapsed to 64px by default and is per-route.
+- Artifacts: `docs/planning/PLAN_UI_PARITY_LAUNCHES_CALENDAR_2026-10-30.md` (rewritten),
+  `docs/audit/2026-10-30-launches-parity/findings.json`,
+  `.../probe-audit-render.mjs`, 7 screenshots, 8 TODO rows.
+- No code was changed in this pass. No build gate applies to a docs-only change; the
+  verification that does apply is the rendered measurement recorded in findings.json.

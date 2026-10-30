@@ -1,0 +1,62 @@
+[
+  {
+    "url": "https://localhost:6544/login",
+    "width": 1440,
+    "scheme": "light",
+    "fail": [
+      {
+        "k": "load",
+        "m": "page.goto: net::ERR_CONNECTION_REFUSED at https://localhost:6544/login"
+      }
+    ],
+    "warn": [
+      {
+        "k": "request",
+        "m": "net::ERR_CONNECTION_REFUSED https://localhost:6544/login"
+      }
+    ],
+    "info": {
+      "screenshot": "docs/audit/2026-10-30-launches-parity/probe-login/login-1440.png"
+    }
+  },
+  {
+    "url": "https://localhost:6544/login",
+    "width": 768,
+    "scheme": "light",
+    "fail": [
+      {
+        "k": "load",
+        "m": "page.goto: net::ERR_CONNECTION_REFUSED at https://localhost:6544/login"
+      }
+    ],
+    "warn": [
+      {
+        "k": "request",
+        "m": "net::ERR_CONNECTION_REFUSED https://localhost:6544/login"
+      }
+    ],
+    "info": {
+      "screenshot": "docs/audit/2026-10-30-launches-parity/probe-login/login-768.png"
+    }
+  },
+  {
+    "url": "https://localhost:6544/login",
+    "width": 375,
+    "scheme": "light",
+    "fail": [
+      {
+        "k": "load",
+        "m": "page.goto: net::ERR_CONNECTION_REFUSED at https://localhost:6544/login"
+      }
+    ],
+    "warn": [
+      {
+        "k": "request",
+        "m": "net::ERR_CONNECTION_REFUSED https://localhost:6544/login"
+      }
+    ],
+    "info": {
+      "screenshot": "docs/audit/2026-10-30-launches-parity/probe-login/login-375.png"
+    }
+  }
+]
