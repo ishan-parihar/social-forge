@@ -745,3 +745,56 @@ async fn frontend_url_is_still_the_csrf_origin() {
          CORS/CSRF origin and must stay so"
     );
 }
+
+/// Every provider that requests GOOGLE scopes must pass the scope guard.
+///
+/// The guard (`social::scope_guard`) was introduced for the unified `google`
+/// provider and is CALLED only from `google::generate_auth_url`. But the fix
+/// that narrowed `google`'s scopes also split Drive, Gmail and Calendar into
+/// their own providers, so three more consent flows now request
+/// `googleapis.com` scopes and NONE of them passes through the guard.
+///
+/// That reintroduces the defect the guard was built to prevent, one provider
+/// over. Proven by mutation before the test existed: re-adding
+/// `youtube.upload` beside `drive.file` in `src/social/drive.rs` compiled and
+/// `cargo test --lib` stayed 527/527 green — the refusal that used to happen
+/// locally would now happen on Google's page again, with a message naming no
+/// fix and no consent screen.
+///
+/// The test is over the REGISTRY, not a list of names, so a provider added
+/// later is covered the day it is registered.
+#[tokio::test]
+async fn every_google_scoped_provider_passes_the_scope_guard() {
+    switchpost::config::load_dotenv_for_tests();
+    let config = Config::from_env().expect("config");
+    let registry = ProviderRegistry::new(&config, None, None);
+
+    let mut checked = 0usize;
+    for provider in registry.all() {
+        let scopes = provider.scopes();
+        // Only Google-flavored providers: the conflict rules are Google's,
+        // and asserting them on X or Reddit would be checking a rule that
+        // does not apply to them.
+        if !scopes.iter().any(|s| s.contains("googleapis.com")) {
+            continue;
+        }
+        checked += 1;
+        if let Err((a, b, _)) =
+            switchpost::social::scope_guard::google_scope_conflict(&scopes, provider.identifier())
+        {
+            panic!(
+                "provider `{}` requests a scope pair Google refuses together: \
+                 {a} + {b}. Add the pair-check to this provider's \
+                 generate_auth_url, or drop one of the scopes.",
+                provider.identifier()
+            );
+        }
+    }
+    // Four is the real count: google, drive, gmail, calendar. A drop to zero
+    // means the registry stopped populating, not that the rule is satisfied.
+    assert!(
+        checked >= 4,
+        "checked {checked} google-scoped providers, expected 4+ (google, \
+         drive, gmail, calendar)"
+    );
+}
