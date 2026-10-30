@@ -111,10 +111,23 @@
   });
   let attentionCount = $derived(statusCounts.expiring + statusCounts.refresh_needed);
 
-  // Already-connected providers do not need a connect button: the user wants to
-  // manage what they have, not stack duplicates.
-  let connectedProviderIds = $derived(new Set(integrations.map((i) => i.provider_identifier)));
-  let connectableProviders = $derived(availableProviders.filter((p) => !connectedProviderIds.has(p)));
+  // Already-connected providers keep their tile. The founder managing many
+  // channels connects a second Google account, a third LinkedIn identity and a
+  // second X handle as a matter of course, and the old rule - hide a provider
+  // the moment ONE integration exists for it - made those impossible. Five
+  // accounts connected left five tiles missing from this grid, and the only
+  // way back was disconnecting the one you wanted to keep alongside.
+  //
+  // A tile that is already connected reads as "Add another", not "Connect",
+  // because that is what the click does. The count comes from
+  // `connectedCounts` below - a Set would say only "connected" and the
+  // founder with three LinkedIn profiles should see the three.
+  let connectedCounts = $derived.by(() => {
+    const m = new Map<string, number>();
+    for (const i of integrations) m.set(i.provider_identifier, (m.get(i.provider_identifier) ?? 0) + 1);
+    return m;
+  });
+  let connectableProviders = $derived(availableProviders);
 
   async function load() {
     loading = true;
@@ -354,14 +367,22 @@
     {:else}
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {#each connectableProviders as provider (provider)}
+          {@const connCount = connectedCounts.get(provider) ?? 0}
           <button
             onclick={() => initiateConnect(provider)}
             disabled={connecting === provider}
-            aria-label="Connect {providerLabel(provider)}"
-            class="flex flex-col items-center gap-2 p-4 bg-background-input border border-line rounded-xl hover:border-accent/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Connect another {providerLabel(provider)}{connCount > 0 ? ` (${connCount} connected)` : ''}"
+            class="relative flex flex-col items-center gap-2 p-4 bg-background-input border border-line rounded-xl hover:border-accent/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
+            {#if connCount > 0}
+              <span class="absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0.5 rounded-full border border-line text-muted bg-surface">
+                {connCount} connected
+              </span>
+            {/if}
             <ProviderIcon {provider} size="lg" />
-            <span class="text-xs text-center">{providerLabel(provider)}</span>
+            <span class="text-xs text-center">
+              {connCount > 0 ? `Add another ${providerLabel(provider)}` : providerLabel(provider)}
+            </span>
           </button>
         {/each}
       </div>
