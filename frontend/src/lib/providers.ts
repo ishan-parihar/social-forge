@@ -249,6 +249,42 @@ export function providerInkOnCard(provider: string): string {
     : inkForSurface(brand, '#1a1f2e'); // --bg-card, dark
 }
 
+/// Ink for the channel rail's avatar: the brand fill at 22% alpha over the
+/// surface it sits on.
+///
+/// This exists because "the provider ink is computed against a surface, and
+/// there are four" (AGENTS.md 9.40) turned out to be five: the rail paints
+/// `brand`22` as a wash, which composites to something that is NOT
+/// `--bg-card`, and the ink chosen for the card cleared only 4.33:1 on it.
+/// MeASURED 2026-10-31 on /calendar at 1440 light: 24 contrast FAILs, all on
+/// the rail's own initials.
+///
+/// The wash is built here rather than by the caller so the wash and the ink
+/// cannot disagree about what the background is.
+export function providerInkOnTint(provider: string): string {
+  const brand = providerColor(provider);
+  const surface = theme.value === 'light' ? '#f8fafc' : '#131720';
+  // 22/255 alpha, the one the rail uses, composited over the surface.
+  const wash = compositeHex(brand, surface, 22 / 255);
+  return inkForSurface(brand, wash);
+}
+
+/// `src` over `dst` at alpha, as a hex. Both are six-digit '#rrggbb'.
+function compositeHex(src: string, dst: string, alpha: number): string {
+  const p = (h: string) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const a = alpha;
+  const s = p(src);
+  const d = p(dst);
+  return (
+    '#' +
+    s
+      .map((v, i) => Math.round(v * a + d[i] * (1 - a))
+        .toString(16)
+        .padStart(2, '0'))
+      .join('')
+  );
+}
+
 /// Pick a hex clearing 4.5:1 on `surface`, moving lightness in whichever
 /// direction the comparison favours, and give up to black only if the hue
 /// cannot be carried there at all.

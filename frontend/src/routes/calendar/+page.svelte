@@ -24,11 +24,18 @@
   import DayView from "$lib/calendar/DayView.svelte";
   import ListView from "$lib/calendar/ListView.svelte";
   import PostDetail from "$lib/calendar/PostDetail.svelte";
+  import ChannelRail from "$lib/channels/ChannelRail.svelte";
   import { goto } from "$app/navigation";
 
   let events = $state<CalendarEvent[]>([]);
   let allTags = $state<Tag[]>([]);
   let allIntegrations = $state<Integration[]>([]);
+  // Phase 5b: the rail manages ALL channels, including disabled ones - a
+  // disabled channel is exactly the one a founder came to the rail to fix,
+  // so hiding it from the management surface would hide the problem. The
+  // publish views keep filtering on `allIntegrations`, because a disabled
+  // channel cannot publish.
+  let allIntegrationsRaw = $state<Integration[]>([]);
   let allCampaigns = $state<Campaign[]>([]);
   let selectedTagId = $state<string | null>(null);
   // v24-2: server-side calendar filters (channel + campaign). These are
@@ -536,7 +543,10 @@
     if (tagRes.data) allTags = tagRes.data;
     // Phase 2: fetch integrations for DayView ghost slots
     const integRes = await integrationsApi.list();
-    if (integRes.data) allIntegrations = integRes.data.integrations.filter(i => !i.disabled);
+    if (integRes.data) {
+      allIntegrationsRaw = integRes.data.integrations;
+      allIntegrations = allIntegrationsRaw.filter(i => !i.disabled);
+    }
     // v24-2: fetch campaigns for the campaign filter dropdown.
     const campRes = await campaignsApi.list();
     if (campRes.data) allCampaigns = campRes.data;
@@ -545,6 +555,18 @@
       calUnsubscribers.push(realtime.on(evt, () => refresh()));
     }
   });
+
+  // Phase 5b: the rail's reconnect / connect / disconnect actions change the
+  // channel set, and the rail must not re-fetch silently behind the calendar's
+  // back - it hands control back so both lists change together.
+  async function reloadIntegrations() {
+    const r = await integrationsApi.list();
+    if (r.data) {
+      allIntegrationsRaw = r.data.integrations;
+      allIntegrations = allIntegrationsRaw.filter(i => !i.disabled);
+    }
+    refresh();
+  }
 
   // v24-2: re-fetch events when the channel or campaign filter changes.
   $effect(() => {
@@ -582,7 +604,36 @@
      page with a title row, a header row and a filter bar between them; with
      one header row it was dead space between the header and the grid, and
      every pixel of it comes off the working hours the week grid shows. -->
-<div class="page-enter space-y-3">
+<!-- Phase 5b: the channel rail sits BESIDE the calendar content, not above
+     it, because the plan measured the collision (2.3). At 1440 the global rail is
+     80px, so an always-open 260px channel rail would leave the grid 1100px -
+     LESS than the 1104px it had before the whole exercise.
+
+     The rail is NOT a second channel filter: the header's `All channels` select
+     stays. Two controls, two jobs - the select is "show me these posts", the rail
+     is "manage these accounts".
+
+     MEASURED 2026-10-31 at 1440, and the plan's own arithmetic is off: the
+     calendar's content box is capped by the layout's `max-w-6xl` at 1104px, so
+     the "1296px available for the channel rail" figure was never reachable - the
+     container is the binding constraint, not the rails. Collapsed, the rail
+     costs 64px and there is NO page-level gap between it and the calendar (the
+     rail carries its own border and inner padding), so the calendar measures
+     1040px rather than the 1104px it had. That 64px is the honest price and the
+     default; the 260px expanded state costs 260px and is opt-in and persisted.
+     Widening `max-w-6xl` to make the plan's number true was rejected: it lives
+     in +layout.svelte and would reshape every other route for one page's
+     arithmetic. -->
+<div class="page-enter flex">
+  <ChannelRail
+    integrations={allIntegrationsRaw}
+    selected={selectedIntegrationId}
+    onSelect={(id) => (selectedIntegrationId = id)}
+    onChannelsChanged={reloadIntegrations}
+    variant="calendar"
+  />
+
+  <div class="space-y-3 min-w-0 flex-1">
   <!-- C-2: this row was a standalone `h1` plus the two action buttons, and
        it existed only to carry those buttons. Its 44px, plus the `space-y-6`
        gap above and below it, was more than half of the measured 218px of
@@ -732,6 +783,7 @@
   </div>
 
   <PostDetail event={selectedEvent} onclose={() => selectedEvent = null} onDuplicate={handleDuplicate} {duplicating} />
+  </div>
 </div>
 
 <style>
