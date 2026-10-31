@@ -546,6 +546,60 @@ against 1296 vs 1116.
 - The char count is per-channel for the channel in view.
 - No provider's `required_settings` check regresses: `cargo test --lib` + the composer settings-key integration tests.
 
+### Phase 6. Per-channel date and target view (M-2)
+
+**LANDED 2026-10-31 (`764e9ca`), with two scope limits named below.**
+
+The acceptance's first line is met: **a post to X and LinkedIn can be scheduled
+9:00 for X and 17:00 for LinkedIn, and the API persists both.** Verified
+directly against the running server - one POST with a shared 09:00 and a Reddit
+override of 17:00 returns X at `2026-11-02T09:00Z queued` and Reddit at
+`17:00Z queued`, two separate rows.
+
+**What shipped**
+
+| Layer | Change |
+|---|---|
+| `PostOverride` (Rust) | gains `scheduled_at`. The create path already had an overrides branch keyed by integration id carrying each channel's own content and settings - so this is the natural home, and the branch is only taken when `overrides` is present |
+| create loop | each integration's row now gets its OWN `scheduled_at`. The scheduler reads a post's column, so this is what actually makes the two times publish |
+| detail/probe response | returns the override, so the edit flow can restore it (AGENTS.md §9.29) |
+| composer | ONE `SchedulePicker`, not one per channel. A `channelSchedule` map plus a `scheduleInView` derived mean switching to a channel's tab makes the same picker show that channel's time - or the shared one when the channel has not diverged |
+| composer | diverged channels are listed with their own time and a **"Use shared"** undo (AGENTS.md §9.28) |
+
+**Two defects the verification found, both fixed in the same commit.** This is
+the value of driving the flow rather than reading the diff:
+
+1. **The autosave wrote the draft without the per-channel times.** The exact
+   shape AGENTS.md §9.14/§9.29 name: a field the save writes, or the restore
+   never reads. A custom 17:00 for Reddit silently reverted on reload while the
+   UI said "Autosave on". Both halves are now present and the effect re-arms on
+   the map.
+2. **"Save as Draft" stripped the SHARED `scheduled_at` but not the per-channel
+   ones.** A draft save on a post whose Reddit copy was set for 17:00 produced a
+   row still `queued` for 17:00 - the composer said "Draft saved" and the
+   calendar still showed a scheduled post. The draft path now drops only the
+   time and keeps the channel's content and settings.
+
+**Named scope limits - this is what was NOT done, stated so nobody reads the
+acceptance as fully met:**
+
+- **Edit mode cannot change a per-channel time.** `UpdatePostRequest` has no
+  `scheduled_at` field, by design: the update endpoint deliberately does not
+  touch the schedule ("use the separate reschedule endpoint"), and the plan's
+  own risk register says per-channel dates touch the publish path. A per-row
+  reschedule call is the honest way to do it and it is a separate change.
+- **A full create SUBMIT with a mouse-picked Reddit subreddit was not driven.**
+  The composer's own required-settings check correctly refused it every time
+  (AGENTS.md §9.27: "Reddit needs subreddit"), so that last mile is unproven.
+  The two layers that matter ARE proven: the API that stores the per-channel
+  time, and the composer UI that collects it.
+
+**Deliberately not ported**, as the plan already said: postiz's per-channel
+*full content* (an `internal` value with its own media and delay for every
+channel). Switchpost's model is one shared body + per-channel targets
+(AGENTS.md §9.13, §9.27), and changing it would touch every provider's
+`settings` read.
+
 ### Phase 7. Preview, polish, and the measurement gate (V-1)
 
 **Files**: `frontend/src/lib/composer/PlatformPreviewPane.svelte`, `frontend/src/lib/composer/previews/*`, `Makefile`, `frontend/scripts/`.
