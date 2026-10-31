@@ -3401,3 +3401,103 @@ Stage Summary:
 - The value of this pass: two of this cycle's fixes had tests that would
   have passed on the original defect's code and on a trivially rewritten
   version of it. Those tests were decoration. They are not now.
+
+---
+Task ID: v27-validation-pass-2
+Agent: Jcode
+Task: second independent validation pass over the cycle's fixes, per the
+  "a test that has only ever passed has not been checked" rule
+
+Work Log:
+- Traced the `ProviderError::NoPageManagement` introduction across every
+  consumer of the new variant, looking for a wildcard match arm that
+  would now route it where `Api` used to go. There is none: the circuit
+  breaker's `is_platform_outage` matches three NAMED variants, so the new
+  variant is not miscounted as a platform outage - which is itself the
+  correct outcome, because the old `Api` string WAS miscounted and the
+  doc comment above that function says local refusals say nothing about
+  platform health. The variant's Display string has no other consumer,
+  so nothing else depended on the old text.
+
+- Found and fixed a stale rustdoc that named an error which no longer
+  exists: the default `reconnect`'s doc still described providers
+  refusing with `Err(Api("X does not support page management"))`, the
+  string form replaced by the typed variant two commits earlier. All 14
+  refusal sites confirmed inside `fetch_page_info`. The first version of
+  my correction quoted the wrong message too - I wrote what the Display
+  string implied instead of reading `error.rs`, which maps the variant to
+  "This provider has no page or sub-account concept. The channel is the
+  account." Now the real string, so a grep finds the code.
+
+- Redirect_uri: verified with a REAL server and a REAL HTTP request that
+  the fix works and what it says. `?redirect_uri=https%3A%2F%2Fevil.test%2Fcb`
+  answers 400 with "redirect_uri https://evil.test/cb is not this
+  deployment's callback. The callback URI every provider registers is
+  http://localhost:6599/api/auth/callback (built from APP_URL). Omit
+  redirect_uri to use it." - which surfaced an operator-facing grammar
+  defect ("every provider register are" / "every provider register is")
+  in both refusals in `resolve_redirect_uri`. Fixed. The tests pin only
+  the substring "is not this deployment's callback", so no test asserted
+  the typo.
+
+- Redirect_uri, and the most important finding of this pass: the three
+  router-level tests could green without ever calling the function under
+  test. The connect handler checks credentials at
+  src/api/integrations.rs:71 BEFORE it validates `redirect_uri` at :88,
+  so on a box with no `INSTAGRAM_CLIENT_ID` all three return early. Here
+  `.env` (gitignored) supplies credentials so they run, but a clean CI
+  checkout would show 20/20 green having exercised nothing.
+
+  My first attempt to close it counted the skips and asserted on the
+  count from another test - which is order-dependent, because cargo runs
+  tests on threads, so it would flake and then be deleted. The real fix
+  is `the_redirect_uri_rule_is_exercised_without_any_provider_credentials`,
+  which calls `resolve_redirect_uri` directly and therefore runs in
+  EVERY environment. Six cases pinned. Mutation-proved both directions:
+  honour-verbatim is RED on it and on the two router tests, and
+  disabling `same_callback` is RED on it and on the foreign-host one.
+
+  Two of my six cases were wrong on first write, and both were caught by
+  running them rather than reasoning: I asserted a doubly-quoted value
+  was accepted (it is REFUSED - one layer strips, the remainder is
+  quoteless gibberish), and I asserted an empty `redirect_uri` was
+  refused (it is the documented "no opinion" default, which is correct
+  behaviour - the quoted-but-empty `""` is the refused case, and it is a
+  different rule). The second is the more instructive: I would have made
+  a working path refuse, and the "stricter" check would have shipped a
+  dead-end for every client that zeroes a field.
+
+- profile_name: found and fixed an UNPATCHED instance of the exact bug
+  class Phase B fixed. Proven live before the change - see commit
+  cd76c4e. A seeded row with name 'u/cooluser r/NICE SUB' and a real
+  avatar came back from POST /api/integrations/:id/refresh with the
+  avatar intact and the name ''. The refresh write guarded
+  `profile_picture` with COALESCE and wrote `profile_name = $1` bare,
+  and `reconnect`'s DEGRADE arm (the thing Phase B added) returns an
+  empty name - so the picture guard was the only thing hiding it. The
+  write looked protected; half of it was.
+
+  And the test for it PASSED its own mutation on first write. I added
+  COALESCE to the SQL while binding the raw `info.name`, making the fix
+  entirely inert, and the SQL-only assertion went GREEN. Third time this
+  cycle. Fixed by asserting on the BIND positively. Both mutations now
+  RED.
+
+Stage Summary:
+- Commits b310b18, cd76c4e pushed.
+- One NEW live-proven operator defect fixed (profile_name wipe), same
+  bug class as the Phase B avatar fix, one column away in the same
+  statement.
+- One real test-honesty hole closed (redirect_uri needed no credentials
+  before it would run at all).
+- One stale doc fixed; one operator-facing grammar defect fixed, both
+  in messages a founder reads mid-incident.
+- Three of my own tests failed their own mutation on first write this
+  cycle. The common shape: I assert on the SPELLING of the fix rather
+  than the BEHAVIOUR it produces, and the mutation keeps the spelling
+  while breaking the behaviour. Every one was found by running the
+  mutation, not by reading.
+- Honest gaps unchanged: the avatar repair path has never been verified
+  end-to-end against a provider that actually supplies an avatar, and
+  the x-cookie avatar path is blocked on credentials. The profile_name
+  fix IS end-to-end verified (HTTP 200 -> read the row back).
