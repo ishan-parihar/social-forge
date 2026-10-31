@@ -37,10 +37,10 @@
 use switchpost::api::AppState;
 use switchpost::config::Config;
 use switchpost::db;
-use switchpost::realtime::Broadcaster;
-use switchpost::social::registry::ProviderRegistry;
 use switchpost::db::queries;
 use switchpost::mcp::auth::resolve_first_user;
+use switchpost::realtime::Broadcaster;
+use switchpost::social::registry::ProviderRegistry;
 
 async fn state(name: &str) -> AppState {
     switchpost::config::load_dotenv_for_tests();
@@ -245,5 +245,82 @@ async fn the_x_cookie_picture_survives_the_round_trip_the_ui_reads() {
         public.profile_picture.as_deref(),
         Some(x_picture),
         "the picture does not survive the serialization the UI reads"
+    );
+}
+
+// ══════════════════════════════════════════════════════════════
+// The SAME bug class, in the refresh handler's own write
+// ══════════════════════════════════════════════════════════════
+
+/// The refresh endpoint writes the profile fields too, and its picture was
+/// guarded while its name was not.
+///
+/// `reconnect`'s default DEGRADES on a channel-shaped provider (Reddit, X,
+/// Discord, Instagram-standalone, ...) by returning the channel's own identity
+/// with an EMPTY name and no picture: that is what makes a channel refreshable
+/// without a per-provider override. Written bare, that blank is destructive:
+///
+///     UPDATE integrations SET profile_name = $1,
+///            profile_picture = COALESCE($2, profile_picture), ...
+///
+/// The picture survives a provider that supplies nothing. The name does not.
+///
+/// Proven live before the fix, on a running server: a row seeded with
+/// `profile_name = 'u/cooluser r/NICE SUB'` and a real avatar came back from
+/// `POST /api/integrations/:id/refresh` with the avatar intact and
+/// `profile_name = ''`. The Channels page then rendered an unlabelled channel,
+/// with no error, no toast, and no way to recover the label by hand.
+///
+/// So this is the ASYMMETRY this whole file exists for, one statement later:
+/// the COALESCE lesson was learned for one column in a write and not applied
+/// to its neighbour in the same write. The two must be guarded together, or
+/// the write blanks one of them.
+#[test]
+fn the_refresh_write_guards_profile_name_as_well_as_the_picture() {
+    let src = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/api/integrations.rs"),
+    )
+    .expect("read src/api/integrations.rs");
+
+    // The refresh handler's write, isolated: from the sqlx::query that names
+    // profile_name to the end of its execute. Not the whole file, because
+    // `connect_page` and the connect handlers legitimately write a bare
+    // profile_name - they are writing a value the provider DID supply.
+    let start = src
+        .find("UPDATE integrations SET profile_name")
+        .unwrap_or_else(|| panic!("the refresh handler's write is not in integrations.rs"));
+    let tail = &src[start..];
+    let end = start
+        + tail
+            .find(".await?;")
+            .expect("the refresh write has no .await? terminator")
+        + ".await?;".len();
+    let write = &src[start..end];
+
+    assert!(
+        write.contains("profile_name = COALESCE("),
+        "the refresh write assigns profile_name directly, so a channel-shaped \
+         provider (whose reconnect DEGRADES to an empty name) loses the label \
+         the Channels page renders. It just lost its avatar fix to a blank \
+         name; the write was: {write}"
+    );
+    assert!(
+        write.contains("profile_picture = COALESCE("),
+        "the refresh write no longer guards the picture, which is the original \
+         avatar bug this file pins. Write was: {write}"
+    );
+
+    // And the name must be bound as an OPTION, not as the raw String. A
+    // `Some(info.name)` makes the COALESCE above inert: an empty name then
+    // arrives as Some("") rather than NULL, and COALESCE preserves it.
+    //
+    // Mutation-proven: adding `COALESCE($1, profile_name)` to the SQL while
+    // binding `info.name.clone()` still passes a SQL-only check. This is the
+    // whole reason the assertion is on the BIND and not just the statement.
+    assert!(
+        write.contains(".bind(info_name)"),
+        "the refresh write does not bind the name as an Option, so the COALESCE \
+         above it is inert: an empty name arrives as Some(\"\") and COALESCE \
+         keeps it. The blank must become NULL at the bind. Write was: {write}"
     );
 }

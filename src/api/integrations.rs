@@ -546,10 +546,34 @@ pub async fn refresh(
             )
         })?;
 
+    // The write is COALESCE on BOTH profile fields, not just the picture.
+    //
+    // `reconnect`'s default DEGRADES on a channel-shaped provider by returning
+    // its own identity with an empty name and no picture: that is what lets a
+    // Reddit channel be refreshable without a per-provider override. Written
+    // bare, those two blanks overwrite what the founder already had - the
+    // channel on the Channels page went from "u/cooluser r/NICE SUB" to an
+    // empty label, with no error and no way back.
+    //
+    // The picture was already guarded; the name was not. Proven live: a row
+    // seeded with `'u/cooluser r/NICE SUB'` and a real avatar came back from
+    // POST /api/integrations/:id/refresh with the avatar intact and the name
+    // `''`.
+    //
+    // An EMPTY name is what "the provider told us nothing" looks like here, so
+    // it must not be distinguishable from "keep what you had" at the write. A
+    // name that is genuinely cleared is a different operation and a different
+    // endpoint.
+    let info_name = if info.name.is_empty() {
+        None
+    } else {
+        Some(info.name.clone())
+    };
+
     sqlx::query(
-        "UPDATE integrations SET profile_name = $1, profile_picture = COALESCE($2, profile_picture), refresh_needed = false, updated_at = unixepoch() WHERE id = $3 AND user_id = $4",
+        "UPDATE integrations SET profile_name = COALESCE($1, profile_name), profile_picture = COALESCE($2, profile_picture), refresh_needed = false, updated_at = unixepoch() WHERE id = $3 AND user_id = $4",
     )
-    .bind(&info.name)
+    .bind(info_name)
     .bind(info.picture.clone())
     .bind(id)
     .bind(auth.user_id)
