@@ -3761,3 +3761,41 @@ Stage Summary:
 - The whole of M-1 resolved as: 6 probe FAILs that were the probe's own measurement (`02d340a`), four
   Phase-4 bullets that were already built, two real defects (`cd2f9c2`, `e2604b9`), one production defect
   that was the probe again (`0835545`). Three of the four were the plan describing work that was done.
+
+---
+Task ID: ui-parity-phase5a
+Agent: Jcode
+Task: Phase 5a of the parity plan - the global nav rail defaults to 80px instead of 224px.
+
+Work Log:
+- Measured the rail FIRST, at 1440 and 768, in both states: aside 224px expanded / 56px collapsed, 16
+  links at 44px expanded but **40px collapsed**, 5 section headings, no hover flyout.
+- Found a comment promising a hover flyout when collapsed and grepped for it - it has never existed. Deleted
+  the promise rather than build it (the header toggle is the intended interaction).
+- Made the width change: `w-20` collapsed default, `w-56` expanded, state renamed to `sidebarExpanded`
+  so the persisted thing is the preference. Migrated the old `switchpost-sidebar-collapsed` key on read.
+- MEASURED, and my reasoning was wrong: collapsed links were **40px**, not 44. With the label removed the
+  row's only flex child is the 16px icon, so 12+12+16 = 40. The 20px line-height that made 44 needs text.
+  Fixed with `min-h-11` on every link.
+- Ran the full probe: **FAIL 0 -> 216**. The "Expand sidebar" button was **20px wide** - under the 24x24
+  WCAG 2.2 floor, and at 56px the surrounding space had been hiding it. `min-w-11` restored FAIL 0. A
+  regression the probe caught in 6 minutes that a source read would never have seen.
+- Wrote a comment claiming the timezone "lives on /settings" and the theme toggle has "a second home in the
+  top bar". BOTH FALSE - grepped and found neither. That was the third false claim in one file. Corrected
+  the comment AND closed the real gap: added a labelled Display card on /settings with the timezone, both
+  directions verified (settings writes America/New_York and it persists; the sidebar writes Europe/London
+  and /settings reads it back).
+- Verified the final state at 1440 and 768: aside 80px collapsed / 224px expanded, 16 links at 44px in
+  BOTH, theme + logout reachable in both, the old key migrated to the new one.
+- Corrected Phase 5b's acceptance numbers, which divide by a rail width the plan never shipped and were
+  already impossible before 5a (see below).
+
+Stage Summary:
+- `fd7cdab` rail 80px default, `c7f156a` plan note, `d511ee6` 5b acceptance correction. All pushed.
+- Probe: FAIL 0 over 27 routes x 4 widths x 2 themes; WARN 216 unchanged and the same pre-existing set.
+- Pattern that has now repeated five times in this plan: the description of a thing in this repo was wrong,
+  and reading the file before changing it was cheaper than the change. The flyout comment, four Phase-4
+  bullets, one of my own comments, and now two acceptance numbers.
+- Lesson recorded in the plan: **an acceptance number is a claim about a tree.** Phase 5b's `>= 1296px` and
+  `>= 1116px` were computed against a 224px rail; with 5a's measured 1360px the real figures are 1296
+  (satisfiable, it is the default) and 1100 (a stated trade, 16px worse than the plan imagined).
