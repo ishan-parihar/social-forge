@@ -578,22 +578,24 @@
   });
 </script>
 
-<div class="page-enter space-y-6">
-  <!-- v25 F5: `flex-wrap` + responsive gap. The h2 (~165px) plus two buttons
-       measured ~350px against the ~312px available at a 360px viewport. -->
-  <div class="flex items-center justify-between flex-wrap gap-2">
-    <h1 class="text-xl font-semibold">Content Calendar</h1>
-    <div class="flex gap-2">
-      <button
-        onclick={() => modals.open(GeneratorModal, {}, { title: 'AI Post Generator', size: 'max-w-lg' })}
-        class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-content hover:bg-surface-hover transition-colors min-h-11"
-        title="Generate multiple posts from a topic using AI"
-      >Generate Posts</button>
-      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors min-h-11">
-        + New Post
-      </button>
-    </div>
-  </div>
+<!-- `space-y-3`, not `space-y-6`. The 24px vertical gap was sized for a
+     page with a title row, a header row and a filter bar between them; with
+     one header row it was dead space between the header and the grid, and
+     every pixel of it comes off the working hours the week grid shows. -->
+<div class="page-enter space-y-3">
+  <!-- C-2: this row was a standalone `h1` plus the two action buttons, and
+       it existed only to carry those buttons. Its 44px, plus the `space-y-6`
+       gap above and below it, was more than half of the measured 218px of
+       chrome between the top bar and the grid - chrome that pushed the week
+       grid's first working hour below the fold.
+
+       Both actions moved INTO the header row, which is where postiz puts them
+       (next to the view switch, on the line that carries everything else). The
+       date range is the title now; a second `h1` reading "Content Calendar"
+       said nothing the nav rail's active item and the date range do not.
+
+       The nav rail's "Calendar" item remains the route's landmark, so the page
+       still has one accessible name for assistive technology. -->
 
   <CalendarHeader
     view={calendarState.state.view}
@@ -611,6 +613,8 @@
     campaigns={allCampaigns}
     {selectedCampaignId}
     onCampaignFilter={(id) => selectedCampaignId = id}
+    onNewPost={() => composer.openCreate()}
+    onGenerate={() => modals.open(GeneratorModal, {}, { title: 'AI Post Generator', size: 'max-w-lg' })}
   />
 
   {#if selected.size > 0}
@@ -632,10 +636,16 @@
   <!-- v28: the view card takes the REST of the viewport, so the week
        and day hour grids scroll INSIDE the card (postiz's shape) and the
        month grid scrolls as a whole with its weekday header pinned.
-       The header/filter chrome above measured: 24px title row + 44px
-       CalendarHeader + the p-4 gutter + the sticky TopBar is ~168px;
-       100dvh - 168px keeps the card inside one screen with the page's
-       own scroll reserved for the cases below. -->
+
+       The chrome above is ONE row now (C-2): it measured 218px at 1440
+       before this phase - a 44px `h1`+actions row, a 46px CalendarHeader and
+       two 24px `space-y-6` gaps, on top of the sticky top bar. It is one
+       40px row plus its gutter now. The number that matters is not in this
+       comment: `.calendar-view-shell` below takes its height from
+       `--cal-shell-top`, which the page MEASURES from the element's own
+       `getBoundingClientRect().top` - so a comment that says "~168px" and a
+       CSS fallback that says "218px" can both be stale without breaking
+       anything, which is exactly how they drifted. -->
   <div class="calendar-view-shell">
   {#if fetchError}
     <!-- Phase v21: postiz-style full-card error state with Retry button.
@@ -727,18 +737,26 @@
 <style>
   /* The height the calendar card gets: from the card's own top edge
      to the bottom of the viewport, MEASURED, not a magic rems constant.
-     The chrome above (TopBar + title row + CalendarHeader) WRAPS: the
-     filter row (channel + state selects + view toggles) reflows onto a
-     second line below 768px, and a fixed `calc(100dvh - Xrem)` then
-     overshoots the fold by the wrapped row's height — the page scrolls
-     instead of the grid (the regression the v28 review found at 768px
-     and 1440px alike). `100dvh` tracks mobile URL bars.
 
-     The shell is sized by a `top:`-anchored absolute-free trick: the
-     page sets `--cal-shell-top` from the element's own offsetTop on
-     mount and on resize, so the height follows whatever the header
-     does at any width. Below `sm` the page keeps normal document flow
-     (the whole page scrolls; the card grows with content). */
+     The chrome above WRAPS - the filter row (channel + campaign + tag
+     selects + the view switch + the two actions) reflows onto a second line
+     at 768 and a third at 390 - so a fixed `calc(100dvh - Xrem)` would
+     overshoot the fold by the wrapped rows' height and the page would scroll
+     instead of the grid. `100dvh` tracks mobile URL bars.
+
+     The shell is sized by the element's own position: the page sets
+     `--cal-shell-top` from `getBoundingClientRect().top + scrollY` on mount,
+     on resize, and through a ResizeObserver on every sibling BEFORE the
+     shell (any of them growing pushes the shell down). So the ONE number
+     that is authoritative is measured at runtime.
+
+     The 218px FALLBACK below is pre-JS-paint only, and it is deliberately
+     the WIDE layout's upper bound rather than a measured value - a fallback
+     that guesses low clips the grid in the first frame. It used to disagree
+     with the comment above it ("~168px"), which is the shape a constant
+     takes when nobody measures it. If you change the header, re-measure with
+     `frontend/scripts/measure-calendar-chrome.mjs` and update the text, not
+     the fallback - the fallback's job is to be safe before JS runs. */
   .calendar-view-shell {
     height: calc(100dvh - var(--cal-shell-top, 218px));
     min-height: 420px;
