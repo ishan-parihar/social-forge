@@ -1461,37 +1461,51 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
           {/if}
         {/each}
 
-        <!-- Tags -->
-        <div class="bg-surface border border-line rounded-xl p-4">
-          <h3 class="text-sm font-semibold mb-3">Tags</h3>
-          <TagPicker
-            selected={selectedTagIds}
-            onToggle={(id) => {
-              if (selectedTagIds.includes(id)) {
-                selectedTagIds = selectedTagIds.filter(t => t !== id);
-              } else {
-                selectedTagIds = [...selectedTagIds, id];
-              }
-            }}
-          />
-        </div>
+        <!-- ONE card where two stood. Tags and Campaign are both small
+             metadata controls, and they used to be two separate bordered
+             cards stacked above the body - which pushed the content editor,
+             the thing the composer exists for, down past four cards. Two
+             controls that each answer one line are one card.
 
-        <!-- Phase 8: Campaign selector -->
-        {#if allCampaigns.length > 0}
-          <div class="bg-surface border border-line rounded-xl p-4">
-            <h3 class="text-sm font-semibold mb-3">Campaign</h3>
-            <select
-              value={selectedCampaignId || ''}
-              onchange={(e) => selectedCampaignId = e.currentTarget.value || null}
-              class="w-full px-3 py-2 min-h-11 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
-            >
-              <option value="">No campaign</option>
-              {#each allCampaigns as c (c.id)}
-                <option value={c.id}>{c.name}</option>
-              {/each}
-            </select>
+             The plan (Phase 4) asked for Tags behind a "more" disclosure
+             with the picker inside; that is more machinery than the problem
+             and hides a control the founder opens the composer reaching
+             for. A shared card keeps both a single tap away and costs one
+             card of vertical space instead of two. -->
+        <div class="bg-surface border border-line rounded-xl p-4 space-y-3">
+          <h3 class="text-sm font-semibold">Details</h3>
+          <div>
+            <label class="block text-xs text-muted mb-1.5" for="composer-campaign">Campaign</label>
+            {#if allCampaigns.length > 0}
+              <select
+                id="composer-campaign"
+                value={selectedCampaignId || ''}
+                onchange={(e) => selectedCampaignId = e.currentTarget.value || null}
+                class="w-full px-3 py-2 min-h-11 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+              >
+                <option value="">No campaign</option>
+                {#each allCampaigns as c (c.id)}
+                  <option value={c.id}>{c.name}</option>
+                {/each}
+              </select>
+            {:else}
+              <p class="text-xs text-muted">No campaigns yet.</p>
+            {/if}
           </div>
-        {/if}
+          <div>
+            <span class="block text-xs text-muted mb-1.5">Tags</span>
+            <TagPicker
+              selected={selectedTagIds}
+              onToggle={(id) => {
+                if (selectedTagIds.includes(id)) {
+                  selectedTagIds = selectedTagIds.filter(t => t !== id);
+                } else {
+                  selectedTagIds = [...selectedTagIds, id];
+                }
+              }}
+            />
+          </div>
+        </div>
 
         <!-- Global vs Internal channel editor toggle (Phase 3: SelectCurrent) -->
         {#if selectedIntegrations.length > 1}
