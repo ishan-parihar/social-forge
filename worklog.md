@@ -3189,3 +3189,91 @@ Known issues / follow-ups:
 - Pre-existing failures untouched: surface_docs_audit trio (missing docs/providers.md),
   clippy in src/cli/autopost.rs + src/cli/oauth_browser.rs, README length_in_band,
   unstaged scripts/genome submodule.
+
+---
+Task ID: v26-avatar-trace-round-2
+Agent: Jcode
+Task: re-trace the avatar report to its cause after the first-pass fix, and close
+  the remaining reported item (Google-family tile unification)
+
+Work Log:
+- Re-tracing the report's cause claim ("fetch_page_info is the function refresh
+  calls") was itself wrong: the refresh endpoint calls provider.reconnect(),
+  whose DEFAULT routes through fetch_page_info. Corrected rather than carried
+  forward; the first-pass fix still landed correctly on the three providers
+  that do reach it.
+- x-cookie is NOT in the missing-avatar defect class. Its reconnect reads
+  profile_image_url from X v2 users/me, and its connect path reads
+  profile_image_url_https out of GraphQL and rewrites _normal -> _400x400.
+  My prior session's "noted for later, x's picture silently becomes None" was
+  wrong in its cause.
+- NEW DEFECT, in the write path the first pass did not reach:
+  create_integration's ON CONFLICT arm wrote profile_picture = ? bare, one
+  binding before root_internal_id = COALESCE(?, ...) in the SAME statement.
+  The connect path therefore did the opposite of the refresh path: refresh keeps
+  a value the provider does not supply, connect WIPES one. A provider that
+  returned no picture on one exchange destroyed the picture it already held,
+  on a reconnect that had nothing to do with avatars. For x/reddit/github this
+  is latent (all three DO supply a picture on connect, verified by reading each
+  create_integration call), but reachable for any OAuth provider whose userinfo
+  read fails after the code exchange.
+- NEW DEFECT, larger blast radius: provider.reconnect() is called
+  unconditionally by the refresh endpoint, and the trait default forwarded
+  fetch_page_info's error with `?`. fetch_page_info is the PAGE-SELECTION
+  function, so refusing is its CORRECT answer for a provider with no page
+  concept - which made that refusal the answer to the only button the Channels
+  page offers to repair a token: "Failed to refresh profile: X does not support
+  page management", on a Reddit channel, naming another platform entirely.
+- Fix is two halves. (1) Typed ProviderError::NoPageManagement across 13
+  sites - a msg.contains("page management") guard at the trait level would be a
+  string match that silently breaks the first time someone rewords a message,
+  and the 11 pre-existing refusers already word it three different ways. The
+  exhaustive match this broke in src/error.rs maps it to a clear 400, not a 500.
+  (2) The default reconnect DEGRADES on that variant and returns the channel's
+  own identity, so the refresh endpoint's COALESCE write keeps the stored
+  name/picture and only clears refresh_needed. A refusal for any other reason
+  is still an error.
+- Deleted google.rs' reconnect override: a verbatim copy of the default,
+  including the refuser it had escaped, so it did nothing the default does not.
+- GOOGLE TILE UNIFICATION - answered, not done, and the answer is that the
+  token-level merge the operator asked for cannot work. Each family provider
+  requests a DISJOINT scope set (gmail: gmail.*, calendar: calendar.*, drive:
+  drive.*, youtube: youtube.*), and src/social/google.rs already documents a
+  live 2026-10-30 deployment where requesting them together made Google answer
+  Error 400 invalid_request "scopes that cannot be requested together", taking
+  the entire connect flow offline with no consent screen at all.
+  scope_guard::google_scope_conflict now enforces the narrowed set on every
+  authorize request. So the tiles are 5 because 5 consent screens are the price
+  of the product's actual capability set; merging them would remove Drive and
+  gmail.modify, not simplify anything. The credential IS already shared (every
+  family provider reads provider_credentials("youtube")), so there is no
+  duplicate-client problem to fix either.
+
+Stage Summary:
+- Commits: 841688b (threads borrow), ff5e39c (rustfmt follow-up on the
+  redirect_uri validator), 362188d (both new defects above). All pushed to
+  github/master.
+- tests/integration_upsert_picture_test.rs: 2 tests, real SQLite pool, drives
+  create_integration twice. Mutation-proven both ways - restoring the bare
+  write turns the first RED(left: None) while the "new avatar still lands"
+  companion stays green, which is the guard against over-correcting into
+  COALESCE-always.
+- tests/reconnect_no_page_test.rs: 4 tests. Mutation-proven twice - restoring
+  the forwarding `?` turns 2 RED; un-typing ONE refusal (reddit) turns a third
+  RED; the fourth pins that the degraded arm is NOT a catch-all, so a real
+  outage is never reported as a successful refresh.
+- The test's own premise was wrong twice and was corrected each time, not
+  forced: google_my_business and wordpress have a WORKING fetch_page_info
+  (their Api( arms are genuine fetch-failure paths, not refusals) and were
+  dropped from the table; youtube has a working one and its override is fine;
+  linkedin_page likewise. The table now holds exactly the 13 outright refusers,
+  and the test re-checks each entry's premise so a provider that grows pages
+  fails loudly instead of silently passing.
+- Honest gap, unchanged: the avatar fix is verified by invariant + mutation,
+  not end-to-end. The operator's live DB has no Google/gmail/youtube row at
+  all - they have never completed a Google OAuth - so there is no row to repair
+  and no way to observe the fix from their side yet.
+- Known issues: PagePicker.svelte still breaks on the first multi-account error
+  instead of continuing the batch. Pre-existing failures untouched:
+  surface_docs_audit trio, clippy in autopost.rs + oauth_browser.rs, README
+  length_in_band, unstaged scripts/genome.
