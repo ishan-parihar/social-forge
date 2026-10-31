@@ -276,6 +276,25 @@ async function main() {
   // different components with five different class strings.
   await page.goto(`${BASE_URL}/channels`, { waitUntil: 'load' });
   await page.waitForTimeout(1500);
+  // THE ONBOARDING TOUR, and it was the second reason every credential
+  // form was unreachable to this gate. The tour is a full-screen
+  // `role="dialog"` that the layout raises once the app is authenticated, so
+  // while it is open the gate reads the tour instead of the page - and it
+  // never dismissed it, so it measured the tour while looking for tiles.
+  //
+  // Same step `audit-dialogs.mjs` uses, for the same reason (9.49): the
+  // flag first so the layout does not raise it again on the next
+  // navigation, then Skip if the tour is on screen. Dismissing before the
+  // login does nothing, so this is AFTER the login.
+  await page.evaluate(() => {
+    try { localStorage.setItem('switchpost-onboarded', 'true'); } catch {}
+  });
+  const skipTour = page.getByRole('button', { name: /skip/i }).first();
+  if (await skipTour.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await skipTour.click({ timeout: 2000 }).catch(() => {});
+    await page.waitForTimeout(500);
+  }
+  await page.waitForTimeout(300);
   const connectTiles = await page.evaluate(() =>
     [...document.querySelectorAll('button[aria-label^="Connect"]')].map(
       (b) => b.getAttribute('aria-label')
@@ -294,7 +313,27 @@ async function main() {
 
   for (const provider of CREDENTIAL_PROVIDERS) {
     const opened = await page.evaluate((P) => {
-      const b = document.querySelector(`button[aria-label="Connect ${P}"]`);
+      // The tile's label is NOT a fixed string, and the provider name is
+      // NOT at the start of it. Since 3bbf41b ("keep a provider's tile
+      // after the first channel is connected") every tile reads
+      // `Connect another WordPress` or `Connect another GitHub
+      // (1 connected)` - the provider name sits AFTER the word
+      // "another". The gate used an exact match on `Connect ${P}`, so it
+      // could never find a single one of these tiles: it reported five
+      // FAILURES while measuring nothing at all, which is the one thing
+      // 9.45 exists to prevent, inverted. The credential-form contrast
+      // check - the one 9.45 was written for, the `text-white` on a
+      // light input that measured 1.05:1 - had been DEAD since that
+      // commit for every provider.
+      //
+      // A prefix match is not enough either, which is why this is a
+      // substring match on the provider name: `Connect ${P}` and
+      // `Connect another ${P} (1 connected)` both CONTAIN the name, and
+      // neither the word "another" nor an accumulating count changes
+      // that.
+      const b = [...document.querySelectorAll('button[aria-label^="Connect"]')].find(
+        (x) => (x.getAttribute('aria-label') || '').includes(P)
+      );
       if (!b) return false;
       b.click();
       return true;
@@ -308,7 +347,7 @@ async function main() {
       // gate that measures nothing must say so, not pass.
       findings.push({
         where: `connect:${provider}`,
-        selector: `button[aria-label="Connect ${provider}"]`,
+        selector: `button[aria-label*="${provider}"]`,
         ratio: 0,
         fg: 'n/a',
         bg: 'n/a',
