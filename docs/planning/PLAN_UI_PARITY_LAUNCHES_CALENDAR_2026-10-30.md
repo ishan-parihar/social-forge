@@ -507,6 +507,32 @@ gap.
 - The rail's avatars and badges use `providerInkOnCard` / `OnChip` (AGENTS.md §9.40).
 - Every nav link resolves; no probe FAIL; `pnpm build` + `svelte-check --threshold error` clean.
 
+**CORRECTED 2026-10-31 - the two width numbers above were computed against a rail
+that never shipped, and they are arithmetically impossible.** They divide by 224:
+
+- `1440 - 80 - 64 = 1296` only works if the rail is 80 - which is what 5a NOW
+  delivers, so this one is satisfiable (measured: the calendar has **1360px** at
+  1440 today, so adding a 64px rail leaves exactly 1296px).
+- `1440 - 80 - 260 = 1100`, and the acceptance asks for **>= 1116**. It cannot
+  be met. Before 5a the rail was 224px, so the real figures were 1152 and 956
+  against claims of 1296 and 1116 - the plan was quoting a rail width it had
+  not built.
+
+The correct acceptance, against what 5a measured:
+
+- with the channel rail COLLAPSED (64px), the calendar holds **>= 1296px** at
+  1440 - satisfiable, and it is the DEFAULT, so the founder loses nothing.
+- with the channel rail EXPANDED (260px) the calendar holds **1100px**, and
+  that is a **stated trade**, not a regression to hide: it is 240px WORSE than
+  the collapsed default and 16px worse than the 1116 the plan imagined. The
+  expanded state is opt-in and persisted, so a founder who wants the wider
+  grid keeps the narrower rail.
+
+The lesson worth carrying: a number in an acceptance criterion is a claim about
+a tree. This one was computed against a design, and it was already wrong on the
+day it was written. Phase 5b will be judged against the measured 1360px, not
+against 1296 vs 1116.
+
 ### Phase 6. Per-channel date and target view (M-2)
 
 **Files**: `frontend/src/lib/composer/ComposerModal.svelte`, `SchedulePicker.svelte`, `frontend/src/lib/stores/composer.svelte.ts`, `frontend/src/lib/api/posts.ts`.
