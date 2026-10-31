@@ -315,8 +315,16 @@
               {/each}
               <!-- The same cap as the week and day grids, so a day reads
                    identically in all three. The cell's own scroll stays as
-                   the fallback for a phone-width day column. -->
-              {#if cappedDay.hidden > 0}
+                   the fallback for a phone-width day column.
+
+                   The button must stay mounted while the cell is EXPANDED:
+                   `capCell` returns hidden=0 once expanded, so guarding on
+                   `hidden > 0` alone removed the only control that could
+                   collapse the cell again - MEASURED 2026-10-31, expanding
+                   "+7 more" left no way back, and the founder's only
+                   recovery was to leave the month view and return. A
+                   disclosure with no exit is worse than none. -->
+              {#if cappedDay.hidden > 0 || cellExpanded}
                 <CellMoreButton hidden={cappedDay.hidden} expanded={cellExpanded} onToggle={() => toggleCell(key)} />
               {/if}
             </div>
