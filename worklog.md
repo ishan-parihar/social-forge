@@ -3851,3 +3851,60 @@ Stage Summary:
   composer routes.
 - Nine commits landed this session: 02d340a, 10dc9c3, cd2f9c2, e2604b9, 9652d79,
   0835545, 9ccbb3b, fd7cdab, c7f156a, d511ee6, 4ce2ef3, 764e9ca, eda6828.
+
+---
+Task ID: outline-token-refresh-gaps
+Agent: Jcode
+Task: /ponytail-style outline of remaining implementation gaps, plus a
+red-team/audit of token auto-refresh across ALL providers, prompted by
+LinkedIn channels showing "needs reconnect"
+
+Work Log:
+- Pinned the two line numbers the previous pass could not get. The greps that
+  failed on `linkedin.rs` failed identically on the other two files; listing
+  `async fn` per file instead worked immediately. `instagram_standalone.rs`'s
+  `refresh_token` is at :192 and `threads.rs`'s at :186.
+- Completed the sweep on the remaining cron providers (x, reddit, tiktok,
+  google, youtube, drive, gmail, calendar): zero profile/userinfo
+  references inside any of their `refresh_token`, so the fatal-fetch shape is
+  confined to the three found.
+- Confirmed the scheduler's failure arm at `src/scheduler/mod.rs:561-575`:
+  ANY `Err` from `refresh_token` becomes `mark_integration_refresh_needed`,
+  which is what the channel UI renders as "needs reconnect".
+- Wrote `docs/planning/OUTLINE_TOKEN_REFRESH.md` (G-01 through G-07) and
+  pushed it as `0aeac1f`. Nothing in it is applied - it is the queue.
+- The push reported the outward-boundary check going from 1 to 2 hard
+  failures, and my own new doc was one of them. D003 wants a resolved
+  markdown LINK; adding the row to AGENTS.md's §0.6 DOCUMENT MAP did not
+  clear it because that check only reads `docs/**/*.md` and the README.
+  The linking doc is `docs/PAGE-INDEX.md`, which is also the index AGENTS.md
+  tells you to read first. Routed through both, pushed as `ae35795`; the
+  boundary is back to 1 hard failure, and that one is
+  `PLAN_UI_PARITY_LAUNCHES_CALENDAR_2026-10-30.md` from `eda6828`, not mine.
+
+Stage Summary:
+- `0aeac1f` (the outline) and `ae35795` (the routing fix) are on
+  github/master.
+- The reported bug is real and its cause is NOT the refresh mechanism:
+  `linkedin.rs` refreshes successfully, returns a valid access token and
+  parses `expires_in`, then fetches `/v2/userinfo` and propagates that
+  call's failure with `?`. The 24h window query excludes the marked row
+  forever, so the channel reconnects by hand while a good token is discarded.
+- The correct behaviour is already in the tree one file over:
+  `linkedin_page.rs` reads the same endpoint as `Ok(r) => r.json().await.ok()`
+  with a comment saying page-scoped tokens may not carry openid/profile. A
+  recorded design decision present on one LinkedIn provider and absent on the
+  other.
+- Two more sites: `instagram_standalone` (:192) and `threads` (:186).
+- Priority argument recorded rather than assumed: G-05 (`resolve_token`,
+  scheduler/mod.rs:1824) runs the SAME provider call on the pre-publish path
+  and propagates its `Err`, so the same defect drops a published post rather
+  than just flagging a channel row.
+- Two false alarms written into G-07 with their disproof, so a future reader
+  does not re-spend the hour: the "8 of 12 providers never set expires_in"
+  grep (the Google family keeps it in the shared `google_oauth::refresh`, and
+  all 12 propagate it) and the "scheduler decrypt fallback sends ciphertext"
+  claim (`maybe_decrypt_token` has the identical `unwrap_or_else`). Both came
+  from reading a grep result instead of the returned `AuthToken`. That is the
+  same lesson as the five earlier retractions this cycle, and it is why every
+  verdict in the outline is a file-and-line rather than a pattern.
