@@ -3799,3 +3799,55 @@ Stage Summary:
 - Lesson recorded in the plan: **an acceptance number is a claim about a tree.** Phase 5b's `>= 1296px` and
   `>= 1116px` were computed against a 224px rail; with 5a's measured 1360px the real figures are 1296
   (satisfiable, it is the default) and 1100 (a stated trade, 16px worse than the plan imagined).
+
+---
+Task ID: ui-parity-phase6
+Agent: Jcode
+Task: Phase 6 (M-2) of the parity plan - per-channel date and target view.
+
+Work Log:
+- Read before writing: `PostOverride` already carried per-channel content and
+  settings, keyed by integration id, and the create path only took that branch
+  when `overrides` was present. That is the natural home for a per-channel
+  time, so no new plumbing was needed on the write side.
+- Added `scheduled_at` to `PostOverride`, and resolved each integration's own
+  time in the create loop, falling back to the shared one. The scheduler reads a
+  post's column, so each row carrying its own is what makes it real.
+- Composer: a `channelSchedule` map and a `scheduleInView` derived. ONE
+  SchedulePicker reads the channel in view; switching tabs re-targets the same
+  component instead of duplicating it per channel.
+- Hit the E0063 on the response probe (the struct literal) and read where it
+  lived: the UPDATE handler's validation probe, not a detail read. My comment
+  about the "detail response" was wrong and I corrected it rather than leaving
+  the fiction.
+- Verified the API directly: one POST, shared 09:00 + a Reddit override of
+  17:00, returns X at 09:00Z queued and Reddit at 17:00Z queued.
+- VERIFICATION FOUND TWO REAL DEFECTS, and both are the point of this entry:
+  1. the autosave wrote the draft WITHOUT the per-channel map - the exact
+     AGENTS.md 9.14/9.29 shape. A custom 17:00 reverted on reload while the UI
+     said "Autosave on". Both halves now present.
+  2. "Save as Draft" stripped the shared time but not the per-channel ones, so a
+     draft save left a row QUEUED for 17:00 while the toast said "Draft saved".
+     The draft path now drops only the time.
+- Drove the composer in a real browser: switching to Reddit's tab renders
+  "Schedule for Reddit custom", the time shows in the app's zone (23:30 UTC
+  reads 05:00 in Asia/Calcutta), and the "Use shared" undo appears. Captured the
+  wire payload to confirm the override reaches the request.
+- Wrote `new Date(...)` in the divergence list, grep'd it out for
+  `formatDateTime` (AGENTS.md 9.17/9.30) - caught before it shipped.
+- A Python heredoc was used to patch two identical save sites. It did NOT
+  corrupt anything (svelte-check confirmed) but it is the same tool that
+  corrupted probe.mjs earlier this session, and the preference is `edit`.
+
+Stage Summary:
+- `764e9ca` Phase 6, `eda6828` plan note. Both pushed.
+- The acceptance's headline is met at the layer that matters (the API persists
+  both times) and the UI that collects it is proven.
+- Two named scope limits, stated explicitly rather than left implied: EDIT mode
+  cannot change a per-channel time (UpdatePostRequest has no scheduled_at by
+  design), and a full submit with a mouse-picked Reddit subreddit was NOT driven
+  because the required-settings check correctly refused it every time.
+- cargo test --lib 541/541; svelte-check 0/0; probe FAIL 0 / WARN 0 on the
+  composer routes.
+- Nine commits landed this session: 02d340a, 10dc9c3, cd2f9c2, e2604b9, 9652d79,
+  0835545, 9ccbb3b, fd7cdab, c7f156a, d511ee6, 4ce2ef3, 764e9ca, eda6828.
