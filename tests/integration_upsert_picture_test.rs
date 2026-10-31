@@ -188,3 +188,62 @@ async fn reconnecting_with_a_new_avatar_updates_it() {
         "a genuinely new avatar was discarded"
     );
 }
+
+/// The x-cookie connect path's promise, pinned at the layer that can be
+/// driven: the connector reads `profile_image_url_https` out of X's
+/// GraphQL `UserByScreenName` response and rewrites `_normal` to the
+/// larger size. That value must (a) survive the write and (b) come back
+/// out of the read path the Channels page renders, or the "missing
+/// avatar" report reproduces at the seam that is actually reachable.
+///
+/// A full end-to-end here needs real X cookies - `connect_x_cookie`
+/// POSTs to x.com with the caller's own session and has no injection
+/// point - so what is pinned is every layer after the network call.
+#[tokio::test]
+async fn the_x_cookie_picture_survives_the_round_trip_the_ui_reads() {
+    let state = state("upsert_picture_x_round_trip").await;
+    db::ensure_local_user(&state.db).await.expect("local user");
+    let user_id = resolve_first_user(&state).await.expect("user");
+
+    // The exact shape `connect_x_cookie` builds: the `_normal` suffix
+    // replaced for the larger file, and a cookie-blob access token.
+    let x_picture = "https://pbs.twimg.com/profile_images/1234/abc_400x400.jpg";
+    queries::create_integration(
+        &state.db,
+        user_id,
+        "x",
+        "X (Twitter)",
+        "1234567890",
+        r#"{"auth_token":"at","ct0":"ct0","cookie_string":"auth_token=at; ct0=ct0;"}"#,
+        None,
+        None,
+        Some("The Founder"),
+        Some(x_picture),
+        Some("@thefounder"),
+        None,
+        Some("cookie"),
+    )
+    .await
+    .expect("x-cookie connect");
+
+    let stored = queries::list_integrations(&state.db, user_id)
+        .await
+        .expect("integrations")
+        .into_iter()
+        .find(|i| i.internal_id == "1234567890")
+        .expect("the channel exists");
+
+    assert_eq!(
+        stored.profile_picture.as_deref(),
+        Some(x_picture),
+        "the picture the connector builds does not survive the write"
+    );
+
+    // The serialization the Channels page consumes.
+    let public: switchpost::db::models::IntegrationPublic = stored.into();
+    assert_eq!(
+        public.profile_picture.as_deref(),
+        Some(x_picture),
+        "the picture does not survive the serialization the UI reads"
+    );
+}
