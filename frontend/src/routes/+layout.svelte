@@ -26,10 +26,21 @@
   // behind a hamburger toggle. State resets on navigation (route change).
   let sidebarOpen = $state(false);
   // v22 Phase 4: desktop sidebar collapse-to-icon-rail state. Persisted
-  // to localStorage so the user's preference survives reloads. When
-  // collapsed, the sidebar shrinks from w-56 (224px) to w-14 (56px)
-  // showing only icons; hovering when collapsed expands a flyout.
-  let sidebarCollapsed = $state(false);
+  // to localStorage so the user's preference survives reloads.
+  //
+  // Phase 5a (2026-10-31): the DEFAULT is now the 80px icon rail, not the
+  // 224px expanded rail. The app's content is the calendar grid and the
+  // post lists, and a 224px label rail was spending 15% of a 1440px
+  // viewport on nav text. The persisted state is now the EXPAND toggle,
+  // because the persisted thing should be the preference, not the
+  // starting point - someone who expanded it wants to find it expanded.
+  //
+  // There is NO hover flyout when collapsed. An earlier comment here
+  // promised one and none was ever built - a comment describing behaviour
+  // that does not exist is how the next agent wastes an afternoon. The
+  // rail is toggled by the header button, which is the intended
+  // interaction.
+  let sidebarExpanded = $state(false);
 
   // v22 Phase 4: Command palette state (Cmd+K / Ctrl+K).
   let commandPaletteOpen = $state(false);
@@ -185,9 +196,20 @@
         showOnboarding = true;
       }
     }
-    // v22 Phase 4: restore sidebar collapse preference.
+    // Phase 5a: restore the EXPAND preference. The key is NEW, so an install
+    // that never sees it gets the 80px default - that is the point of the
+    // phase. A preference the old build DID set is migrated on read, so a
+    // founder who had expanded the rail does not lose it: the old key meant
+    // "collapsed", so NOT-collapsed was the expanded preference. A fresh
+    // install has neither key and lands on the compact rail.
     if (browser) {
-      sidebarCollapsed = localStorage.getItem('switchpost-sidebar-collapsed') === 'true';
+      const stored = localStorage.getItem('switchpost-sidebar-expanded');
+      if (stored !== null) {
+        sidebarExpanded = stored === 'true';
+      } else if (localStorage.getItem('switchpost-sidebar-collapsed') !== null) {
+        sidebarExpanded = localStorage.getItem('switchpost-sidebar-collapsed') !== 'true';
+        try { localStorage.setItem('switchpost-sidebar-expanded', String(sidebarExpanded)); } catch {}
+      }
     }
     // v22 Phase 4: Cmd+K / Ctrl+K opens the command palette.
     const onKey = (e: KeyboardEvent) => {
@@ -214,11 +236,11 @@
     destroyKeyboardShortcuts();
   });
 
-  // v22 Phase 4: persist sidebar collapse state.
+  // Phase 5a: persist the EXPAND preference, under the new key.
   function toggleSidebar() {
-    sidebarCollapsed = !sidebarCollapsed;
+    sidebarExpanded = !sidebarExpanded;
     if (browser) {
-      localStorage.setItem('switchpost-sidebar-collapsed', String(sidebarCollapsed));
+      localStorage.setItem('switchpost-sidebar-expanded', String(sidebarExpanded));
     }
   }
 
@@ -278,15 +300,26 @@
       Skip to main content
     </a>
     <aside
-      class="{sidebarCollapsed ? 'w-14' : 'w-56'} bg-background border-r border-line flex flex-col flex-shrink-0 overflow-y-auto fixed lg:static inset-y-0 left-0 z-40 transition-all duration-200
+      class="{sidebarExpanded ? 'w-56' : 'w-20'} bg-background border-r border-line flex flex-col flex-shrink-0 overflow-y-auto fixed lg:static inset-y-0 left-0 z-40 transition-all duration-200
         {sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}"
     >
       <!-- F1: the sidebar header carries the brand mark only. Streak + notifications
            moved to the single top bar (below) - previously they were mounted here AND
-           in a duplicate lg:hidden bar, so the two instances could disagree. -->
-      <div class="h-14 flex items-center justify-between px-{sidebarCollapsed ? '2' : '5'} border-b border-line sticky top-0 bg-background z-10">
-        {#if sidebarCollapsed}
-          <button onclick={toggleSidebar} class="text-content hover:text-accent transition-colors mx-auto min-h-11" aria-label="Expand sidebar" title="Expand sidebar">
+           in a duplicate lg:hidden bar, so the two instances could disagree.
+
+           Phase 5a: when COLLAPSED (the default) the header is a single
+           centred toggle button. The brand mark used to sit beside the
+           search field here; at 80px there is room for one 44px control, so
+           the toggle is it. -->
+      <div class="h-14 flex items-center justify-between px-{sidebarExpanded ? '5' : '2'} border-b border-line sticky top-0 bg-background z-10">
+        {#if !sidebarExpanded}
+          <!-- The icon is 20px and the button was 20px too, which is under
+               WCAG 2.2's 24x24 target-size floor - the probe caught it the
+               moment the rail went to 80px, because at 56px the surrounding
+               space hid it. min-w-11 carries the target; the glyph stays
+               centred inside it, so it looks the same but is big enough
+               to hit. -->
+          <button onclick={toggleSidebar} class="text-content hover:text-accent transition-colors mx-auto min-h-11 min-w-11 flex items-center justify-center" aria-label="Expand sidebar" title="Expand sidebar">
             <Icon name="dashboard" class="w-5 h-5" />
           </button>
         {:else}
@@ -302,9 +335,13 @@
           </button>
         {/if}
       </div>
-      <nav class="flex-1 py-3 px-2">
+      <nav class="flex-1 py-3 px-2" aria-label="Main">
         {#each navSections as section}
-          {#if section.title && !sidebarCollapsed}
+          <!-- Phase 5a: section headings exist only when the rail is EXPANDED.
+               At 80px there is no room for a 24px-tall heading text between
+               44px icon rows, and a heading squeezed to a sliver is worse
+               than none. The nav keeps its landmarks without them. -->
+          {#if section.title && sidebarExpanded}
             <div class="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-faint">
               {section.title}
             </div>
@@ -314,22 +351,39 @@
               `py-3` (12px) + a 20px line gives a 44px-tall target, the
               WCAG 2.2 AA minimum. At `py-2` the link was 36px, and it is
               the app's most-used control - 13 of them, on every route.
+
+              COLLAPSED needs its own minimum, and this was MEASURED rather
+              than reasoned: with the label removed the row's only flex
+              child is the 16px icon, so 12+12+16 = 40px - under the floor.
+              The 20px line-height that got it to 44px EXPANDED does not
+              exist when there is no text to set a line on.
             -->
             <a href={item.href}
-              class="flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors duration-200 cursor-pointer {sidebarCollapsed ? 'justify-center' : ''}
+              class="flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors duration-200 cursor-pointer min-h-11 {sidebarExpanded ? '' : 'justify-center'}
                 {isActive(item.href, $page.url.pathname)
                   ? 'bg-surface-hover text-accent font-medium'
                   : 'text-muted hover:text-content hover:bg-surface-hover'}"
-              title={sidebarCollapsed ? item.label : undefined}
+              aria-current={isActive(item.href, $page.url.pathname) ? 'page' : undefined}
+              title={sidebarExpanded ? undefined : item.label}
             >
               <Icon name={item.icon} class="w-4 h-4 flex-shrink-0" />
-              {#if !sidebarCollapsed}{item.label}{/if}
+              {#if sidebarExpanded}{item.label}{/if}
             </a>
           {/each}
         {/each}
       </nav>
-      <!-- Sidebar footer: timezone + theme toggle (hidden when collapsed) -->
-      {#if !sidebarCollapsed}
+      <!-- Sidebar footer. EXPANDED: the timezone select, the theme toggle and
+           log out, each labelled. COLLAPSED: theme and log out as centred
+           44px icon buttons.
+
+           ONLY the timezone is dropped, and it is ONE click away - the
+           header toggle restores the expanded rail. It is NOT duplicated on
+           /settings, and this comment is deliberately not claiming it is:
+           the claim was made first, checked, and was false, which is a
+           better outcome for the next agent than a confident fiction.
+           Adding a duplicate would create two controls for one value, which
+           is how they start disagreeing. -->
+      {#if sidebarExpanded}
         <div class="px-3 py-3 border-t border-line space-y-2">
           <div>
             <label for="sidebar-timezone" class="text-[10px] font-semibold uppercase tracking-wider text-faint block mb-1">Timezone</label>
