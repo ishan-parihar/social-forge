@@ -228,8 +228,10 @@
             </div>
           {/each}
           <!-- Same cell cap as WeekView, so a day with 8 posts reads the same
-               as the same day inside a week. -->
-          {#if cappedHour.hidden > 0}
+               as the same day inside a week. The `|| hourExpanded` half
+               keeps the row mounted while expanded so it can be collapsed
+               again - the same one-way door MonthView and WeekView had. -->
+          {#if cappedHour.hidden > 0 || hourExpanded}
             <CellMoreButton hidden={cappedHour.hidden} expanded={hourExpanded} onToggle={() => toggleCell(hourKey)} />
           {/if}
           <!-- Phase 2: ghost slots - per-channel posting time presets.

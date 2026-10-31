@@ -353,8 +353,12 @@
             {/each}
             <!-- The cell cap: postiz's `slice(0,3)` + `Show more (N)`. Without
                  it a busy slot is a wall - 23 chips rendered for 8 seeded
-                 posts, 6 of them stacked inside this one cell. -->
-            {#if capped.hidden > 0}
+                 posts, 6 of them stacked inside this one cell.
+
+                 `|| isExpanded` keeps the row mounted while expanded, so it
+                 can be collapsed again - the same one-way door MonthView had
+                 (verified + fixed there; this view had the identical bug). -->
+            {#if capped.hidden > 0 || isExpanded}
               <CellMoreButton hidden={capped.hidden} expanded={isExpanded} onToggle={() => toggleCell(cellKey)} />
             {/if}
           </div>
