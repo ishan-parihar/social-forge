@@ -3583,3 +3583,58 @@ Stage Summary:
   removed error, and this one), 3 of my own tests caught passing their own
   mutations, and every claim re-proven by a before/after on a live server
   or a mutation that compiles.
+
+---
+
+Task ID: v10-cycle-error-message-erased
+Agent: Jcode
+Task: sweep for the recurring COALESCE-guarded/one-bare bug class and prove a fix for every instance
+
+Work Log:
+- The cycle had found the class twice already (`profile_name` written bare beside a COALESCE-guarded
+  `profile_picture`; a state write with guards missing entirely). I searched for the SHAPE rather than
+  the two known sites: every UPDATE with a COALESCE in it.
+- Six candidates matched the regex. Read all six rather than trusting the match:
+  - `update_integration_token` and `update_user_preferences` - the documented three-state
+    `CASE WHEN ?` pattern of AGENTS.md §9.12. Not defects; they correctly distinguish
+    absent/null/explicit-clear.
+  - `update_post_state` - FOUR of five value columns guarded, one bare. THIS WAS IT.
+  - `reset_post_for_republish` - bare `error_message` is CORRECT, it is the deliberate clear.
+  - `mark_post_error` - same, deliberate.
+- Traced the caller to see whether the bare form was actually reachable with something to say.
+  All THREE callers pass `None`, so the parameter could only ever erase. The erase reached a
+  live error message via the claim-release path: a manual publish of a thread whose predecessor
+  is not published skips, then releases the claim with `state = post.state.clone()` (Error, allowed)
+  and `error_message = None`. Post stays `error` and loses its reason.
+- Wrote `tests/post_state_error_message_test.rs` with three assertions: the failure reason survives
+  the claim release, a never-failed post does not acquire one, and the deliberate
+  republish clear still works. The last two exist because `COALESCE(?, error_message)` without
+  them would be a different bug - a sticky column nothing can clear.
+- Verified the fix is not the wrong size in the other direction: the four deliberate writers
+  (`mark_post_error`, `mark_thread_rest_failed`, `reclaim_stuck_publishing`,
+  `reset_post_for_republish`) still write outright and are unchanged.
+- Proved the test could actually fail: removed the COALESCE, re-ran. The claim-release test went
+  RED with `left: None`, the two companions stayed GREEN. That is the proof that the assertion
+  targets the erase and is not over-fitted to it.
+- Confirmed the conversion to the runtime query form did not break the offline build in a new way:
+  stashed the commit, re-ran `SQLX_OFFLINE=true cargo check --lib`, and got the identical single
+  error at `queries.rs:119` (`create_integration`, a `query_as!` I did not touch). Pre-existing,
+  not a regression from my change.
+
+Stage Summary:
+- Fixed `src/db/queries.rs::update_post_state`: `error_message = ?` is now
+  `COALESCE(?, error_message)`. The fourth write this cycle to erase data through an unguarded
+  column, and the first one that leaves the operator with an unexplained failure.
+- Converted the macro to the runtime form (AGENTS.md §5.2) because the COALESCE arm changes the
+  column list and this environment has no live DB to regenerate `.sqlx/`.
+- New binary `tests/post_state_error_message_test.rs`, 3 tests.
+- Known follow-ups: the SQLX_OFFLINE error at `queries.rs:119` is untouched by this work and needs
+  a `cargo sqlx prepare` run somewhere with a database; two environmental test failures remain
+  (`surface_docs_audit`, `x_transport_test::test_x_headers_bisect`).
+- Also swept `pages()` for a fourth instance in the same family: called unconditionally on a repeat
+  connect, so a provider outage showed the founder a 502 while their working channel was right
+  there. That one is `cd76c4e`.
+- Recurring lesson, now four times: the guard exists for the columns someone was bitten by, and
+  is learned for the rest by the same commit only if the commit author lists the columns. My own
+  tests keep passing their own mutations when I assert the spelling of a fix rather than its
+  behaviour - caught by RUNNING the mutation, never by reading it.
