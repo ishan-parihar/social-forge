@@ -3334,3 +3334,70 @@ Stage Summary:
 - Known-untouchable pre-existing failures unchanged: surface_docs_audit
   trio, clippy in autopost.rs + oauth_browser.rs, README length_in_band,
   unstaged scripts/genome.
+
+---
+Task ID: v26-validation-pass
+Agent: Jcode
+Task: independent validation of every fix landed this cycle, on the principle
+  that a test which has only ever passed has not been checked
+
+Work Log:
+- Ran each fix's own test and then tried to break it. Five fixes,
+  re-validated. Three were sound; TWO of their tests could not fail and
+  are now fixed.
+
+- avatar_repair_path_test could not fail on the same defect rewritten one
+  line differently. It asserted the literal `picture: None`, which is what
+  the pre-fix code happened to look like. I rewrote calendar's fix the way
+  I would have written it originally - bind the picture to a local, pass
+  the local - and the test passed on code whose success arm permanently
+  answered "no avatar". Mutation-proved the old test's blindness, then
+  rewrote the assertion as what the success arm DOES (reaches a real
+  picture reader) instead of one spelling of the failure. Both the
+  local-binding and a `Some(String::new())` that is not the shared reader
+  are now caught.
+
+- My rewrite's first version had the mirror-image error: it demanded the
+  OpenID userinfo reader for the WHOLE Google family and flagged google,
+  youtube and drive. google/youtube are correct - a channel's face is the
+  YouTube channel thumbnail from youtube/v3/channels, which is a better
+  avatar than the account photo. drive reads `user["picture"]` inline,
+  which is a duplication the sibling test flags but NOT a missing
+  avatar. So the demand was a different rule, not a stricter one. All
+  three are named with their reason in PICTURE_SOURCE_OVERRIDES. The
+  lesson: a strengthened check that overreaches fails working code and
+  teaches the reader to distrust the test.
+
+- channels_grid_multi_account_test is new (the multi-account tiles fix had
+  NO test) and its first version passed the mutation it was written to
+  catch. The filter I reintroduced sat on its own line inside a
+  multi-line `$derived`, and the check read only the opening line. A
+  line-scoped scan of a multi-line statement. Fixed by taking the whole
+  statement to its terminating `;\n`; the mutation is now caught with the
+  operator-facing message.
+
+- connect_flow_redteam_test re-proven: restoring the old
+  "Page 'X' is already connected" 400 turns BOTH re-connect tests RED with
+  the operator's exact error text. And the validator's surface is complete
+  - traced every provider's `redirect_uri` and confirmed it is always
+  passed IN by the caller, so the four validated call sites are the whole
+  reachable set and there is no unvalidated path building an authorize
+  URL.
+
+- Provider list re-measured from source, not from the test that asserts
+  it: 30 `providers.insert` identifiers including farcaster (Tier-3,
+  env-gated) => 29 always registered, matching the documented 26 +
+  linkedin-page + instagram-standalone.
+
+- Also confirmed, for the record, that the earlier single-binary
+  failing count of 2 was a parallel-execution collision and not a
+  regression: connect_flow_redteam_test passes 20/20 in isolation and
+  across repeated full runs, and its per-binary SQLite file is the
+  collision AGENTS.md 9.42 describes.
+
+Stage Summary:
+- Commit b4d007b pushed. Two tests strengthened (one of which was newly
+  written and immediately mutation-proved broken), three re-proven sound.
+- The value of this pass: two of this cycle's fixes had tests that would
+  have passed on the original defect's code and on a trivially rewritten
+  version of it. Those tests were decoration. They are not now.
