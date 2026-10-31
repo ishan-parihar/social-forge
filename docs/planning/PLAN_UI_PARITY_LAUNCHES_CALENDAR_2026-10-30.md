@@ -456,6 +456,33 @@ is a type-system failure, not a visual-density one.
 
 ### Phase 5. The channel rail (R-1, R-2)
 
+**5a LANDED 2026-10-31 (`fd7cdab`).** The global rail defaults to 80px and
+expands to 224px, and the timezone picker now has a home on /settings. The
+three things this needed were all found by measuring, not reasoning:
+
+| What was assumed | What the measurement said |
+|---|---|
+| the collapsed links stay 44px | **40px.** With the label gone the row's only flex child is the 16px icon, so 12+12+16=40 - under the WCAG 2.2 2.5.8 floor. The 20px line-height that made 44 EXPANDED needs text. Fixed with `min-h-11` on every link. |
+| the "Expand sidebar" button is fine | **20px wide** - under the 24x24 floor, and the full probe went **FAIL 0 -> 216** the moment the rail narrowed. At 56px the surrounding space had been hiding it. Fixed with `min-w-11`. |
+| the timezone is "a setting, not a nav" | it was NOT on /settings at all, so the compact rail would have left it reachable only by re-expanding. Added a laboured Display card on /settings writing the SAME store as the footer select. |
+
+Measured after: aside **80px** collapsed / **224px** expanded at both 1440 and
+768; content width **1360px** collapsed / 1216px expanded at 1440 (the plan
+asked for >= 1296 collapsed); 16 links at **44px** in both states; the theme
+toggle and log out reachable in both. The old `switchpost-sidebar-collapsed`
+key is migrated on read to `switchpost-sidebar-expanded`, so an install keeps
+its preference.
+
+Two comments were also deleted rather than left to mislead, and one of them
+was mine: the rail header promised a hover flyout that has never existed, and
+I wrote a comment claiming the timezone was on /settings and the theme toggle
+had "a second home in the top bar" - both false when checked. The footer
+comment now says the timezone is NOT duplicated and why a duplicate would be
+worse than a one-click expand. A confident fiction is more expensive than a
+gap.
+
+### Phase 5. The channel rail (R-1, R-2)
+
 **Files**: new `frontend/src/lib/channels/ChannelRail.svelte`; `frontend/src/routes/+layout.svelte` (the 80px rail); `frontend/src/lib/api/integrations.ts` (a reconnect action if absent).
 
 **Change, in this order:**
