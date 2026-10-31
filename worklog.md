@@ -3729,3 +3729,35 @@ Stage Summary:
   tree. Reading the file before "fixing" it is cheaper than the fix.
 - Remaining, unowned: the composer's `color-sprawl` advisory - 24 distinct text colours on one surface.
   That is the real remaining Phase-4 defect and it needs its own pass.
+
+---
+Task ID: ui-parity-m1-color-sprawl
+Agent: Jcode
+Task: The composer's `color-sprawl` advisory - "24 distinct text colours" - which the previous entry flagged as
+       the composer's real remaining defect and the only Phase-4 item needing a named owner.
+
+Work Log:
+- Enumerated the composer's text colours in the live DOM rather than trusting the number. The app assigns
+  FIVE real token colours (content, muted, faint, error, accent-fg) plus tag/campaign swatch ink.
+- Traced the swatch ink to its source: `TagPicker.svelte:51` paints
+  `style="color: {inkOnFill(tag.color)}"`, the per-chip computed ink from `lib/chip-colors.ts`, which exists
+  precisely because the hue is the OPERATOR's choice and its luminance is not the app's to control.
+- So the advisory was measuring the founder's colour input, not the type system. It could never name a real
+  defect, and it was the last thing standing between Phase 4 and FAIL 0 / WARN 0.
+- Amended the count: exclude text whose own element sets its colour inline; count inherited chip colour
+  against the child. Closed the hole it would otherwise open by pointing at check-tailwind-classes.mjs and
+  the hex gate in `make check`, which read the SOURCE and catch a hardcoded inline literal.
+- Verified three directions, because "turned it off" and "fixed it" look the same from outside:
+  18 stylesheet colours -> still warns; 6 inline chip inks -> 0; 17 inline swatches + 2 real tokens -> 2.
+- Probed: FAIL 0 / WARN 0 on /posts/new and /posts; full 27-route run FAIL 0, WARN 216 unchanged.
+
+Stage Summary:
+- `0835545` pushed. Phase 4 (M-1) is now FAIL 0 / WARN 0 on the composer routes.
+- TOOLING MISTAKE worth recording: my first attempt to apply this used a Python heredoc that un-escaped
+  every backtick in probe.mjs, because that file stores its template literals ESCAPED. It corrupted 27
+  sites and I only found it because `node --check` failed. Restored with `git checkout --` and redone
+  through the `edit` tool, which shows the escaped bytes it matches. A script that rewrites a template
+  cannot be trusted with that template's own escapes, and the `edit` tool is the safe path here.
+- The whole of M-1 resolved as: 6 probe FAILs that were the probe's own measurement (`02d340a`), four
+  Phase-4 bullets that were already built, two real defects (`cd2f9c2`, `e2604b9`), one production defect
+  that was the probe again (`0835545`). Three of the four were the plan describing work that was done.
