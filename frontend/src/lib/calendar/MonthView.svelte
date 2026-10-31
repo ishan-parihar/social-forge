@@ -250,71 +250,86 @@
               class="text-xs w-6 h-6 flex items-center justify-center rounded-full mb-0.5 {isToday(date, timezone.value) ? 'bg-accent-fill text-accent-fg' : 'text-muted'}"
               class:opacity-80={past || !isCurrentMonth(date, year, month)}
             >{date.getDate()}</span>
-            <!-- The post stack scrolls per-cell when it outgrows the
-                 cell, so every post on a day is reachable without the
-                 whole month grid scrolling away. `min-h-0` lets the
-                 flex child shrink. -->
-            <div class="space-y-0.5 max-h-32 overflow-y-auto overscroll-contain min-h-0">
-              {#each cappedDay.visible as event (event.id)}
-                <div
-                  class="event-chip-row group/chip relative flex items-center gap-1 flex-1 min-w-0 min-h-6 focus-visible:outline-2 focus-visible:outline-accent {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
-                  draggable={event.state !== 'published' && !past}
-                  ondragstart={(e) => handleDragStart(e, event.id)}
-                  onclick={(e) => { e.stopPropagation(); onEventClick?.(event.id); }}
-                  onkeydown={(e) => {
-                    if (chipKeydown(e, event.id, key)) return;
-                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onEventClick?.(event.id); }
-                  }}
-                  role="button"
-                  tabindex="0"
-                  aria-label="{event.content?.slice(0, 60) || 'Post'}. Press Enter to open, Alt plus arrow keys to reschedule."
-                  title={event.state === 'published' || past ? 'Published posts cannot be dragged' : 'Drag to reschedule'}
-                >
-                  {#if onToggleSelect}
-                    <!--
-                      The LABEL carries the target: the box stays 16px (it
-                      is a checkbox in a dense grid) and the clickable
-                      area around it is 44px.
+            <!-- The stack splits in two: a CHIP SCROLL area capped at 128px, and
+                 the disclosure below it in the cell's own flow.
 
-                      It is an OVERLAY, not a flow sibling. A month cell
-                      is 144px wide, and a 44px label in the flow left
-                      the chip 15px - the chip's wrapper has no
-                      `flex-1`, so it took only what the label left,
-                      and the title got nothing. Overlaying the label
-                      puts the 44px target on the chip's left edge
-                      instead of beside it.
-                    -->
-                    <label class="absolute left-0 top-0 z-10 flex items-center justify-center shrink-0 min-h-11 min-w-11 cursor-pointer opacity-0 group-hover/chip:opacity-100 focus-within:opacity-100 transition-opacity">
-                      <input type="checkbox" checked={selected.has(event.id)} aria-label="Select post for bulk actions" onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded w-4 h-4" />
-                    </label>
-                  {/if}
-                  <!-- v25 F3: drag affordance. A six-dot grip that only appears on
-                       hover tells the user which chips are movable; without it the
-                       whole cell reads as click-to-open. F5 keeps it hover-only
-                       because the chip is now focusable and Alt+arrows reschedule,
-                       so the grip is a mouse hint, not the only affordance. -->
-                  {#if event.state !== 'published' && !past}
-                    <span class="hidden group-hover/chip:inline text-faint leading-none select-none" aria-hidden="true">⠿</span>
-                  {/if}
-                  <!-- Phones: a 48px day column cannot hold a title, so each chip is a
-                       state-colored dot. The chip keeps its aria-label and keyboard
-                       handling, so the dot loses nothing a screen reader or keyboard
-                       user relies on. -->
-                  <span
-                    class="sm:hidden w-1.5 h-1.5 rounded-full shrink-0"
-                    class:bg-info={event.state === 'draft'}
-                    class:bg-warning={event.state === 'queued'}
-                    class:bg-success={event.state === 'published'}
-                    class:bg-error={event.state === 'error'}
-                    aria-hidden="true"
-                  ></span>
-                  <span class="hidden sm:block min-w-0 flex-1 relative z-[1]">
-                    <CalendarEvent {event} compact {onDuplicate} {onStats} {onDelete} />
-                  </span>
-                </div>
-              {/each}
+                 It used to be ONE element holding both, and that cost the
+                 disclosure: expanding a 10-post day renders 284px of chips
+                 inside the 128px box, which put the collapse control at
+                 offset 260px - reachable only by finding the cell's own 16px
+                 scrollbar and scrolling it to the bottom. On a 900px viewport
+                 it rendered 6px BELOW the viewport, on a page that cannot
+                 scroll at all (documentElement.scrollHeight == innerHeight),
+                 so it was unreachable by any means. MEASURED 2026-10-31.
+
+                 The chips keep the inner scroll - WITHOUT it a busy day is a
+                 wall, and the cell would grow past the grid's row height. The
+                 way back DOWN does not depend on that scrollbar: the
+                 disclosure is the cell's last flow child, so it always sits
+                 on the cell's last visible row. -->
+            <div class="flex flex-col min-h-0">
+              <div class="space-y-0.5 max-h-32 overflow-y-auto overscroll-contain min-h-0">
+                {#each cappedDay.visible as event (event.id)}
+                    <div
+                      class="event-chip-row group/chip relative flex items-center gap-1 flex-1 min-w-0 min-h-6 focus-visible:outline-2 focus-visible:outline-accent {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
+                    draggable={event.state !== 'published' && !past}
+                    ondragstart={(e) => handleDragStart(e, event.id)}
+                    onclick={(e) => { e.stopPropagation(); onEventClick?.(event.id); }}
+                    onkeydown={(e) => {
+                      if (chipKeydown(e, event.id, key)) return;
+                      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onEventClick?.(event.id); }
+                    }}
+                    role="button"
+                    tabindex="0"
+                    aria-label="{event.content?.slice(0, 60) || 'Post'}. Press Enter to open, Alt plus arrow keys to reschedule."
+                    title={event.state === 'published' || past ? 'Published posts cannot be dragged' : 'Drag to reschedule'}
+                  >
+                    {#if onToggleSelect}
+                      <!--
+                        The LABEL carries the target: the box stays 16px (it
+                        is a checkbox in a dense grid) and the clickable
+                        area around it is 44px.
+
+                        It is an OVERLAY, not a flow sibling. A month cell
+                        is 144px wide, and a 44px label in the flow left
+                        the chip 15px - the chip's wrapper has no
+                        `flex-1`, so it took only what the label left,
+                        and the title got nothing. Overlaying the label
+                        puts the 44px target on the chip's left edge
+                        instead of beside it.
+                      -->
+                      <label class="absolute left-0 top-0 z-10 flex items-center justify-center shrink-0 min-h-11 min-w-11 cursor-pointer opacity-0 group-hover/chip:opacity-100 focus-within:opacity-100 transition-opacity">
+                        <input type="checkbox" checked={selected.has(event.id)} aria-label="Select post for bulk actions" onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded w-4 h-4" />
+                      </label>
+                    {/if}
+                    <!-- v25 F3: drag affordance. A six-dot grip that only appears on
+                         hover tells the user which chips are movable; without it the
+                         whole cell reads as click-to-open. F5 keeps it hover-only
+                         because the chip is now focusable and Alt+arrows reschedule,
+                         so the grip is a mouse hint, not the only affordance. -->
+                    {#if event.state !== 'published' && !past}
+                      <span class="hidden group-hover/chip:inline text-faint leading-none select-none" aria-hidden="true">⠿</span>
+                    {/if}
+                    <!-- Phones: a 48px day column cannot hold a title, so each chip is a
+                         state-colored dot. The chip keeps its aria-label and keyboard
+                         handling, so the dot loses nothing a screen reader or keyboard
+                         user relies on. -->
+                    <span
+                      class="sm:hidden w-1.5 h-1.5 rounded-full shrink-0"
+                      class:bg-info={event.state === 'draft'}
+                      class:bg-warning={event.state === 'queued'}
+                      class:bg-success={event.state === 'published'}
+                      class:bg-error={event.state === 'error'}
+                      aria-hidden="true"
+                    ></span>
+                    <span class="hidden sm:block min-w-0 flex-1 relative z-[1]">
+                      <CalendarEvent {event} compact {onDuplicate} {onStats} {onDelete} />
+                    </span>
+                  </div>
+                {/each}
+              </div>
               <!-- The same cap as the week and day grids, so a day reads
-                   identically in all three. The cell's own scroll stays as
+                   identically in all three. The cell's own scroll above stays as
                    the fallback for a phone-width day column.
 
                    The button must stay mounted while the cell is EXPANDED:
@@ -323,7 +338,11 @@
                    collapse the cell again - MEASURED 2026-10-31, expanding
                    "+7 more" left no way back, and the founder's only
                    recovery was to leave the month view and return. A
-                   disclosure with no exit is worse than none. -->
+                   disclosure with no exit is worse than none.
+
+                   It is here, AFTER the scroll container, so it cannot be
+                   pushed out of the cell the way it was when it was the
+                   scroll's last child (see the comment above). -->
               {#if cappedDay.hidden > 0 || cellExpanded}
                 <CellMoreButton hidden={cappedDay.hidden} expanded={cellExpanded} onToggle={() => toggleCell(key)} />
               {/if}
