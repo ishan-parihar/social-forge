@@ -24,6 +24,19 @@
   It is a real <button> rather than a clickable <div>, so it takes keyboard
   focus and announces itself. The count is exact and in the accessible name,
   so a screen reader reads "+5 more posts" and not "more".
+
+  THE HEIGHT IS 24px, MEASURED, and it is a DELIBERATE choice rather than an
+  oversight. WCAG 2.2 2.5.8 sets the floor at 24x24 and that is exactly what
+  this clears - hit-tested 2026-10-31 at all four corners and the centre, in
+  all three views, and every hit landed on the button itself (no overlay, no
+  wrapper stealing it): month 24x135, week 24x121, day 24x958.
+
+  44px is the target everywhere else on the calendar, and a 44px disclosure
+  row would cost a quarter of a 96px month cell. AGENTS.md 9.37 draws the
+  line the same way the probe does: below 24 is a FAIL, 24-44 is a WARNING.
+  This is the WARNING band, and the probe reports it as one. If the chip cap
+  ever drops to two, revisit - not before, because the alternative is a
+  calendar grid that cannot hold a post and its disclosure.
 -->
 {#if expanded}
   <button

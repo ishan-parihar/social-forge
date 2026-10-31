@@ -48,8 +48,20 @@
   });
 
   // The select controls share one height and one minimum width so the row
-  // reads as a set. `h-10` is 40px - the same height as the nav group's
-  // border box, so the row is one line tall without any of them sticking out.
+  // reads as a set. `h-10` is 40px - verified MEASURED 2026-10-31 against the
+  // nav group's own border box at 40px, and both the selects and the group
+  // render 40px at 1440, so no control in this row sticks out of the line.
+  //
+  // `min-w-[120px]` is measured, not decorative: the selects come out 120px
+  // wide with the shortest label and grow, which is why the row wraps.
+  //
+  // THE ROW WRAPS ANYWAY - 88px over TWO rows, measured at 1440, 1600, 1920
+  // and 2560. It is not short of width: `max-w-6xl` in +layout.svelte caps the
+  // row at 1040px at every one of those viewports, and it still wraps. The
+  // equal 40px heights keep the wrap clean (two aligned lines, not a ragged
+  // edge) - they do not prevent it. An earlier version of this comment claimed
+  // "the row is one line tall" on the strength of the heights matching, and
+  // the rendered app contradicted it at every width tested.
   const selectClass = "h-10 min-w-[120px] px-2 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-accent";
 </script>
 
@@ -59,10 +71,24 @@
      which the page's own comment said was ~168px while the CSS fallback
      said 218px. Three numbers for one thing is how a constant goes stale.
 
+     218px is HISTORY, NOT THE CURRENT VALUE. It describes what was removed.
+     MEASURED 2026-10-31, this header occupies 88px of its own two rows and
+     the grid starts at 180px from the top of the viewport - so this row, the
+     page padding and the shell's own top margin account for 180px where the
+     old three rows accounted for 218px. Anyone reading "218px" as a
+     description of what is on screen now will be wrong by 38px; that is why
+     the number is spelled out as past tense and the current number is too.
+
      What is left is the date range as the title, the nav, the filters, the
      view switcher, and the two actions - on one line that wraps to at most
-     two rows at 768. Nothing here reaches for `new Date(...)`: the range
-     still resolves through `wallClockToUtc` in the page (AGENTS.md 9.17). -->
+     two rows at 768. READ THAT WITH CARE: the wrap is not a small-screen
+     behaviour. Measured 2026-10-31 the header is 88px over TWO rows at 1440,
+     1600, 1920 and 2560 as well - `max-w-6xl` caps it at 1040px at every one
+     of those, and there is more content than that holds. Two rows is what it
+     is everywhere; "at 768" was measuring the width where it was first
+     noticed, not where it starts. Nothing here reaches for `new Date(...)`:
+     the range still resolves through `wallClockToUtc` in the page (AGENTS.md
+     9.17). -->
 <div class="flex items-center flex-wrap gap-x-2 gap-y-2">
   <!-- The nav arrows and the date are ONE bordered group, so the date reads
        as the thing being navigated rather than a title sitting between two
