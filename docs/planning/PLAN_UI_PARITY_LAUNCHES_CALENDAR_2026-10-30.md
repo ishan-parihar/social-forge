@@ -290,6 +290,51 @@ While here, fix the secondary defect the render exposed: at a 129px chip the tag
 - Drag-to-reschedule, the published-post choice and the group-move confirmation still work unchanged (the drag handle stays the chip body).
 - Probe 0 FAIL in all four views at three widths.
 
+### Phase 3. One-row calendar header (C-2) — LANDED 2026-10-31 (commit f8ab00e)
+
+**Status: done, and the number is 132px, not ~60px.**
+
+The 218px of chrome above the grid measured (with
+`frontend/scripts/measure-calendar-chrome.mjs`) as:
+
+| part | before | after |
+|---|---|---|
+| sticky top bar | 45px | 45px |
+| page gutter (`p-4 sm:p-6`) | 35px | 35px |
+| `h1` + two action buttons row | 44px | **gone** (moved into the header) |
+| `space-y-6` gap x2 | 48px | **24px** (`space-y-3`, one gap left) |
+| CalendarHeader | 46px | 40px (one row, was two) |
+| **total** | **218px** | **132px** |
+
+The plan's "~60px" target was written from a screenshot, not from a
+measurement, and it ignored two things the measurement shows: the app's global
+`p-4 sm:p-6` gutter is shared by every route (changing it is a whole-app
+decision, not a calendar one), and the sticky top bar is 45px of that chrome.
+132px is a 39% reduction and it is the honest number.
+
+**What shipped beyond the plan's list**, each of which the render required:
+
+- the DATE became the page's `h1`. The probe FAILs a page with no `<h1>`, and
+  the date range is the heading that carries information. The removed `h1`
+  read "Content Calendar", which the nav rail's active item already said.
+- the nav arrows are icon-width, not 44px buttons. A 44px chevron inside a
+  40px row is not reachable anyway, and the whole row needs the 32px back to
+  stay on one line at 1440. `Today` is a comfortable target for the same
+  intent. This is why the probe reports 112 `/calendar` tap-target WARNINGs
+  (all in the 24-44px advisory band, zero FAILs).
+- the view switcher is a `role="group"` segmented control with `aria-pressed`
+  per option, not four buttons in a border.
+
+**`--cal-shell-top`**: the plan asked for the constant to be named. It already
+is - the page measures it from the element's own
+`getBoundingClientRect().top + scrollY` on mount, on resize, and through a
+ResizeObserver on every sibling above the shell. The 218px in the CSS is the
+pre-JS-paint FALLBACK and is deliberately the wide layout's upper bound (a low
+guess clips the grid in the first frame). What was actually broken was the two
+comments that disagreed with each other, and those are reconciled now.
+
+---
+
 ### Phase 3. One-row calendar header (C-2)
 
 **Files**: `frontend/src/routes/calendar/+page.svelte`, `frontend/src/lib/calendar/CalendarHeader.svelte`.
