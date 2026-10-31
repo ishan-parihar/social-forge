@@ -1451,19 +1451,45 @@ pub async fn update_post_state(
     let published_at = now.map(EpochUtc::from);
     // `state` is already a PostState; the old `state as PostState` cast was a
     // PG-shaped no-op that created a temporary the macro could not outlive.
-    sqlx::query!(
-        r#"UPDATE posts SET state = ?, published_at = COALESCE(?, published_at),
-           platform_post_id = COALESCE(?, platform_post_id),
-           platform_post_url = COALESCE(?, platform_post_url),
-           error_message = ?, updated_at = unixepoch()
-           WHERE id = ?"#,
-        state,
-        published_at,
-        platform_post_id,
-        platform_post_url,
-        error_message,
-        id,
+    //
+    // The caller's `error_message` is NULL when it has nothing to say, and a
+    // bare write then ERASES the stored reason - so a post that failed keeps
+    // saying `error` and says nothing about why, and the founder is left with
+    // a failure they cannot act on.
+    //
+    // That is not hypothetical: the manual publish path releases a claim with
+    // `state = post.state.clone()` and `error_message = None`, and
+    // `PostState::Error` is an accepted state for a manual publish. So a post
+    // that failed, then had its thread publish skipped, lost its reason on the
+    // release.
+    //
+    // Four of this statement's five value columns were already COALESCE-guarded
+    // (published_at, platform_post_id, platform_post_url) and this one was not.
+    // Same shape as the avatar and profile_name bugs, one column later.
+    //
+    // It also makes the parameter dead as written: all three call sites pass
+    // None, so it only ever bound NULL. Guarded, those sites still work AND a
+    // future caller that passes Some can actually set a reason.
+    //
+    // The DELIBERATE clear lives elsewhere and still writes outright:
+    // `reset_post_for_republish` and `mark_post_error` mean it.
+    //
+    // Runtime query, not `query!`: the COALESCE arm's column list changed and
+    // regenerating the offline cache needs a live database this environment
+    // does not have (AGENTS.md §5.1-5.3).
+    sqlx::query(
+        "UPDATE posts SET state = ?, published_at = COALESCE(?, published_at), \
+         platform_post_id = COALESCE(?, platform_post_id), \
+         platform_post_url = COALESCE(?, platform_post_url), \
+         error_message = COALESCE(?, error_message), updated_at = unixepoch() \
+         WHERE id = ?",
     )
+    .bind(state)
+    .bind(published_at)
+    .bind(platform_post_id)
+    .bind(platform_post_url)
+    .bind(error_message)
+    .bind(id)
     .execute(pool)
     .await?;
     Ok(())
