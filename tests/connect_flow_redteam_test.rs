@@ -1548,3 +1548,60 @@ async fn re_connecting_survives_a_provider_that_no_longer_lists_the_page() {
         "the repeat left the page's access token empty."
     );
 }
+
+/// The repeat path must not call `pages()` at all.
+///
+/// The existing `re_connecting_an_already_connected_page_succeeds` test claims
+/// a founder whose provider is down can still recover a repeat, but it could
+/// never have proved that: `google`'s `pages()` answers an empty list for a
+/// bogus token rather than an error (the YouTube endpoint returns a JSON body
+/// with no `items`, and the reader maps that to zero pages), so the call that
+/// was supposed to fail simply didn't. The test was green while the handler
+/// still made the network call unconditionally.
+///
+/// So this pins the thing the other test only asserted in prose: the fetch is
+/// GATED on "this page is not already connected".
+///
+/// Mutation-proven: putting the `pages()` call back outside the `if` (the
+/// pre-fix shape) turns this RED, and the two router-level tests stay green -
+/// which is exactly how the original defect survived a green suite.
+#[test]
+fn a_repeat_connect_does_not_fetch_pages_from_the_provider() {
+    let src = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/api/integrations.rs"),
+    )
+    .expect("read src/api/integrations.rs");
+
+    let start = src
+        .find("let already_connected = sqlx::query_scalar")
+        .expect("the connect-page lookup is not in integrations.rs");
+    let tail = &src[start..];
+    let call = tail
+        .find("provider_obj\n")
+        .or_else(|| tail.find(".pages("))
+        .expect("the pages() call is not after the lookup");
+    let region = &tail[call.saturating_sub(400)
+        ..tail[call..]
+            .find(".await")
+            .map(|e| call + e + ".await".len())
+            .unwrap_or(tail.len())];
+
+    assert!(
+        region.contains("if already_connected.is_some()")
+            || region.contains("if let Some(")
+            || region.contains("already_connected.is_none()"),
+        "pages() is called whether or not the page is already connected, so a \
+         repeat makes a provider call it does not need - and that call is the \
+         one that fails during an outage, which is precisely when a founder \
+         retries a connect that failed halfway. The gated call was: {region}"
+    );
+
+    // And the gate must select the EMPTY answer for the repeat, not skip the
+    // variable: `page` is read unconditionally afterwards.
+    assert!(
+        region.contains("Vec::new()") && region.contains(".pages("),
+        "the repeat path does not skip the provider fetch, or does not produce \
+         an empty page list for it. Both must hold, because `page` is read \
+         unconditionally below. Call was: {region}"
+    );
+}

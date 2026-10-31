@@ -1459,12 +1459,13 @@ pub async fn connect_page(
     // The one-across-many-providers invariant the picker exists to preserve is
     // unaffected - this only stops a no-op request from failing.
     //
-    // The lookup happens BEFORE the pages() call on purpose. Everything it
+    // The lookup happens BEFORE the pages() call on purpose, and on the repeat
+    // path the pages() call does not happen at all (see below). Everything it
     // needs is already in hand (the parent's provider and the requested page
-    // id), so a repeat answers from the database instead of making the
-    // provider fetch it first - and that means a repeat while the provider's
-    // API is down or rate-limiting still succeeds instead of failing on the
-    // network call it never needed.
+    // id), so a repeat answers from the database instead of asking the provider
+    // for it first - and that means a repeat while the provider's API is down or
+    // rate-limiting still succeeds, instead of failing on the network call it
+    // never needed.
     let already_connected = sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM integrations WHERE user_id = $1 \
          AND provider_identifier = $2 AND internal_id = $3",
@@ -1477,11 +1478,30 @@ pub async fn connect_page(
 
     let token = crypto::maybe_decrypt_token(raw_token, state.token_key.as_ref());
 
-    // Fetch all pages and find the matching one
-    let pages = provider_obj
-        .pages(&token)
-        .await
-        .map_err(|e| AppError::Provider(format!("Failed to list pages: {e}")))?;
+    // Fetch all pages and find the matching one.
+    //
+    // Skipped on the repeat path, and that is the point rather than an
+    // optimisation: `pages()` is the call that fails during a provider outage or
+    // a rate limit, and a repeat is exactly what a founder retries after a
+    // connect failed halfway for that reason. Making the provider fetch a list
+    // we do not need would turn a recovery into another failure on the same
+    // broken network path.
+    //
+    // The earlier note here said the lookup was ordered first so a repeat
+    // "answers from the database instead of making the provider fetch it", but
+    // the fetch was still unconditional - so the claim was true of the lookup
+    // and false of the handler. Verified before the change: nothing in the
+    // repeat branch needs `page`, except to refresh the token, and it handles
+    // `None` precisely because a provider that no longer lists the page is a
+    // case it already expected. First connect still requires the page.
+    let pages = if already_connected.is_some() {
+        Vec::new()
+    } else {
+        provider_obj
+            .pages(&token)
+            .await
+            .map_err(|e| AppError::Provider(format!("Failed to list pages: {e}")))?
+    };
 
     let page = pages.into_iter().find(|p| p.id == page_id);
 
