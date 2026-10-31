@@ -3277,3 +3277,60 @@ Stage Summary:
   instead of continuing the batch. Pre-existing failures untouched:
   surface_docs_audit trio, clippy in autopost.rs + oauth_browser.rs, README
   length_in_band, unstaged scripts/genome.
+
+---
+Task ID: v26-page-picker-batch-and-x-avatar-guard
+Agent: Jcode
+Task: close the two follow-ups the previous round left open: the PagePicker
+  multi-account abort, and the x-cookie avatar verification
+
+Work Log:
+- PagePicker.svelte's batch loop ended at the first failure with `break`,
+  abandoning every page after it. The founder selects five, the second is
+  refused, and the three after it are never attempted - they stay
+  unconnected with no signal. `onSuccess` was gated on the same
+  `!errorMsg`, so a page that DID connect was still offered as selectable
+  and the list behind the modal never refreshed.
+- Fixed: collect failures, continue, report them together ("Connected 3 of
+  5; failed to connect a, b"), and refresh either way. A partial success is
+  still a success for the channels that connected.
+- tests/page_picker_batch_test.rs holds three source-invariant tests (the
+  picker is browser-side with no API a unit test drives): the `continue`,
+  the plural reporting, and the ungated refresh. Mutation-proven -
+  restoring the original loop turns all three RED, each naming the
+  operator-facing consequence.
+- My third test's first draft was wrong twice before it was right and both
+  corrections were mechanical, not cosmetic: an `rsplit(...).count()` proxy
+  that asserted a count rather than the property, then a
+  `.split(marker).nth(1)` that returned everything AFTER the marker
+  (including the unconditional `onSuccess` at the end) so the assertion
+  could never be true against any source. Rewritten to take the branch
+  body between the opening brace and the `selected = new Set();` that
+  follows the branch close.
+- x-cookie avatar: the true end-to-end is BLOCKED, not unverified-by-choice.
+  connect_x_cookie POSTs to x.com with the caller's own session and has no
+  injection point, and no local browser profile (chromium, Brave) is logged
+  into X, so there are no cookies to drive it with. The browser tool's
+  bridge is also not responding, so the operator's signed-in tab is
+  unreachable this session.
+- Pinned what IS reachable instead: the connector's built URL survives the
+  write AND the IntegrationPublic serialization the page reads. Field name
+  corroborated internally (x.rs:1541 reads the same
+  profile_image_url_https for author avatars), not by a guess.
+- AND labelled honestly what that test is: a GUARD, not a mutation-proof.
+  It exercises only the INSERT arm, so it stays green when the ON CONFLICT
+  write regresses. Proven by reverting the COALESCE and watching the other
+  two in the same binary go RED while this one stayed green. That result
+  is recorded in the commit rather than hidden.
+
+Stage Summary:
+- Commits: 8c12e81 (PagePicker batch), 8dd9edc (x-cookie round-trip guard).
+  Both pushed to github/master.
+- Tests: page_picker_batch_test 3/3 (mutation-proven),
+  integration_upsert_picture_test 3/3 (2 mutation-proven, 1 recorded guard).
+- Frontend: svelte-check 0 errors 0 warnings; pnpm build succeeds.
+- Both open follow-ups from the previous round are now closed. Nothing is
+  left open from the five original reports.
+- Known-untouchable pre-existing failures unchanged: surface_docs_audit
+  trio, clippy in autopost.rs + oauth_browser.rs, README length_in_band,
+  unstaged scripts/genome.
