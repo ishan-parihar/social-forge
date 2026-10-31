@@ -377,6 +377,38 @@ ONE number in the CSS, derived, not typed.
 - `askClose`, "Draft saved", Escape, the blocker banner and the keyboard hints all still work.
 - Probe 0 FAIL at 1440/768/390 with the composer OPEN (AGENTS.md §12.1: the composer is a state the probe must be driven into).
 
+**Landed so far (2026-10-31, `02d340a`)**: the acceptance's LAST bullet only. The composer already
+retained `showPreviewMobile` as its tab trigger and reorders nothing else here. What this phase reported
+as "6 probe FAILs at 768px - the signature overlapping Preview/Save Draft/Post Now" was NOT a
+composer defect: it was the probe comparing a box CLIPPED by an ancestor against the footer.
+
+The evidence, in order:
+
+1. The signature's rect was `y=731..955` in a 900px viewport; the footer's was `785..854`.
+2. `.rich-editor` computes `overflow: hidden` and the editor column scrolls (`scrollHeight 1106`,
+   `clientHeight 674`), so the signature is simply the last item in a long correctly-scrolling column.
+3. `document.elementFromPoint` at each footer button's CENTRE returned that button - nothing covers them,
+   and the kept-open composer's buttons are clickable.
+4. Scrolling the column to its end moved the signature to `y=299..523`, far clear of the footer.
+
+The fix belongs to the gate, not the app (AGENTS.md §9.37: "a severity that does not match the standard
+makes the gate lie"). `frontend/scripts/probe.mjs`'s overlap check now clips every candidate box to the
+visible band (`cr.top` .. `cr.top + clientHeight`) of each ancestor whose `overflow` is not `visible`,
+before the viewport clip. Both directions are verified, because a gate that swallows real FAILs is as
+useless as one that invents them: the signature's clipped box overlaps the footer by 0px, while two
+fully visible boxes overlapping 50x25 are still reported.
+
+Result over the same 27 routes x 4 widths x 2 themes: **FAIL 0**, WARN 216 (unchanged - 104 `/tags`
+swatches and 112 `/calendar` tap targets inside the 24-44px WCAG 2.2 2.5.8 advisory band).
+
+Also measured and NOT a defect: the 8 console 400s are `GET /api/dms/conversations` for the
+cookie-auth X channel, which X's DM API does not support. The server answers with a correct, actionable
+message and `/dms` already renders it inline ("Could not reach X (Twitter) for direct messages. Check
+the connection, or pick another channel." + the provider's own detail).
+
+**Remaining in Phase 4**: the five structural changes above (tab swap, scrim, channel switch row,
+editor-column reorder, one footer primary) - untried, and each is a probe-driven pass of its own.
+
 ### Phase 5. The channel rail (R-1, R-2)
 
 **Files**: new `frontend/src/lib/channels/ChannelRail.svelte`; `frontend/src/routes/+layout.svelte` (the 80px rail); `frontend/src/lib/api/integrations.ts` (a reconnect action if absent).

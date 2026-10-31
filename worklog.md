@@ -3638,3 +3638,52 @@ Stage Summary:
   is learned for the rest by the same commit only if the commit author lists the columns. My own
   tests keep passing their own mutations when I assert the spelling of a fix rather than its
   behaviour - caught by RUNNING the mutation, never by reading it.
+
+---
+Task ID: ui-parity-m1
+Agent: Jcode
+Task: Phase 4 (M-1) of `docs/planning/PLAN_UI_PARITY_LAUNCHES_CALENDAR_2026-10-30.md` — the 6 pre-existing
+       `/posts/new` probe FAILs at 768px, reported as the appended signature text overlapping
+       Preview / Save Draft / Post Now.
+
+Work Log:
+- Measured the composer open at 1440 / 768 / 390. Reproduced the 6 FAILs; every one named the
+  signature element (text starting "— Ish…") against a footer button.
+- Traced the signature's ancestor chain from the real DOM: `.editor-body` (224px) is inside
+  `.rich-editor` (`overflow: hidden`) inside a column with `scrollHeight 1106` over `clientHeight 674`.
+- Hit-tested the three footer buttons with `document.elementFromPoint` at each centre: every one
+  returned that exact button. Nothing covers them; the composer is fully usable with the signature
+  loaded.
+- Scrolled the editor column to its end: the signature moved from `y=731..955` to `y=299..523`,
+  clear of the footer at `785..854`. The overlap is a PAINT difference, not a layout one.
+- Read `frontend/scripts/probe.mjs`'s overlap check and found the cause: it filtered candidate boxes
+  by VIEWPORT bounds only, using the raw `getBoundingClientRect()`. A clipped child of a scroller
+  or an `overflow: hidden` box keeps a rect larger than the pixels it paints, so 170px of phantom
+  rect reached across the footer. The existing comment shows the intent ("a box scrolled out of the
+  viewport still has a rectangle") — the fix was written for the viewport case and never extended to
+  clipping ancestors.
+- Added `clippedRect()` to the probe: walk each ancestor, and for any whose `overflow` is not
+  `visible`, intersect the box with that ancestor's visible band. Then the viewport clip.
+- Verified BOTH directions, deliberately, because a gate that swallows real FAILs is as useless as
+  one that invents them: an isolated harness asserted the signature's clipped box overlaps the footer
+  by 0px (so the false positive is gone) while two fully visible boxes overlapping 50x25 are still
+  reported.
+- Hit the coding pitfall worth recording: a backtick inside a `//` comment broke the module load with
+  `SyntaxError: Unexpected identifier`. `node scripts/probe.mjs` is the load check, not `pnpm build`.
+- Ran the full probe over 27 routes x 4 widths x 2 themes: **FAIL 0**, WARN 216, unchanged from the
+  run that reported 6 FAILs. Washed the 8 console 400s: all are `GET /api/dms/conversations` for the
+  cookie-auth X channel, which X's DM API does not support. The server answers with an accurate,
+  actionable message and `/dms` already renders it inline. Documented, not "fixed".
+
+Stage Summary:
+- `02d340a` (pushed to `github/master`): the probe's overlap check is now clip-aware.
+- The composer itself was NOT wrong. No production frontend or Rust file changed.
+- Probe result: FAIL 0 over 27 routes / 4 widths / 2 themes. WARN 216 (104 `/tags` swatches, 112
+  `/calendar` tap targets inside the 24-44px advisory band) — pre-existing, zero FAILs.
+- Plan note `5324324` is now also in the record for this phase; Phase 4's five structural changes
+  (tab swap, scrim, channel-switch row, editor reorder, one footer primary) remain untried.
+- Lesson, twice now in this plan: before "fixing" what the gate reports, prove the gate is measuring
+  the thing a visitor sees. `elementFromPoint` plus scrolling to the element's own extent did that
+  here in ten minutes; the whole of Phase 4 as originally scoped would have been spent rearranging a
+  composer that was already correct.
+
