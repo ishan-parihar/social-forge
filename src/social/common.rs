@@ -179,13 +179,13 @@ pub fn resolve_redirect_uri(provided: Option<&str>, app_url: &str) -> Result<Str
         // the absolute form the way the "wrong host" one does.
         format!(
             "redirect_uri is not an absolute URL: {unquoted:?}. The callback URI every provider \
-             register are {fallback} (built from APP_URL). Omit redirect_uri to use it."
+             registers is {fallback} (built from APP_URL). Omit redirect_uri to use it."
         )
     })?;
     if !same_callback(&parsed, &fallback) {
         return Err(format!(
-            "redirect_uri {unquoted} is not this deployment's callback. The callback URI \
-             every provider register is {fallback} (built from APP_URL). Omit \
+            "redirect_uri {unquoted} is not this deployment's callback. The callback URI every \
+             provider registers is {fallback} (built from APP_URL). Omit \
              redirect_uri to use it."
         ));
     }

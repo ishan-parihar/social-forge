@@ -690,12 +690,13 @@ pub trait SocialProvider: Send + Sync {
     /// Reconnect/re-bind after re-authentication.
     ///
     /// The default routes through `fetch_page_info`, which is the
-    /// PAGE-SELECTION function — and which is SUPPOSED to refuse for a
-    /// provider with no page concept (`Err(Api("X does not support
-    /// page management"))`). Left alone, that refusal becomes the
-    /// answer to the refresh endpoint's "Refresh", because a `?`
-    /// forwards it: "Failed to refresh profile: X does not support
-    /// page management", from a button on a Reddit channel.
+    /// PAGE-SELECTION function - and which is SUPPOSED to refuse for a
+    /// provider with no page concept
+    /// (`Err(ProviderError::NoPageManagement)`). Left alone, that
+    /// refusal becomes the answer to the refresh endpoint's "Refresh",
+    /// because a `?` forwards it: "Failed to refresh profile: This
+    /// provider has no page or sub-account concept. The channel is the
+    /// account.", from a button on a Reddit channel.
     ///
     /// So the default DEGRADES on a page-management refusal rather than
     /// forwarding it: it returns the channel's own identity with the

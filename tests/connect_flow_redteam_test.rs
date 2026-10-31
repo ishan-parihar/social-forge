@@ -46,6 +46,137 @@ fn session_cookie() -> String {
     format!("{SESSION_COOKIE}={token}")
 }
 
+/// Three tests below use `instagram-standalone` because its connect path is
+/// OAuth-shaped, so the authorize URL is observable. That requires the
+/// provider to be CONFIGURED, and it is configured through `.env` (gitignored)
+/// or real env vars - so on a fresh CI checkout it is not.
+///
+/// Each of those three has an "unconfigured, so treat as a pass" escape,
+/// because a credentials refusal is the honest answer there and not a defect.
+/// The escape is also how a test can green WITHOUT EXERCISING ANYTHING: the
+/// handler checks credentials BEFORE `redirect_uri` validation, so an
+/// unconfigured provider never reaches the code under test.
+///
+/// Two things hold that open. `note_unconfigured` counts and reports each
+/// skip, and the direct test below runs the rule with no provider at all -
+/// so the rule is exercised in every environment, including a clean checkout.
+static REDIRECT_SKIPS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+/// The `redirect_uri` router tests escape on a credentials refusal. Count it
+/// and say so loudly, so an all-skipped run is visible rather than hidden in
+/// a green checkmark. (A test cannot assert on another test's skip - cargo
+/// runs them on threads - so this reports rather than gates; the direct test
+/// above is what guarantees the rule is exercised regardless.)
+fn note_unconfigured(which: &str) {
+    let n = REDIRECT_SKIPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    eprintln!(
+        "SKIP[{which}]: instagram-standalone is not configured, so redirect_uri \
+         validation (which runs AFTER the credentials check) was never reached. \
+         This is skip #{n} of the three; a run that only skips has proved \
+         nothing about redirect_uri."
+    );
+}
+
+/// The `redirect_uri` rule, exercised directly - no provider credentials, so
+/// this runs in EVERY environment.
+///
+/// The three router-level tests below reach the same code, but only when
+/// `instagram-standalone` is configured, and the handler checks credentials
+/// BEFORE it validates `redirect_uri` - so on a fresh checkout those three
+/// green without ever calling this function. That is the state in which a
+/// regression ships. This test closes it: it can always run, so the rule is
+/// always exercised.
+///
+/// For the same reason the three router tests' "unconfigured, treat as a
+/// pass" escape is counted: if they all skip here, that is visible in the
+/// run output rather than hidden in a green checkmark.
+#[test]
+fn the_redirect_uri_rule_is_exercised_without_any_provider_credentials() {
+    let app_url = "https://switchpost.example.com";
+    let callback = format!("{app_url}/api/auth/callback");
+
+    // 1. A JSON-quoted value round-tripped through serde_json is normalised,
+    //    not refused. This is the exact wire form the operator saw: Meta's
+    //    consent page rendered literal quotes and `\/` escapes.
+    let json_quoted = format!("{}", serde_json::to_string(&callback).unwrap());
+    assert_eq!(
+        switchpost::social::common::resolve_redirect_uri(Some(&json_quoted), app_url).unwrap(),
+        callback,
+        "the JSON-quoted form of our own callback was not normalised back to the \
+         callback, so the operator's connect request is refused even though it \
+         carried the right URI"
+    );
+
+    // 2. A doubly-quoted value (quoted twice by a caller that already
+    //    round-tripped it once) must be REFUSED, not accepted: one layer is
+    //    stripped, and what is left still carries its own quotes, so it is
+    //    neither the callback nor an absolute URL. A blanket unquote here
+    //    would accept a value the caller corrupted twice, and the operator's
+    //    connect would still fail - just at the provider instead of at the
+    //    door.
+    let double_quoted = serde_json::to_string(&json_quoted).unwrap();
+    assert!(
+        switchpost::social::common::resolve_redirect_uri(Some(&double_quoted), app_url).is_err(),
+        "a doubly-quoted redirect_uri was accepted. {double_quoted:?}"
+    );
+
+    // 3. A foreign host is an open redirect and must be refused.
+    for foreign in [
+        "https://evil.test/cb",
+        "https://switchpost.example.org/api/auth/callback",
+    ] {
+        assert!(
+            switchpost::social::common::resolve_redirect_uri(Some(foreign), app_url).is_err(),
+            "redirect_uri {foreign} was accepted; whoever controls the query string \
+             controls where the provider's authorization code goes"
+        );
+    }
+
+    // 4. Omitting it still yields the deployment's callback.
+    assert_eq!(
+        switchpost::social::common::resolve_redirect_uri(None, app_url).unwrap(),
+        callback
+    );
+
+    // 5. An empty or whitespace-only value means "no opinion" and uses the
+    //    deployment's callback - the same as omitting it. That is the desired
+    //    behaviour, not a hole: an empty query parameter is what a client that
+    //    zeroes a field sends, and refusing it would dead-end a caller who
+    //    meant the default.
+    for no_opinion in ["", "   ", "\t"] {
+        assert_eq!(
+            switchpost::social::common::resolve_redirect_uri(Some(no_opinion), app_url).unwrap(),
+            callback,
+            "an empty or whitespace redirect_uri ({no_opinion:?}) must be treated as \
+             'no opinion' and fall back to the deployment's callback, the same as \
+             omitting it. Refusing it would dead-end a caller who meant the default."
+        );
+    }
+
+    // 6. A value that is quoted-but-empty (what a caller who round-tripped an
+    //    empty string through serde_json sends) is a DIFFERENT case, and must
+    //    be refused: the quotes say "this is a real value" while the content
+    //    says "there is none". Falling back silently would let a broken
+    //    client's connect look like it worked.
+    for empty_but_quoted in ["\"\"", "\"   \""] {
+        let err = switchpost::social::common::resolve_redirect_uri(Some(empty_but_quoted), app_url)
+            .expect_err(&format!("redirect_uri {empty_but_quoted:?} was accepted"));
+        assert!(
+            err.contains("Omit"),
+            "the refusal for {empty_but_quoted:?} must name the recovery, so the \
+             caller knows to leave the parameter out. Got: {err}"
+        );
+    }
+
+    // 7. A trailing-slash base must not produce a double slash.
+    assert_eq!(
+        switchpost::social::common::resolve_redirect_uri(None, "https://switchpost.example.com/")
+            .unwrap(),
+        callback,
+        "an APP_URL with a trailing slash produced a doubled slash in the callback"
+    );
+}
+
 fn json_request(method: &str, uri: &str, body: Option<Value>) -> Request<Body> {
     let cookie = session_cookie();
     // The Origin must match the CSRF middleware's expected Frontend origin.
@@ -1038,6 +1169,7 @@ async fn a_caller_supplied_redirect_uri_is_validated_not_honoured() {
             .unwrap_or("")
             .contains("INSTAGRAM_CLIENT_ID")
         {
+            note_unconfigured("a_caller_supplied_redirect_uri_is_validated_not_honoured");
             return;
         }
         panic!(
@@ -1098,6 +1230,7 @@ async fn a_redirect_uri_pointing_at_another_host_is_refused() {
             let parsed = parse_json("connect foreign redirect_uri", status, &body);
             let msg = parsed.get("error").and_then(|e| e.as_str()).unwrap_or("");
             if msg.contains("INSTAGRAM_CLIENT_ID") {
+                note_unconfigured("a_redirect_uri_pointing_at_another_host_is_refused");
                 continue;
             }
         }
@@ -1142,6 +1275,7 @@ async fn omitting_redirect_uri_still_uses_the_deployed_callback() {
             .unwrap_or("")
             .contains("INSTAGRAM_CLIENT_ID")
         {
+            note_unconfigured("omitting_redirect_uri_still_uses_the_deployed_callback");
             return;
         }
     }
@@ -1173,8 +1307,11 @@ fn extract_authorize_url(status: StatusCode, body: &str) -> String {
         let parsed = parse_json("connect authorize url", status, body);
         let msg = parsed.get("error").and_then(|e| e.as_str()).unwrap_or("");
         if msg.contains("INSTAGRAM_CLIENT_ID") || msg.contains("credentials") {
-            // The provider is not configured here; the redirect_uri was still
-            // validated before the credentials check, so treat it as a pass.
+            // The provider is not configured here, so the connect request was
+            // refused at the credentials gate - which is BEFORE
+            // `redirect_uri` validation. Nothing about redirect_uri ran; say so
+            // instead of treating it as a pass.
+            note_unconfigured("extract_authorize_url");
             return String::new();
         }
     }
