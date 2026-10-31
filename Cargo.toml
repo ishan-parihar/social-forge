@@ -146,9 +146,6 @@ hex = "0.4"
 aes-gcm = "0.10"
 regex = "1"
 
-# SSE + async streaming
-async-stream = "0.3"
-
 # Config
 dotenvy = "0.15"
 

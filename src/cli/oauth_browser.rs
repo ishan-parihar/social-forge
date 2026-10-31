@@ -125,9 +125,8 @@ pub async fn drive_oauth_login(
             }
         )
     })?;
-    let oauth_state = extract_param(&redirect_url, "state").ok_or_else(|| {
-        anyhow!("The callback URL carried no `state` parameter: {redirect_url}")
-    })?;
+    let oauth_state = extract_param(&redirect_url, "state")
+        .ok_or_else(|| anyhow!("The callback URL carried no `state` parameter: {redirect_url}"))?;
 
     let exchange = crate::services::integrations::IntegrationService::complete_connect(
         &state.db,
@@ -143,7 +142,9 @@ pub async fn drive_oauth_login(
     // FAILURE matters too: a timeout used to leave the operator's browser
     // holding a consent tab for a login that is over. A failure to close
     // must not fail the login.
-    let _ = browser.call("tabs", json!({"action": "close", "page": page})).await;
+    let _ = browser
+        .call("tabs", json!({"action": "close", "page": page}))
+        .await;
 
     let integration = exchange.map_err(|e| anyhow!("OAuth exchange failed: {e}"))?;
 
@@ -161,8 +162,7 @@ async fn open_auth_page(browser: &mut Browser, auth_url: &str) -> Result<u32> {
         .call("tabs", json!({"action": "new", "url": auth_url}))
         .await?;
     let text = Browser::text(&result);
-    parse_page_id(&text)
-        .ok_or_else(|| anyhow!("browseros-neo did not report a page id: {text}"))
+    parse_page_id(&text).ok_or_else(|| anyhow!("browseros-neo did not report a page id: {text}"))
 }
 
 /// Wait until the browser lands on the OAuth callback with a `code`.
@@ -300,7 +300,11 @@ fn extract_param(url: &str, key: &str) -> Option<String> {
 /// browseros-neo lists every agent's tabs, and another agent's tab can
 /// be on the same callback URL. The `state` is unique per login, so it
 /// is what makes another agent's authorization code unreachable.
-fn find_matching_callback(urls: &[String], callback_prefix: &str, oauth_state: &str) -> Option<String> {
+fn find_matching_callback(
+    urls: &[String],
+    callback_prefix: &str,
+    oauth_state: &str,
+) -> Option<String> {
     urls.iter()
         .find(|url| {
             url.starts_with(callback_prefix)
@@ -309,37 +313,30 @@ fn find_matching_callback(urls: &[String], callback_prefix: &str, oauth_state: &
         .cloned()
 }
 
-/// Decode `%xx` escapes in a query value.
+/// Decode a query value: `%xx` escapes and `+` as space.
+///
+/// The `%xx` half is `urlencoding::decode`, which the crate was already a
+/// dependency for. Its docs are explicit that "unencoded `+` is preserved
+/// literally, and _not_ changed to a space" - so the crate alone is NOT a
+/// substitute for the loop this replaced, and swapping it in unchanged broke
+/// the existing test with `a b/c+d`. `+`-as-space is the
+/// `x-www-form-urlencoded` rule and this parses a query string, so it is
+/// applied first and the crate handles the escapes.
+///
+/// The hand-rolled loop was not wrong - its `i + 2 < bytes.len()` bound was
+/// the correct one for an escape at `i`, and the mutation run confirmed it:
+/// every input below decodes identically either way. It was 31 lines doing
+/// what a 3-line delegation does, which is the only reason it was cut.
+///
+/// A value that fails to decode comes back unchanged: this parses a callback
+/// URL a browser handed us, and a malformed escape should not lose the
+/// parameter. That fallback is the crate's own behaviour on the escape half,
+/// so it is one rule rather than two.
 fn percent_decode(value: &str) -> String {
-    let bytes = value.as_bytes();
-    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'%' if i + 2 < bytes.len() => {
-                let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
-                match u8::from_str_radix(hex, 16) {
-                    Ok(byte) => {
-                        out.push(byte);
-                        i += 3;
-                    }
-                    Err(_) => {
-                        out.push(bytes[i]);
-                        i += 1;
-                    }
-                }
-            }
-            b'+' => {
-                out.push(b' ');
-                i += 1;
-            }
-            byte => {
-                out.push(byte);
-                i += 1;
-            }
-        }
-    }
-    String::from_utf8_lossy(&out).into_owned()
+    let space_form = value.replace('+', " ");
+    urlencoding::decode(&space_form)
+        .map(|c| c.into_owned())
+        .unwrap_or(space_form)
 }
 
 /// Parse the page id out of browseros-neo's answer.
@@ -394,7 +391,10 @@ mod tests {
 
     #[test]
     fn page_id_is_parsed_from_the_opened_page_text() {
-        assert_eq!(parse_page_id("opened page 12\n[Page 12 snapshot]"), Some(12));
+        assert_eq!(
+            parse_page_id("opened page 12\n[Page 12 snapshot]"),
+            Some(12)
+        );
     }
 
     #[test]
@@ -420,6 +420,19 @@ mod tests {
     #[test]
     fn percent_escapes_are_decoded() {
         assert_eq!(percent_decode("a%20b%2Fc+d"), "a b/c d");
+    }
+
+    /// This is the assertion a bare `urlencoding::decode` fails: the crate's
+    /// own docs say "unencoded `+` is preserved literally, and _not_ changed to
+    /// a space", and swapping the delegation in without the `replace` first
+    /// had this test reading `a b/c+d`. `+`-as-space is the
+    /// `x-www-form-urlencoded` rule and this parses a query string.
+    #[test]
+    fn a_plus_still_means_space() {
+        assert_eq!(percent_decode("a+b"), "a b");
+        // And the two rules compose, rather than one being applied only when
+        // the other did not fire.
+        assert_eq!(percent_decode("a+b%2Dc"), "a b-c");
     }
 
     #[test]
@@ -449,7 +462,9 @@ Other agents' tabs:\n\
     fn tab_urls_are_parsed_from_the_text_format() {
         let urls = parse_tab_urls(TABS_TEXT);
         assert!(urls.contains(&"https://example.com/xyz?code=Q&state=S".to_string()));
-        assert!(urls.contains(&"https://localhost:6544/api/auth/callback?code=OURS&state=OURSTATE".to_string()));
+        assert!(urls.contains(
+            &"https://localhost:6544/api/auth/callback?code=OURS&state=OURSTATE".to_string()
+        ));
     }
 
     #[test]
@@ -503,7 +518,11 @@ Other agents' tabs:\n\
         let ours = "https://localhost:6544/api/auth/callback?code=OURS&state=OURSTATE";
         let theirs = "https://localhost:6544/api/auth/callback?code=THEIRS&state=THEIRS";
         let urls = vec![theirs.to_string(), ours.to_string()];
-        let found = find_matching_callback(&urls, "https://localhost:6544/api/auth/callback", "OURSTATE");
+        let found = find_matching_callback(
+            &urls,
+            "https://localhost:6544/api/auth/callback",
+            "OURSTATE",
+        );
         assert_eq!(found.as_deref(), Some(ours));
     }
 
@@ -516,9 +535,8 @@ Other agents' tabs:\n\
 
     #[test]
     fn a_callback_without_our_state_is_never_matched() {
-        let urls = vec![
-            "https://localhost:6544/api/auth/callback?code=THEIRS&state=THEIRS".to_string(),
-        ];
+        let urls =
+            vec!["https://localhost:6544/api/auth/callback?code=THEIRS&state=THEIRS".to_string()];
         assert!(find_matching_callback(
             &urls,
             "https://localhost:6544/api/auth/callback",

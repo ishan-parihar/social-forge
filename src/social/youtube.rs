@@ -6,7 +6,6 @@
 use async_trait::async_trait;
 
 use super::*;
-use super::common::extract_access_token;
 use crate::config::Config;
 
 /// Read one entry of a `commentThreads`/`replies.comments` list — both share
@@ -790,46 +789,15 @@ impl SocialProvider for YoutubeProvider {
         _code_verifier: &str,
         redirect_uri: &str,
     ) -> Result<AuthToken, ProviderError> {
-        let params: Vec<(&str, &str)> = vec![
-            ("code", code),
-            ("client_id", self.client_id.as_str()),
-            ("client_secret", self.client_secret.as_str()),
-            ("redirect_uri", redirect_uri),
-            ("grant_type", "authorization_code"),
-        ];
-
-        let resp = self
-            .http
-            .post("https://oauth2.googleapis.com/token")
-            .form(&params)
-            .send()
-            .await?;
-
-        let (access_token, json) = extract_access_token(resp, "youtube")
-            .await
-            .map_err(ProviderError::Auth)?;
-        let refresh_token = json["refresh_token"].as_str().map(String::from);
-        let expires_in = json["expires_in"].as_u64().map(|v| v as u32);
-
-        // Get user info
-        let user: serde_json::Value = self
-            .http
-            .get("https://www.googleapis.com/oauth2/v2/userinfo")
-            .header("Authorization", format!("Bearer {access_token}"))
-            .send()
-            .await?
-            .json()
-            .await?;
-
-        Ok(AuthToken {
-            access_token,
-            refresh_token,
-            expires_in,
-            provider_user_id: user["id"].as_str().unwrap_or("").to_string(),
-            name: user["name"].as_str().unwrap_or("").to_string(),
-            username: user["email"].as_str().unwrap_or("").to_string(),
-            picture: user["picture"].as_str().map(String::from),
-        })
+        super::google_oauth::exchange_code(
+            &self.http,
+            "youtube",
+            &self.client_id,
+            &self.client_secret,
+            code,
+            redirect_uri,
+        )
+        .await
     }
 
     async fn refresh_token(&self, refresh_token: &str) -> Result<AuthToken, ProviderError> {
