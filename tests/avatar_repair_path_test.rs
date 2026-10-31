@@ -63,6 +63,33 @@ const GOOGLE_FAMILY: &[&str] = &[
     "src/social/google_my_business.rs",
 ];
 
+/// A channel's face is not always the Google ACCOUNT's face.
+///
+/// Most of the family shows the account: the account's photo, from the
+/// one shared OpenID reader in `google_oauth::profile_picture`. Two
+/// members are legitimately different, and this test demands OpenID for
+/// them wrongly until it learned otherwise:
+///
+///  * `google` and `youtube` - a channel's face is the channel's own
+///    YouTube thumbnail from `youtube/v3/channels`. That is the right
+///    answer for that row, and the thumbnail is a bigger, better avatar
+///    than the account photo anyway. Demanding OpenID here is not a
+///    stricter version of the same rule, it is a DIFFERENT rule, and it
+///    fails working code.
+///  * `drive` - "who is this channel" IS the account, and it reads
+///    `user["picture"]` inline rather than through the shared helper.
+///    That is a real duplication the SECOND test in this file flags for
+///    having too many inline spellings of the endpoint; it is not a
+///    missing avatar. So this test must not fail on it, and it must
+///    still accept a photo coming from the account.
+///
+/// The default (absent from this table) is the shared OpenID reader.
+const PICTURE_SOURCE_OVERRIDES: &[(&str, &str)] = &[
+    ("src/social/google.rs", "item[\"snippet\"][\"thumbnails\"]"),
+    ("src/social/youtube.rs", "item[\"snippet\"][\"thumbnails\"]"),
+    ("src/social/drive.rs", "user[\"picture\"]"),
+];
+
 /// A provider that reads `user["picture"]` from Google userinfo must not
 /// hardcode `picture: None` on its success path.
 ///
@@ -72,6 +99,26 @@ const GOOGLE_FAMILY: &[&str] = &[
 /// `picture: user["picture"]`. The same provider answering "who is this
 /// channel" two different ways within one function is the defect, and no
 /// amount of reading the write path would have found it.
+///
+/// The check is NOT `fpi.contains("picture: None")`. That literal is what
+/// the pre-fix code happened to look like, and it is also the reason this
+/// test could not catch the same defect rewritten one line differently:
+/// binding the picture to a local (`let picture: Option<String> = None;`
+/// then `picture,`) makes the struct field say `picture` and the source
+/// still answer "no avatar, forever". Verified by mutation - that rewrite
+/// passed this test while the write was still broken.
+///
+/// So the invariant asserted here is what the SUCCESS ARM DOES: it must
+/// read the account's photo from SOME real source. But which source is
+/// per-provider and correct, and this test's first version got that wrong
+/// too - it demanded the OpenID reader for the whole family and flagged
+/// `google` (YouTube), whose channel's face is the YouTube channel
+/// thumbnail, not the Google account's avatar. Both were corrected by
+/// mutation rather than by reading; see
+/// `PICTURE_SOURCE_OVERRIDES`.
+///
+/// A provider that demonstrably has access to a photo and returns None
+/// anyway is the defect, whatever the spelling.
 #[test]
 fn a_google_provider_that_reads_the_accounts_picture_must_return_it() {
     let mut offenders = Vec::new();
@@ -86,13 +133,40 @@ fn a_google_provider_that_reads_the_accounts_picture_must_return_it() {
         let Some(fpi) = extract_fn(&src, "async fn fetch_page_info") else {
             continue;
         };
-        if fpi.contains("picture: None") {
+
+        // The success arm's shape, not its spelling. Take the branch that
+        // runs when the provider's own call worked - `if status.is_success()`
+        // where present, otherwise the whole body - and require it to reach
+        // a real reader. A literal `None` anywhere in that arm is the defect
+        // whether it lands in the struct literal or a local.
+        let success_arm = match fpi.find("if status.is_success()") {
+            Some(at) => fpi[at..].to_string(),
+            None => fpi.clone(),
+        };
+
+        // Which reader counts depends on whose face this is. The Google
+        // account's photo comes from the shared OpenID reader; a YouTube
+        // CHANNEL's face is the channel's own thumbnail, which is the right
+        // answer for that row and not a substitute to be standardised away.
+        let reader = PICTURE_SOURCE_OVERRIDES
+            .iter()
+            .find(|(p, _)| *p == *path)
+            .map(|(_, r)| *r)
+            .unwrap_or("profile_picture(");
+
+        let reaches_a_reader = success_arm.contains(reader);
+        let supplies_no_photo =
+            success_arm.contains("picture: None") || success_arm.contains("Option<String> = None");
+
+        if !reaches_a_reader || supplies_no_photo {
             offenders.push(format!(
                 "{path}: reads {GOOGLE_USERINFO}[\"picture\"] but its \
-                 fetch_page_info hardcodes `picture: None`. Refresh writes \
+                 fetch_page_info does not carry it. Refresh writes \
                  `profile_picture = COALESCE(?, profile_picture)`, so a row \
                  whose avatar was never captured can never gain one - the \
-                 only code that could supply it returns None for good."
+                 only code that could supply it never does. \
+                 (reaches_a_reader={reaches_a_reader}, \
+                 supplies_no_photo={supplies_no_photo})"
             ));
         }
     }
