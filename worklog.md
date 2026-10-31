@@ -3687,3 +3687,45 @@ Stage Summary:
   here in ten minutes; the whole of Phase 4 as originally scoped would have been spent rearranging a
   composer that was already correct.
 
+
+---
+Task ID: ui-parity-m1-pass2
+Agent: Jcode
+Task: Phase 4's five structural bullets, after the probe false positive was cleared (see the ui-parity-m1
+       entry above).
+
+Work Log:
+- Walked each bullet against the tree rather than implementing it from the plan's description. FOUR of the
+  five were already built or stated wrongly:
+  - the `<lg` preview tab already existed (`showPreviewMobile` swaps the pane to `block`/`hidden lg:block`)
+  - the composer's scrim was ALREADY `bg-overlay`, not `bg-overlay-strong` (`ModalManager.svelte:103`)
+  - `SelectCurrent` was ALREADY inside the editor column, directly above the Content Editor
+  - the remaining two were real defects
+- Measured the real ones. Footer: `document.querySelectorAll` counting buttons whose computed
+  `backgroundColor` is not transparent returned **2** at 1440, 768 AND 390 - `bg-success` green Post Now
+  and `bg-accent-fill` indigo Schedule, both claiming the same weight. Editor column: five cards stood
+  above the Content Editor.
+- Fix A (`cd2f9c2`): Schedule became the one filled primary; Post Now became the bordered secondary,
+  kept VISIBLE (the plan's chevron dropdown would bury it). Verified: 1 filled button at all three widths.
+- Fix B (`e2604b9`): Tags + Campaign merged into one labelled `Details` card; both controls verified
+  working in the browser (six tag chips, click sets `aria-pressed` and shows the tick; campaign select
+  keeps all four options). Gained a `<label for="composer-campaign">` the select never had.
+- MEASUREMENT TRAP, hit twice and worth writing down: the first contrast pass reported the dark palette
+  for a LIGHT-theme request. The theme is a class on `documentElement` applied by the store from
+  `localStorage`, so a context that never seeds it renders unthemed defaults. AGENTS.md 9.36 names this
+  exactly. Fixed by `addInitScript` on the store's own key plus a `waitForFunction` on the class.
+- Did NOT claim a contrast win. Checked the old pairing arithmetically: `bg-success` + `text-success-fg`
+  was already 7.25:1, because `success-fg` is the dark-on-green partner of the green fill. The footer
+  change is a hierarchy fix, and the commit says so.
+- Probed both routes after each change: FAIL 0.
+
+Stage Summary:
+- `02d340a` probe clip fix, `10dc9c3` plan note, `cd2f9c2` footer primary, `e2604b9` Details card. All
+  pushed to `github/master`.
+- Phase 4 (M-1) is now at: FAIL 0 across 27 routes, four bullets resolved as no-ops, two real defects
+  fixed and measured.
+- Recursed again on the same theme as the previous entry: THREE of the plan's five Phase-4 bullets
+  described work that was already done. The plan was written from a competitor analysis, not from this
+  tree. Reading the file before "fixing" it is cheaper than the fix.
+- Remaining, unowned: the composer's `color-sprawl` advisory - 24 distinct text colours on one surface.
+  That is the real remaining Phase-4 defect and it needs its own pass.

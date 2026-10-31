@@ -409,6 +409,51 @@ the connection, or pick another channel." + the provider's own detail).
 **Remaining in Phase 4**: the five structural changes above (tab swap, scrim, channel switch row,
 editor-column reorder, one footer primary) - untried, and each is a probe-driven pass of its own.
 
+**Second pass (2026-10-31, `cd2f9c2` + `e2604b9`, both pushed).** Walking the five bullets against the tree,
+four of them were already built or were the wrong shape:
+
+| Plan's bullet | Actual state | Action |
+|---|---|---|
+| "Preview is a footer toggle, unreachable at <lg" | `showPreviewMobile` already swaps the preview pane to `block` / `hidden lg:block`, full-width below `lg` | **no-op - already correct** |
+| "the scrim is `bg-overlay-strong`" | The composer already uses `bg-overlay` (`ModalManager.svelte:103`; `fullScreen` is false for it). `overlay-strong` stays for destructive confirmations | **no-op - already correct** |
+| "move the channel switch into the editor column" | `SelectCurrent` already sits inside the editor column, directly above the Content Editor card | **no-op - already correct** |
+| "editor reorder, body is not seventh" | Real: five cards stood above the body (Channel Selection, Posting Targets, Tags, Campaign, SelectCurrent) | **landed** - Tags + Campaign merged into one labelled `Details` card; headings above the body are now `Post to` and `Details` |
+| "footer: one filled primary" | Real: `bg-success` Post Now and `bg-accent-fill` Schedule, side by side, both filled | **landed** - Schedule is the one filled primary; Post Now is the bordered secondary. **One** filled button at 1440/768/390 |
+
+Two deliberate departures from the plan's wording, both recorded in the commits:
+
+- **Post Now stays visible** instead of moving behind the plan's chevron dropdown. Burying it costs a click on the
+action someone reaches for when they want something out immediately, and the failure mode of a hidden
+control is not "a slightly busy footer" but "I could not find it".
+- **Tags stays visible** instead of going behind a "more" disclosure. Same reasoning: one shared card keeps
+both a single tap away and costs one card of vertical space instead of two.
+
+Measured, both themes, after seeding the theme through the store's own `localStorage` key and waiting for the
+class on `documentElement` (AGENTS.md 9.36: the first measurement pass reported the dark palette for a
+light-theme request and was worthless):
+
+```
+Post Now (bordered secondary)   15.25:1 dark   14.63:1 light
+Schedule (the one primary)        4.56:1 dark    6.29:1 light
+```
+
+Honest note on contrast: the old `bg-success` + `text-success-fg` pairing was already compliant (7.25:1 in
+dark), because `success-fg` pairs dark text with the green fill. The footer change is a **hierarchy** fix,
+not a contrast rescue - stated that way in the commit so nobody reads it as the latter.
+
+Also gained from the merge: the campaign `<select>` had **no `<label>`**; it now has
+`<label for="composer-campaign">`.
+
+Gate results: `pnpm build` ok; `svelte-check --threshold error` 0 errors 0 warnings; `cargo build --release`
+ok with the binary restarted so the rust-embedded assets are the new build (AGENTS.md 9.53); probe
+**FAIL 0** over 27 routes and again over `/posts/new`,`/posts` at 1440/768/375/360 x dark/light. The 216
+WARNs are unchanged and pre-existing (104 `/tags` swatches, 112 `/calendar` tap targets in the 24-44px
+WCAG 2.2 advisory band), plus one composer `color-sprawl` advisory (24 distinct text colours).
+
+**Still out of scope, untouched and unmeasured:** that `color-sprawl` advisory. It is the composer's real
+remaining defect and the only Phase-4 item that needs a named owner - 24 text colours on one surface
+is a type-system failure, not a visual-density one.
+
 ### Phase 5. The channel rail (R-1, R-2)
 
 **Files**: new `frontend/src/lib/channels/ChannelRail.svelte`; `frontend/src/routes/+layout.svelte` (the 80px rail); `frontend/src/lib/api/integrations.ts` (a reconnect action if absent).
