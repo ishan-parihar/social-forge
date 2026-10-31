@@ -552,13 +552,47 @@ ${CONTRAST_CORE}
   // Past a point the type system stops being a system. These are advisory:
   // a dense dashboard legitimately carries more sizes than a landing page.
   const sizes = new Set(textNodes.map((n) => Math.round(parseFloat(getComputedStyle(n.el).fontSize))));
-  const colors = new Set(textNodes.map((n) => getComputedStyle(n.el).color));
   if (sizes.size > 16) {
     warns.push({
       check: 'type-sprawl',
       detail: \`\${sizes.size} distinct font sizes (\${[...sizes].sort((a, b) => a - b).join(', ')})\`,
     });
   }
+  // INLINE-STYLED colours are EXCLUDED from the count, and this is the
+  // difference between an advisory that means something and one that does
+  // not. A tag or campaign chip paints an inline style computing its ink
+  // from the operator's chosen hex, against that chip's own fill,
+  // precisely because the hue is the operator's choice and its luminance is
+  // not the app's to control (frontend/src/lib/chip-colors.ts argues this
+  // at length, and correctly).
+  //
+  // Counting those against the app's palette reported 23 distinct text
+  // colours on the composer - 20 of them one swatch each, from six tags.
+  // The advisory was measuring the operator's colour input, not the type
+  // system, so it could never name a real defect.
+  //
+  // The metric now counts the app's OWN text colours - what a stylesheet
+  // assigns. The composer is four of them (content, muted, faint, error)
+  // plus the accent-fg on its one filled button. That IS a system. A page
+  // whose source genuinely assigns more than 16 is not, and is still
+  // reported.
+  //
+  // The one inline colour that SHOULD count - a hardcoded literal in
+  // source - is caught by check-tailwind-classes.mjs and the hex gate in
+  // make check, which read the SOURCE rather than the rendered styles, so
+  // it cannot escape here.
+  //
+  // An inline colour counts only when the element sets it on ITSELF, so an
+  // inherited chip colour does not wrongly exempt the child's text.
+  //
+  // The inline literal that SHOULD count is caught by
+  // check-tailwind-classes.mjs, which reads the SOURCE, so this exemption
+  // is not a hole.
+  const colors = new Set(
+    textNodes
+      .filter((n) => !n.el.style || !n.el.style.color)
+      .map((n) => getComputedStyle(n.el).color)
+  );
   if (colors.size > 16) {
     warns.push({
       check: 'color-sprawl',
