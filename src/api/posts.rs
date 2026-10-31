@@ -25,6 +25,21 @@ use super::AppState;
 pub struct PostOverride {
     pub content: Option<String>,
     pub settings: Option<serde_json::Value>,
+    /// The channel's own schedule, when the founder wants one post to go
+    /// out at different times per channel.
+    ///
+    /// Phase 6 of the UI parity plan (per-channel date and target view). The
+    /// top-level `scheduled_at` applies to EVERY integration on the post; a
+    /// founder scheduling 09:00 for X and 17:00 for LinkedIn had no way to
+    /// say so, because one post carried one time.
+    ///
+    /// This is an OVERRIDE in the same sense the content is: absent means
+    /// "use the post's shared time", present means "this channel is
+    /// different". A NULL here therefore means KEEP, not CLEAR - which is the
+    /// same three-state reasoning as `Option<Option<T>>` elsewhere
+    /// (AGENTS.md 9.12): the partial-update path must not be able to erase
+    /// the shared schedule by sending an empty object.
+    pub scheduled_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -607,6 +622,20 @@ pub async fn create(
                 .get(&id.to_string())
                 .and_then(|o| o.settings.clone())
                 .unwrap_or_else(|| settings.clone());
+            // This channel's OWN time, falling back to the post's shared
+            // time - and to NO time, so an override with an absent or
+            // unparseable `scheduled_at` behaves exactly as it did before
+            // this field existed rather than failing the whole request.
+            //
+            // The scheduler reads a post's `scheduled_at` column, so this
+            // is what actually makes 09:00-for-X and 17:00-for-LinkedIn
+            // publish at those times: each row carries its own.
+            let post_scheduled_at = overrides
+                .get(&id.to_string())
+                .and_then(|o| o.scheduled_at.as_deref())
+                .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&Utc))
+                .or(scheduled_at);
             let post = queries::create_post(
                 &state.db,
                 auth.user_id,
@@ -615,7 +644,7 @@ pub async fn create(
                 body.title.as_deref(),
                 &media,
                 &post_settings,
-                scheduled_at,
+                post_scheduled_at,
                 state_enum.clone(),
                 body.first_comment.as_deref(),
                 body.sequence.unwrap_or(0),
@@ -969,6 +998,15 @@ pub(crate) async fn update_post(
                             k.clone(),
                             PostOverride {
                                 content: v.content.clone(),
+                                // The channel's own schedule is returned so
+                                // the composer's edit flow can RESTORE it.
+                                // AGENTS.md 9.29: the edit path used to send
+                                // `settings: {}` and the write REPLACED them,
+                                // so opening a scheduled post to fix a typo
+                                // deleted the target. The same shape applies
+                                // here - if the composer cannot read back a
+                                // per-channel time, the first edit erases it.
+                                scheduled_at: v.scheduled_at.clone(),
                                 // The override's settings MERGED over the
                                 // post's, exactly as the write does.
                                 //

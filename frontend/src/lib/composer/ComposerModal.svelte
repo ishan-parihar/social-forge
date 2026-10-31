@@ -73,6 +73,10 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
   import { signaturesApi } from '$lib/api/signatures';
   import { setProviderCharLimits } from '$lib/providers';
   import { wallClockToUtc } from '$lib/composer/wall-clock';
+  // `formatDateTime` for the per-channel schedule list - the app's one
+  // formatter, so the composer does not add a second way to render a time
+  // (AGENTS.md 9.17/9.30: never `new Date(...)` in calendar code).
+  import { formatDateTime } from '$lib/calendar/utils';
   import { timezone } from '$lib/stores/timezone.svelte';
 
   // Props passed by ModalManager (it injects a `close` function).
@@ -130,12 +134,66 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
   // The schedule as it was when the post was loaded. A save compares
   // against this to know whether the user actually changed the schedule.
   let originalScheduledAt = $state<string | null>(null);
+  // Phase 6 (per-channel date and target view): each channel's OWN schedule,
+  // keyed by integration id, alongside `providerOverride` which already
+  // carries each channel's own body.
+  //
+  // The map holds only the channels the founder actually DIVERGED on. A
+  // channel absent from it uses the shared `scheduledAt`, which is what
+  // makes the default behaviour unchanged: one post to two channels with no
+  // per-channel edits still publishes both at the shared time.
+  let channelSchedule = $state<Map<string, string>>(new Map());
   let recurring = $state<{ intervalDays: number; endDate: string } | null>(null);
   let selectedTagIds = $state<string[]>([]);
+  // Phase 6: write the schedule the picker is showing. In the global view
+  // that is the shared time (unchanged behaviour); in a channel's view it is
+  // that channel's own time.
+  //
+  // Clearing to null in a channel's view DELETES the channel's divergence
+  // rather than writing a null time - a channel with no stored time is a
+  // channel that follows the shared schedule, which is the semantics the API
+  // and the payload both read.
+  function setScheduleInView(iso: string | null) {
+    if (editingMode === 'global') {
+      scheduledAt = iso;
+      return;
+    }
+    const intId = editingMode.split(':')[1];
+    if (iso) {
+      channelSchedule.set(intId, iso);
+      channelSchedule = new Map(channelSchedule);
+    } else {
+      channelSchedule.delete(intId);
+      channelSchedule = new Map(channelSchedule);
+    }
+  }
+
+  // Phase 6: drop one channel's own time so it follows the shared schedule
+  // again. This is the UNDO for "I set 09:00 for X and I cannot remember
+  // why" - a divergence with no visible way back is a setting that traps
+  // the founder (AGENTS.md 9.28).
+  function clearChannelSchedule(intId: string) {
+    channelSchedule.delete(intId);
+    channelSchedule = new Map(channelSchedule);
+  }
+
   // Phase 8: campaign selector in composer.
   let allCampaigns = $state<Campaign[]>([]);
   let selectedCampaignId = $state<string | null>(null);
   let editingMode = $state<string>('global');
+  // The schedule in view: the channel being edited, or the shared one for
+  // the global view. Declared after `editingMode` because it reads it.
+  //
+  // This is what ONE SchedulePicker renders, and it is why the picker does
+  // not need to become one-per-channel: switching to a channel's tab makes
+  // the same picker show that channel's time.
+  const scheduleInView = $derived(
+    editingMode !== 'global'
+      ? (channelSchedule.get(editingMode.split(':')[1]) ?? scheduledAt)
+      : scheduledAt
+  );
+  // Which channels have a time of their own.
+  const divergedSchedules = $derived(new Set(channelSchedule.keys()));
   let submitting = $state(false);
   let error = $state<string | null>(null);
   let firstComment = $state('');
@@ -474,6 +532,16 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
             mediaItems = d.mediaItems;
           }
           if (Array.isArray(d.selectedTagIds)) selectedTagIds = d.selectedTagIds;
+          // Phase 6: restore the per-channel times. The save writes them as
+          // a plain object (a Map does not survive JSON); rebuilding the
+          // Map here is what makes a custom 17:00 for Reddit stay custom
+          // across a reload. Without this the divergence is gone and the
+          // founder re-does it without ever knowing it was lost.
+          if (d.channelSchedule && typeof d.channelSchedule === 'object') {
+            channelSchedule = new Map(
+              Object.entries(d.channelSchedule).filter(([, v]) => typeof v === 'string') as [string, string][]
+            );
+          }
         } catch {}
       }
     }
@@ -595,7 +663,7 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
     // effect never re-ran, so the draft was NEVER written - and the
     // image and the tags were gone on reload, while the UI said
     // "Autosave on".
-    const _ = [content, title, selectedIntegrations, scheduledAt, firstComment, mediaItems, selectedTagIds];
+    const _ = [content, title, selectedIntegrations, scheduledAt, firstComment, mediaItems, selectedTagIds, channelSchedule];
     clearTimeout(draftTimer);
     // A DRAFT may carry media and no words: a photo with no caption is
     // legal, and the server's own emptiness rule is
@@ -611,6 +679,12 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
         content, title, selectedIntegrations, scheduledAt, firstComment,
         mediaItems, selectedTagIds,
+        // Phase 6: the per-channel times are the SHAPE the bug in this
+        // family always takes - a field the save writes, or a field the
+        // restore never reads. Both halves are here, or a custom 17:00 for
+        // Reddit silently reverts to the shared time on reload while the
+        // UI said "Autosave on".
+        channelSchedule: Object.fromEntries(channelSchedule),
       }));
       draftState = 'saved';
       // Back to idle (autosave armed) so the indicator does not lie about a
@@ -626,6 +700,12 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
         content, title, selectedIntegrations, scheduledAt, firstComment,
         mediaItems, selectedTagIds,
+        // Phase 6: the per-channel times are the SHAPE the bug in this
+        // family always takes - a field the save writes, or a field the
+        // restore never reads. Both halves are here, or a custom 17:00 for
+        // Reddit silently reverts to the shared time on reload while the
+        // UI said "Autosave on".
+        channelSchedule: Object.fromEntries(channelSchedule),
       }));
       draftState = 'saved';
       clearTimeout(draftTimer);
@@ -713,11 +793,24 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
   }
 
   function buildPayload() {
-    const overridesObj: Record<string, { content?: string; settings?: Record<string, unknown> }> = {};
+    const overridesObj: Record<string, { content?: string; settings?: Record<string, unknown>; scheduled_at?: string | null }> = {};
     for (const [id, text] of providerOverride) {
       if (text && text !== content) {
         overridesObj[id] = { content: text };
       }
+    }
+
+    // Phase 6: the per-channel times ride in the SAME overrides map. The API
+    // takes the override branch only when `overrides` is present, so this is
+    // also what makes a per-channel schedule reach the create path at all -
+    // a divergence with no entry here would be silently dropped.
+    //
+    // Only the channels that DIVERGED are written. Every other channel keeps
+    // the shared `scheduled_at`, which is the whole point: a post to four
+    // channels with one custom time is three shared rows and one custom row.
+    for (const [id, iso] of channelSchedule) {
+      if (!overridesObj[id]) overridesObj[id] = {};
+      overridesObj[id].scheduled_at = iso;
     }
 
     // Per-integration PROVIDER settings.
@@ -1198,7 +1291,27 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
         composer.close();
         toast('Draft updated', 'success');
       } else {
-        const r = await postsApi.create({ ...payload, scheduled_at: undefined });
+        // A DRAFT has no schedule, in BOTH places. The shared
+        // `scheduled_at` was already stripped here; Phase 6's per-channel
+        // times were not, so "Save as Draft" on a post whose Reddit copy
+        // was set for 17:00 produced a row that was still QUEUED for 17:00
+        // - the composer said "Draft saved" and the calendar still showed
+        // a scheduled post.
+        //
+        // The channel overrides are kept for content and settings (the
+        // Reddit subreddit and the title live there), so only the time is
+        // dropped - the same three-state read as everywhere else: no
+        // `scheduled_at` in the override means "follow the post", and a
+        // draft's post has no time.
+        const draftOverrides: typeof payload.overrides = payload.overrides
+          ? Object.fromEntries(
+              Object.entries(payload.overrides).map(([k, v]) => {
+                const { scheduled_at: _drop, ...rest } = v;
+                return [k, rest];
+              })
+            )
+          : undefined;
+        const r = await postsApi.create({ ...payload, scheduled_at: undefined, overrides: draftOverrides });
         if (r.error) { error = r.error; return; }
         localStorage.removeItem(DRAFT_KEY);
         composer.close();
@@ -1691,14 +1804,50 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
 
         <!-- Schedule -->
         <div class="bg-surface border border-line rounded-xl p-4">
-          <h3 class="text-sm font-semibold mb-3">Schedule</h3>
+          <h3 class="text-sm font-semibold mb-3">
+            {#if editingMode === 'global'}
+              Schedule
+            {:else}
+              Schedule for {integrationNames.get(editingMode.split(':')[1]) || 'this channel'}
+              {#if channelSchedule.has(editingMode.split(':')[1])}
+                <span class="text-xs font-normal text-accent ml-1">custom</span>
+              {/if}
+            {/if}
+          </h3>
+          <!-- Phase 6: ONE picker, reading the schedule IN VIEW. When the
+               founder switches to a channel's tab the picker shows THAT
+               channel's time (or the shared one when the channel has not
+               diverged), and changing it writes that channel's own time.
+               Nothing here knows whether the channel diverged before -
+               the `scheduleInView` derived resolves it.
+
+               The resolve button still sends the FIRST integration, which
+               is the shared behaviour and is unchanged. -->
           <SchedulePicker
-            {scheduledAt}
-            onChange={(iso: string | null) => scheduledAt = iso}
+            scheduledAt={scheduleInView}
+            onChange={(iso: string | null) => setScheduleInView(iso)}
             {recurring}
             onRecurringChange={(r: { intervalDays: number; endDate: string } | null) => recurring = r}
-            integrationId={selectedIntegrations[0]}
+            integrationId={editingMode !== 'global' ? editingMode.split(':')[1] : selectedIntegrations[0]}
           />
+          {#if divergedSchedules.size > 0}
+            <!-- The per-channel times, and how to undo one. A founder who
+                 set 09:00 for X six minutes ago and cannot see WHY the
+                 preview says 17:00 has to be able to find it. -->
+            <div class="mt-3 pt-3 border-t border-line space-y-1">
+              {#each selectedIntegrations as intId (intId)}
+                {#if channelSchedule.has(intId)}
+                  <div class="flex items-center justify-between gap-2 text-xs">
+                    <span class="text-muted truncate">{integrationNames.get(intId) || 'channel'} — {formatDateTime(channelSchedule.get(intId)!)}</span>
+                    <button
+                      onclick={() => clearChannelSchedule(intId)}
+                      class="text-accent hover:underline min-h-11 px-2 shrink-0"
+                    >Use shared</button>
+                  </div>
+                {/if}
+              {/each}
+            </div>
+          {/if}
         </div>
 
         <!-- Post Sets -->

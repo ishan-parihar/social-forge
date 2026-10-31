@@ -1,6 +1,26 @@
 import { api } from './client';
 import type { Tag } from './tags';
 
+/**
+ * A per-channel override, keyed by integration id.
+ *
+ * `scheduled_at` arrived with Phase 6 of the UI parity plan. The top-level
+ * `scheduled_at` applies to EVERY channel on the post, so a founder who
+ * wanted 09:00 for X and 17:00 for LinkedIn had no way to say so. Each
+ * override now carries its own time, which the API stores on that
+ * channel's OWN post row - and the scheduler reads that row's column,
+ * so the two times are what actually publish.
+ *
+ * An absent `scheduled_at` means "use the post's shared time". This is the
+ * same three-state reasoning as a partial update (AGENTS.md 9.12): the
+ * EDIT flow must send back what it read, or the first edit erases it.
+ */
+export interface PostOverride {
+  content?: string;
+  settings?: Record<string, unknown>;
+  scheduled_at?: string | null;
+}
+
 export interface PostSummary {
   id: string; integration_id?: string; integration_name: string;
   /**
