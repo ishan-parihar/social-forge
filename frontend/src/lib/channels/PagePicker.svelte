@@ -45,25 +45,46 @@
     selected = next;
   }
 
+  // A multi-page batch must not stop at the first failure. The
+  // `break` this replaces silently abandoned every page after the one
+  // that failed: the founder selected five pages, the second was refused
+  // (a permission, a page already deleted upstream, a rate limit), and
+  // the modal reported only that one while the three after it were never
+  // attempted - so they stayed unconnected with no signal at all. The
+  // founder's next move would be to reopen the picker and retry the
+  // whole selection, including the pages that had already landed.
+  //
+  // Continue the batch, count the successes, and report the failures
+  // together. A partial success is still a success for the channels that
+  // connected, so the list is refreshed either way.
   async function connectSelected() {
     if (selected.size === 0) return;
     connecting = true;
     errorMsg = "";
     connectedCount = 0;
     const toConnect = [...selected];
+    const failures: string[] = [];
     for (const pageId of toConnect) {
       const r = await integrationsApi.connectPage(integrationId, pageId);
       if (r.error) {
-        errorMsg = `Failed to connect ${pageId}: ${r.error}`;
-        break;
+        failures.push(`${pageId} (${r.error})`);
+        continue;
       }
       connectedCount++;
     }
     connecting = false;
-    if (!errorMsg) {
-      selected = new Set();
-      onSuccess?.();
+    if (failures.length > 0) {
+      const prefix =
+        failures.length === toConnect.length
+          ? "Failed to connect"
+          : `Connected ${connectedCount} of ${toConnect.length}; failed to connect`;
+      errorMsg = `${prefix} ${failures.join(", ")}`;
     }
+    // Refresh the list whichever way it went: the pages that DID connect
+    // are connected, and a picker still showing them as selectable would
+    // offer to connect them again.
+    selected = new Set();
+    onSuccess?.();
   }
 
   function handleClose() {
