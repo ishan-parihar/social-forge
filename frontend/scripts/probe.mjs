@@ -329,6 +329,50 @@ ${CONTRAST_CORE}
     return false;
   }
 
+  // Clip a box to every ancestor that actually clips it. An element inside
+  // a scroller, an "overflow: hidden" box or a collapsed panel has a rect far
+  // larger than the pixels it paints: the composer signature sat at
+  // y=731..955 in a 900px viewport while .rich-editor clipped it at 785, so
+  // 170px of phantom rect overlapped the footer buttons it never reached.
+  // elementFromPoint proved the buttons were still the top hit-targets there - a
+  // painting difference, not a layout one. Without this the probe reports
+  // FAILs the visitor can never see.
+  //
+  // A scroller clips to its padding box: from cr.top down clientHeight.
+  // Content scrolled out above or below still reports its un-scrolled layout
+  // rect, so clipping to the scroller's own visible band is enough - the
+  // band itself already sits where the browser painted it.
+  function clippedRect(el) {
+    const r = el.getBoundingClientRect();
+    let left = r.left, top = r.top, right = r.right, bottom = r.bottom;
+    let node = el.parentElement;
+    while (node && node !== document.documentElement) {
+      const cs = getComputedStyle(node);
+      const clipY = cs.overflowY !== 'visible';
+      const clipX = cs.overflowX !== 'visible';
+      if (clipY || clipX) {
+        const cr = node.getBoundingClientRect();
+        if (clipY) {
+          top = Math.max(top, cr.top);
+          bottom = Math.min(bottom, cr.top + node.clientHeight);
+        }
+        if (clipX) {
+          left = Math.max(left, cr.left);
+          right = Math.min(right, cr.left + node.clientWidth);
+        }
+      }
+      node = node.parentElement;
+    }
+    // Finally, nothing paints outside the viewport.
+    left = Math.max(left, 0);
+    top = Math.max(top, 0);
+    right = Math.min(right, window.innerWidth);
+    bottom = Math.min(bottom, window.innerHeight);
+    const width = right - left;
+    const height = bottom - top;
+    return { left, top, right, bottom, width, height };
+  }
+
   const textBoxes = Array.from(document.querySelectorAll('*'))
     .filter((el) => {
       if (isVisuallyOccluded(el)) return false;
@@ -341,17 +385,9 @@ ${CONTRAST_CORE}
         (n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim().length > 0
       );
     })
-    .map((el) => ({ el, r: el.getBoundingClientRect() }))
+    .map((el) => ({ el, r: clippedRect(el) }))
     .filter((b) => b.r.width > 0 && b.r.height > 0)
-    // Only text the visitor can actually see. A box scrolled out of the
-    // viewport still has a rectangle, and it still overlaps the boxes that
-    // ARE on screen - which is how a modal opening over a long page
-    // reported the page's own content as overlapping the modal's text.
-    .filter((b) => {
-      const vh = window.innerHeight;
-      const vw = window.innerWidth;
-      return b.r.bottom > 0 && b.r.top < vh && b.r.right > 0 && b.r.left < vw;
-    });
+    .filter((b) => b.r.width > 0 && b.r.height > 0)
 
   for (let i = 0; i < textBoxes.length; i++) {
     for (let j = i + 1; j < textBoxes.length; j++) {
