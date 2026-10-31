@@ -3501,3 +3501,27 @@ Stage Summary:
   end-to-end against a provider that actually supplies an avatar, and
   the x-cookie avatar path is blocked on credentials. The profile_name
   fix IS end-to-end verified (HTTP 200 -> read the row back).
+
+---
+Task ID: v27-failure-census
+Agent: Jcode
+Task: reconcile the full `cargo test --no-fail-fast` failure count, which is
+  now 2 binaries and not 1
+
+Findings:
+- `surface_docs_audit` (4/4 FAILED): unchanged, pre-existing, and known. It
+  reads `providers.md`, a path that no longer exists at the tree root.
+- `x_transport_test::test_x_headers_bisect` (1/4 FAILED): NOT previously
+  recorded, so it is worth a note rather than a shrug. It is a LIVE test
+  against the real X GraphQL API using plain `reqwest`, with real
+  `X_AUTH_TOKEN`/`X_CT0` from `.env`.
+  Verified environmental, not a code defect: `curl https://x.com` returns
+  200 from this machine, while `curl` on that same GraphQL URL returns 403
+  - X blocks non-Chrome TLS fingerprints, which is the entire reason the
+  repo pins `wreq` with Chrome fingerprinting for its real X path. A test
+  that drives the same API with the client that gets blocked will fail
+  wherever the fingerprint is rejected. None of my commits touch X
+  transport, header handling, or `wreq`.
+- So the honest count is 2 failing binaries, both environmental/pre-existing,
+  and neither is a regression from this cycle's work. 541/541 lib, and all
+  six binaries this cycle touched are green.
