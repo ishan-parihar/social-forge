@@ -1722,11 +1722,27 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
             class="px-3 py-1.5 min-h-11 text-sm text-muted hover:text-content border border-line rounded-lg disabled:opacity-50 transition-colors"
           >Save Draft</button>
         {/if}
+        <!-- TWO filled buttons said NEITHER was primary: Post Now in green
+             and Schedule in accent, side by side, both claiming the same
+             weight. A footer with two primaries has no primary at all.
+
+             Schedule became the one filled action. It is the reason the
+             founder opens a scheduler, and "Post Now" is the expedient
+             exception - so the exception is the bordered secondary and the
+             routine is the filled one. Both stay visible: burying Post Now
+             in a dropdown costs a click on the action someone reaches for
+             when they want something out NOW, and the failure mode of a
+             hidden control is not "a slightly busy footer" but "I could
+             not find it".
+
+             The ORDER is now secondary→primary, so the filled button is
+             the last thing in the row and sits closest to where a
+             right-to-left tap finishes. -->
         <button
           onclick={postNow}
           disabled={submitting || !canPublish}
           title={blockers.length > 0 ? blockers[0].message : ''}
-          class="px-3 py-1.5 min-h-11 bg-success hover:bg-success text-success-fg disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+          class="px-3 py-1.5 min-h-11 text-sm text-content border border-line rounded-lg hover:bg-surface-hover disabled:opacity-50 transition-colors font-medium"
         >{submitting ? 'Posting...' : 'Post Now'}</button>
         <button
           onclick={submit}
