@@ -3525,3 +3525,61 @@ Findings:
 - So the honest count is 2 failing binaries, both environmental/pre-existing,
   and neither is a regression from this cycle's work. 541/541 lib, and all
   six binaries this cycle touched are green.
+
+---
+Task ID: v28-connect-page-ordering
+Agent: Jcode
+Task: validate the connect_page idempotency fix by reading its own claim rather
+  than trusting the test that covers it
+
+Findings:
+- The fix's comment and its covering test's comment both claimed a repeat
+  connect survives a provider outage. Neither was true of the code:
+  `pages()` was called UNCONDITIONALLY, after the lookup and before the
+  `if let Some(id)` branch. The claim was true of the ordering and false of
+  the handler.
+
+- WHY the covering test never caught it, which is the transferable part:
+  `google`'s `pages()` answers an EMPTY LIST for a bad token rather than an
+  error, because the YouTube endpoint returns a JSON body with no `items`
+  and the reader maps that to zero pages. The call that was supposed to
+  fail during an outage silently succeeded. A test asserting prose, sitting
+  beside a provider whose failure mode cannot be triggered from CI, is a
+  test that cannot fail.
+
+- Fixed by gating the fetch (`if already_connected.is_some() { Vec::new() }`
+  else the provider call). First connect is unchanged: the `ok_or_else`
+  below the branch still requires the page.
+
+- Live before/after, with pages() pointed at an unroutable host:
+  pre-fix HTTP 502 "Failed to list pages: Network error"; post-fix HTTP
+  200 with the profile name intact and one row (no duplicate). The
+  recovery path was closed precisely when it was needed - a retry after a
+  connect failed halfway failed on the same broken path.
+
+- New test `a_repeat_connect_does_not_fetch_pages_from_the_provider`.
+  Mutation-proven in the way that matters: reverting to the pre-fix shape
+  (fetch unconditionally, then discard on the repeat path so the
+  observable behaviour is otherwise identical) turns it RED while all 21
+  other tests in the binary stay GREEN. That is the shape of a defect
+  surviving a green suite.
+
+- Also checked, and deliberately NOT changed: `onboard.rs:617` and
+  `integrations.rs:71` check credentials before validating `redirect_uri`.
+  Reordering would trade an accurate, actionable error ("set these env
+  vars") for a less useful one, because an unconfigured provider cannot
+  connect at all. The real gap was that the rule could go unexercised,
+  and commit b310b18's direct test closes that. The MCP call site has no
+  credentials gate before validation, so it has no such issue.
+
+Stage Summary:
+- Commit 8e34926 pushed. One more live-proven defect fixed, found by
+  reading the fix's own claim instead of its test.
+- Frontend: `pnpm build` succeeds, `svelte-check` 0 errors.
+- Full suite green except the two documented environmental failures
+  (`surface_docs_audit`, `x_transport_test::test_x_headers_bisect`).
+- Total this cycle: 4 fixes to defects found while RE-VALIDATING earlier
+  work (profile_name wipe, redirect_uri test-honesty, stale doc naming a
+  removed error, and this one), 3 of my own tests caught passing their own
+  mutations, and every claim re-proven by a before/after on a live server
+  or a mutation that compiles.
