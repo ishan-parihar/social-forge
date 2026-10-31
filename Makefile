@@ -119,16 +119,33 @@ audit:
 	cd frontend && node scripts/probe.mjs --url $(URL) --password '$(PASSWORD)' --routes /calendar --state 'Month' --out /tmp/sf-probe-month
 	cd frontend && node scripts/probe.mjs --url $(URL) --password '$(PASSWORD)' --routes /calendar --state 'List' --out /tmp/sf-probe-list
 	cd frontend && node scripts/probe.mjs --url $(URL) --password '$(PASSWORD)' --routes /calendar --state 'Day' --out /tmp/sf-probe-day
+	# The COMPOSER, open over the calendar (Phase 7 / M-1).
+	#
+	# This pass is why the 6 signature-overlap FAILs were found at all: the
+	# composer is a state the main route probe never enters, because
+	# /posts/new redirects to /posts and the dialog only stays open while
+	# the founder is in it. AGENTS.md 9.50 - a page measured only in its
+	# default state is a page whose other states are unchecked. The
+	# state-hunt walker reaches the composer's PANELS; this reaches the
+	# dialog itself, with the calendar behind it, which is what overlaps.
+	cd frontend && node scripts/probe.mjs --url $(URL) --password '$(PASSWORD)' --routes /calendar --state 'New Post' --out /tmp/sf-probe-composer
+	# Same route, second state: the preview tab open. Below lg the preview
+	# is a separate pane the footer toggle reveals (M-1) - MEASURED: the
+	# toggle changes the pane from display:none to block at 768 and 375,
+	# and at 1440 the button is lg:hidden with the pane already visible,
+	# so that width is a deliberate no-op rather than a surprise. The
+	# phone widths are the ones this pass exists for.
+	cd frontend && node scripts/probe.mjs --url $(URL) --password '$(PASSWORD)' --routes /calendar --state 'New Post,Preview' --out /tmp/sf-probe-composer-preview
 	# The login page, in its OWN logged-out pass: the layout guard
 	# redirects an authenticated visitor away from /login, so the main
 	# probe can never measure it. This is the page that greets the
 	# founder, and where the Unlock button's invisible text-white lived
 	# hand-patched rather than gate-covered (the 9.45 finding).
 	cd frontend && node scripts/probe.mjs --url $(URL) --password '$(PASSWORD)' --routes /login --logged-out --out /tmp/sf-probe-login
-	# Each pass writes ~20MB of screenshots; the audit runs five of them.
+	# Each pass writes ~20MB of screenshots; the audit runs seven of them.
 # This session hit EDQUOT on ~550MB of accumulated probe output and a
 # later run FAILED on write errors that looked like app failures.
-	rm -rf /tmp/sf-probe /tmp/sf-probe-month /tmp/sf-probe-list /tmp/sf-probe-day /tmp/sf-probe-login
+	rm -rf /tmp/sf-probe /tmp/sf-probe-month /tmp/sf-probe-list /tmp/sf-probe-day /tmp/sf-probe-login /tmp/sf-probe-composer /tmp/sf-probe-composer-preview
 
 # ── Deploy / Redeploy ───────────────────────────────────────────
 

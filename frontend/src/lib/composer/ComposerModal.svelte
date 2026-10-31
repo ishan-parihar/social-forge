@@ -1786,7 +1786,19 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
         <!-- F2: one frame per selected channel, each with the full post
              context (title, media, first comment, schedule, TikTok sound,
              Pinterest board) so the preview is frame-accurate rather than a
-             text-only approximation. -->
+             text-only approximation.
+
+             Phase 7: the preview gets `scheduleInView`, NOT the shared
+             `scheduledAt`, so the time shown on Reddit's tab is Reddit's
+             own time. It used to receive the shared value while the
+             component was already told which channel it was rendering - so
+             a founder on Reddit's tab with a custom 23:30 saw the shared
+             09:00 and had no way to tell the preview described someone
+             else's post. That is AGENTS.md 9.28's shape exactly: a value
+             the UI collects and then shows the WRONG one for.
+             `scheduleInView` already resolves this for the picker, and the
+             preview must use the SAME derivation - two rules for one
+             question is how they drift (9.18). -->
         <PlatformPreviewPane
           {content}
           overrides={providerOverride}
@@ -1797,7 +1809,7 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
           media={mediaItems}
           {title}
           {firstComment}
-          {scheduledAt}
+          scheduleFor={(id: string) => channelSchedule.get(id) ?? scheduledAt}
           audioTitle={selectedMusic?.title || ''}
           {targetNames}
         />

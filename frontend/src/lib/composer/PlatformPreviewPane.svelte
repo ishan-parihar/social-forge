@@ -38,6 +38,20 @@
     title = '',
     firstComment = '',
     scheduledAt = null as string | null,
+    /**
+     * Resolves the time ONE channel will actually publish at. The pane
+     * renders a frame per selected channel, and a channel with a
+     * per-channel override publishes at ITS OWN time - so a single
+     * `scheduledAt` cannot answer the question for every frame.
+     *
+     * MEASURED (2026-10-31): passing the shared time made every frame
+     * read the same value. Passing `scheduleInView` (the tab in view)
+     * made every frame read the TAB's value - so on Reddit's tab the X
+     * frame said 11:30 PM while X was still scheduled for 9:00 AM. Both
+     * are the one-prop-every-frame defect; the second is worse because it
+     * looks right.
+     */
+    scheduleFor = null as ((integrationId: string) => string | null) | null,
     audioTitle = '',
     targetNames = new Map<string, string>(),
   }: {
@@ -51,6 +65,7 @@
     title?: string;
     firstComment?: string;
     scheduledAt?: string | null;
+    scheduleFor?: ((integrationId: string) => string | null) | null;
     audioTitle?: string;
     targetNames?: Map<string, string>;
   } = $props();
@@ -60,7 +75,7 @@
   // the frame header still distinguishes them.
   let frames = $derived.by(() => {
     const seen = new Set<string>();
-    const out: Array<{ id: string; provider: string; label: string; name: string; body: string; focused: boolean }> = [];
+    const out: Array<{ id: string; provider: string; label: string; name: string; body: string; focused: boolean; when: string | null }> = [];
     for (const id of selectedIntegrations) {
       const provider = integrationProviders.get(id) || 'x';
       if (seen.has(provider)) continue;
@@ -74,6 +89,10 @@
         // to the global body is correct because that is also what it publishes.
         body: overrides.get(id) ?? content,
         focused: current === id,
+        // The time THIS channel will publish at: `scheduleFor` is the
+        // per-channel resolver, and the bare `scheduledAt` is the
+        // fallback for a caller with no divergence to express.
+        when: scheduleFor ? scheduleFor(id) : scheduledAt,
       });
     }
     return out;
@@ -147,7 +166,7 @@
               {title}
               {media}
               {firstComment}
-              {scheduledAt}
+              scheduledAt={f.when}
               timezone={timezone.value}
               {audioTitle}
               targetLabel={targetNames.get(f.id) || ''}
@@ -159,9 +178,9 @@
               {blocker}
             </p>
           {/if}
-          {#if scheduledAt}
+          {#if f.when}
             <p class="text-[11px] text-faint px-3 py-1.5 border-t border-line">
-              Publishes {timezone.formatDateTime(scheduledAt)}
+              Publishes {timezone.formatDateTime(f.when)}
               <span class="text-faint">({timezone.value})</span>
             </p>
           {/if}
