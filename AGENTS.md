@@ -176,6 +176,7 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `docs/SESSION_HOOKS.md` | Session-start ambient-context setup (AXI) | When wiring agent hooks |
 | `skills/switchpost-agent/SKILL.md` | Installed agent skill (via `make install-skill`) | When editing the skill |
 | `docs/planning/PHASES_P0-P9.md` | The P0–P9 phase plan the objective names: each phase's acceptance criteria and its register-row mapping | Before parity or phase work; when claiming a phase is done |
+| `docs/planning/OUTLINE_TOKEN_REFRESH.md` | The token auto-refresh audit: why a channel shows "needs reconnect" despite a good token (G-01 `linkedin`, G-02 `instagram_standalone` + `threads`), the pre-publish blast radius (G-05), and the sticky-flag policy question (G-03). Also records two false alarms disproved on evidence | Before touching any provider's `refresh_token`, or before adding a refresh retry policy |
 | `docs/planning/SESSION_2026-10-19.md` | Session self-reflection: what worked, every failure with its evidence, and the carry-forward checklist | Before a delegated or browser-driven session |
 | `skills/switchpost-agent/references/` | The skill's leaves: `platform-matrices.md` (read/engage/DM per platform), `recipes.md` (multi-step workflows), `mcp-catalogue.md` (all 389 tools + toolsets), `ops.md` (install/daemon/config) | When editing the skill; `make install-skill` installs them |
 
