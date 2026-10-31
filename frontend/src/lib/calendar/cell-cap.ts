@@ -11,10 +11,22 @@
  *
  * Why three and not two or five: a week cell is ~130px wide and the chip is
  * 24px tall, so three chips plus the disclosure row still fit inside the
- * grid's `min-h-[48px]` rows without pushing a row taller - which would push
- * every hour line below it out of alignment with its own label. Three is
- * also the most a person compares at a glance before they start reading.
- */
+ * grid's `min-h-[48px]` rows in the CAPPED state - which is the state a
+ * founder scans, and the only state they are in most of the time.
+ *
+ * MEASURED 2026-10-31 on the rendered week grid at 1440: a capped row is
+ * 165px with all eight cells at 164px. EXPANDING that cell does grow the
+ * row to 297px and pushes every row below it down by 132px - so the
+ * earlier claim here that expanding does not push a row taller was WRONG.
+ * What it does NOT do is desynchronise the grid: the row is a CSS grid and
+ * the hour label is the row's own first child, so all eight cells AND the
+ * label stretch together and stay aligned. An earlier comment here argued
+ * that a taller row would push hour lines out of alignment with their
+ * labels, and that reasoning was wrong because the label lives inside the
+ * row. The cost of expanding is height, not alignment.
+ *
+ * Three is also the most a person compares at a glance before they start
+ * reading. */
 export const CELL_CAP = 3;
 
 /**
