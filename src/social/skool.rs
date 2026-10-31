@@ -398,9 +398,7 @@ impl SocialProvider for SkoolProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api(
-            "Skool does not support page management via API".into(),
-        ))
+        Err(ProviderError::NoPageManagement)
     }
 
     async fn pages(&self, _access_token: &str) -> Result<Vec<PageInfo>, ProviderError> {

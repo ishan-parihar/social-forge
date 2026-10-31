@@ -597,9 +597,7 @@ impl SocialProvider for BlueskyProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api(
-            "Bluesky does not support page management".into(),
-        ))
+        Err(ProviderError::NoPageManagement)
     }
 
     async fn get_recent_posts(

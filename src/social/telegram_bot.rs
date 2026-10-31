@@ -256,8 +256,6 @@ impl SocialProvider for TelegramBotProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api(
-            "Telegram does not support page management".into(),
-        ))
+        Err(ProviderError::NoPageManagement)
     }
 }

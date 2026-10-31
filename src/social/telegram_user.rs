@@ -187,11 +187,7 @@ impl SocialProvider for TelegramUserProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api(
-            "Telegram user accounts do not support page management. \
-             Use dialog_list to browse conversations."
-                .into(),
-        ))
+        Err(ProviderError::NoPageManagement)
     }
 
     async fn targets(&self, _access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {

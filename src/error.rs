@@ -81,6 +81,12 @@ impl From<crate::social::ProviderError> for AppError {
             crate::social::ProviderError::TokenExpired => AppError::TokenExpired,
             crate::social::ProviderError::RateLimited(m) => AppError::RateLimited(m),
             crate::social::ProviderError::InvalidRequest(m) => AppError::BadRequest(m),
+            // Not a failure. A channel on this provider IS the account —
+            // there is no page/sub-account to pick. `pages()` answer.
+            crate::social::ProviderError::NoPageManagement => AppError::BadRequest(
+                "This provider has no page or sub-account concept. The channel is the account."
+                    .to_string(),
+            ),
             crate::social::ProviderError::Network(e) => {
                 AppError::Internal(format!("Provider network error: {e}"))
             }

@@ -552,9 +552,7 @@ impl SocialProvider for PinterestProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api(
-            "Pinterest does not support page-level management".into(),
-        ))
+        Err(ProviderError::NoPageManagement)
     }
 
     /// Boards are the posting targets, same listing as `pages()`.

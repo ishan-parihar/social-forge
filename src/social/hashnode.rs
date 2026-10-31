@@ -356,9 +356,7 @@ impl SocialProvider for HashnodeProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api(
-            "Hashnode does not support fetch_page_info".into(),
-        ))
+        Err(ProviderError::NoPageManagement)
     }
 
     async fn comment(

@@ -684,9 +684,7 @@ impl SocialProvider for DiscordProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api(
-            "Use pages() to list Discord channels".into(),
-        ))
+        Err(ProviderError::NoPageManagement)
     }
 
     async fn publish(

@@ -1913,9 +1913,7 @@ impl SocialProvider for XProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api(
-            "X does not support page management".into(),
-        ))
+        Err(ProviderError::NoPageManagement)
     }
 
     async fn reconnect(

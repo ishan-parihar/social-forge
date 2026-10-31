@@ -1279,9 +1279,7 @@ impl SocialProvider for LinkedInProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api(
-            "LinkedIn personal profile does not support page selection".into(),
-        ))
+        Err(ProviderError::NoPageManagement)
     }
 
     async fn reply_to_comment(

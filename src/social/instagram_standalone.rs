@@ -361,9 +361,7 @@ impl SocialProvider for InstagramStandaloneProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api(
-            "Instagram Standalone does not support page management".into(),
-        ))
+        Err(ProviderError::NoPageManagement)
     }
 
     /// Account-level insights over a day range. Feeds the dashboard via the

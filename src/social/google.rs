@@ -258,22 +258,6 @@ impl SocialProvider for GoogleProvider {
         }
     }
 
-    async fn reconnect(
-        &self,
-        access_token: &str,
-        _internal_id: &str,
-        page_id: &str,
-    ) -> Result<ReconnectResult, ProviderError> {
-        let info = self.fetch_page_info(access_token, page_id).await?;
-        Ok(ReconnectResult {
-            id: info.id,
-            name: info.name,
-            access_token: info.access_token.unwrap_or_default(),
-            picture: info.picture,
-            username: info.username,
-        })
-    }
-
     async fn publish(
         &self,
         access_token: &str,

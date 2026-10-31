@@ -201,9 +201,7 @@ impl SocialProvider for WhatsAppProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api(
-            "WhatsApp does not support page management".into(),
-        ))
+        Err(ProviderError::NoPageManagement)
     }
 
     async fn targets(&self, _access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {

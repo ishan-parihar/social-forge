@@ -127,7 +127,8 @@ pub async fn create_integration(
            ON CONFLICT (user_id, provider_identifier, internal_id)
            DO UPDATE SET access_token = ?, refresh_token = ?,
              token_expires_at = ?, profile_name = ?,
-             profile_picture = ?, profile_url = ?,
+             profile_picture = COALESCE(?, integrations.profile_picture),
+             profile_url = ?,
              root_internal_id = COALESCE(?, integrations.root_internal_id),
              auth_method = ?,
              refresh_needed = false, disabled = false,

@@ -687,21 +687,52 @@ pub trait SocialProvider: Send + Sync {
         page_id: &str,
     ) -> Result<PageInfo, ProviderError>;
 
-    /// Reconnect/re-bind after re-authentication
+    /// Reconnect/re-bind after re-authentication.
+    ///
+    /// The default routes through `fetch_page_info`, which is the
+    /// PAGE-SELECTION function — and which is SUPPOSED to refuse for a
+    /// provider with no page concept (`Err(Api("X does not support
+    /// page management"))`). Left alone, that refusal becomes the
+    /// answer to the refresh endpoint's "Refresh", because a `?`
+    /// forwards it: "Failed to refresh profile: X does not support
+    /// page management", from a button on a Reddit channel.
+    ///
+    /// So the default DEGRADES on a page-management refusal rather than
+    /// forwarding it: it returns the channel's own identity with the
+    /// existing token, which lets the refresh endpoint keep the stored
+    /// `profile_name`/`profile_picture` and only clear
+    /// `refresh_needed`. The caller writes those with `COALESCE`, so a
+    /// provider that supplies nothing does not blank a channel — it
+    /// just cannot improve it.
+    ///
+    /// A provider that CAN re-read its own profile (LinkedIn, X, the
+    /// Google family) overrides this with a direct userinfo call.
+    ///
+    /// A refusal for any OTHER reason is still an error: it is a
+    /// genuine failure, not a "no pages here".
     async fn reconnect(
         &self,
         access_token: &str,
         _internal_id: &str,
         page_id: &str,
     ) -> Result<ReconnectResult, ProviderError> {
-        let info = self.fetch_page_info(access_token, page_id).await?;
-        Ok(ReconnectResult {
-            id: info.id,
-            name: info.name,
-            access_token: info.access_token.unwrap_or_default(),
-            picture: info.picture,
-            username: info.username,
-        })
+        match self.fetch_page_info(access_token, page_id).await {
+            Ok(info) => Ok(ReconnectResult {
+                id: info.id,
+                name: info.name,
+                access_token: info.access_token.unwrap_or_default(),
+                picture: info.picture,
+                username: info.username,
+            }),
+            Err(ProviderError::NoPageManagement) => Ok(ReconnectResult {
+                id: page_id.to_string(),
+                name: String::new(),
+                access_token: access_token.to_string(),
+                picture: None,
+                username: None,
+            }),
+            Err(e) => Err(e),
+        }
     }
 
     /// Search for @mentions
@@ -1170,6 +1201,11 @@ pub fn validate_post_rules(
 pub enum ProviderError {
     #[error("API error: {0}")]
     Api(String),
+    /// This provider has no "page" / sub-account concept. NOT a
+    /// failure: it is the correct answer to `pages()` /
+    /// `fetch_page_info()` for a channel that is itself the unit.
+    #[error("Provider does not support page management")]
+    NoPageManagement,
     #[error("Token expired")]
     TokenExpired,
     #[error("Rate limited: {0}")]

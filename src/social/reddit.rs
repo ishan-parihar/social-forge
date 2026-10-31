@@ -2162,9 +2162,7 @@ impl SocialProvider for RedditProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api(
-            "Reddit does not support page management".into(),
-        ))
+        Err(ProviderError::NoPageManagement)
     }
 
     async fn targets(&self, access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {
