@@ -1,6 +1,8 @@
 <script lang="ts">
   import { formatDateKey, getDayHours, isToday } from "./utils";
   import CalendarEvent from "./CalendarEvent.svelte";
+  import CellMoreButton from "./CellMoreButton.svelte";
+  import { capCell } from "./cell-cap";
   import type { CalendarEvent as CEvent } from "./types";
   import type { Integration } from "$lib/api/integrations";
   import { makeTouchDragHandler, type TouchDropTarget } from "./touch-drag";
@@ -33,6 +35,18 @@
   let key = $derived(formatDateKey(date));
   let dayEvents = $derived(events.filter(e => e.date === key));
   let hours = $derived(getDayHours());
+
+  // Which hour rows have revealed their `+N more`. See WeekView: the cap is
+  // one rule (`capCell`), so the day grid and the week grid count the same
+  // way and the same day reads the same inside both.
+  let expandedCells = $state(new Set<string>());
+
+  function toggleCell(cellKey: string) {
+    const next = new Set(expandedCells);
+    if (next.has(cellKey)) next.delete(cellKey);
+    else next.add(cellKey);
+    expandedCells = next;
+  }
 
   // Phase 2: ghost slots - per-channel posting time presets that have
   // no real post at that time. These show as dashed-border empty drop
@@ -168,6 +182,10 @@
     {#each hours as hour (hour)}
       {@const hourStr = hour.slice(0, 2)}
       {@const isDragOver = dragOverHour === hourStr}
+      {@const hourEvents = eventsByHour.get(hourStr) || []}
+      {@const hourKey = `${key}-${hourStr}`}
+      {@const hourExpanded = expandedCells.has(hourKey)}
+      {@const cappedHour = capCell(hourEvents, hourExpanded)}
       <div class="flex border-b border-line min-h-[56px]">
         <div class="w-16 text-xs text-muted px-2 py-1 border-r border-line shrink-0">{hour}</div>
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -184,7 +202,7 @@
           role="gridcell"
           tabindex="-1"
         >
-          {#each (eventsByHour.get(hourStr) || []) as event (event.id)}
+          {#each cappedHour.visible as event (event.id)}
             <div
               data-event-id={event.id}
               class="group/chip flex items-center gap-1 flex-1 min-w-0 {event.state === 'published' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
@@ -209,6 +227,11 @@
               <CalendarEvent {event} {onDuplicate} {onStats} {onDelete} />
             </div>
           {/each}
+          <!-- Same cell cap as WeekView, so a day with 8 posts reads the same
+               as the same day inside a week. -->
+          {#if cappedHour.hidden > 0}
+            <CellMoreButton hidden={cappedHour.hidden} expanded={hourExpanded} onToggle={() => toggleCell(hourKey)} />
+          {/if}
           <!-- Phase 2: ghost slots - per-channel posting time presets.
                v26: 44px target (was min-h-6 = 24px, under the 2.5.8 floor
                once padding shrank the label further) and text-xs so the

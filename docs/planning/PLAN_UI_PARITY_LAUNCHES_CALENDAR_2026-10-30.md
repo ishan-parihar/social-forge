@@ -417,3 +417,98 @@ Plus the before/after numbers: rail 224 -> 80; calendar chrome 218 -> ~60; every
 - No raw hex anywhere; every new surface renders through the existing token layer.
 - No new SSE event; the calendar keeps its 19 subscriptions.
 - **No removal of the chip's existing good parts** (time, tag colour bar, tag chips, metrics, hover toolbar, error badge). The first draft of this audit proposed to add four things that were already there; that is the failure mode this rewrite exists to prevent.
+
+---
+
+## Part 7. WHAT THE RENDERED APP TAUGHT US (recorded after C-0 and C-1 landed)
+
+The plan above was written from the rendered baseline. Building it produced two
+defects the baseline could not show, and both are recorded here because the
+next reader of this file will meet them again.
+
+### 7.1 `min-height` with vertical PADDING is not the tap target
+
+Phase 1 said "raise the padding so the box clears 24px". That is what the
+author of the rule could see from the source, and it is wrong in a way only the
+rendered page shows: the chip's children - the 17px time and the 13px tag chips
+- sit on ONE row, so the chip's CONTENT height is 17px, not the sum of both.
+Padding `0.3125rem` (5px) top and bottom declared a 24px box whose content area
+was 14px, and the 17px time overflowed it.
+
+The consequence was not a small box - the box was exactly 24px, and a probe
+reading only the box would have passed it. The consequence was that the tag
+chip and the time, both centred inside a clipped box, INTERSECTED by more than
+2px in both axes, and the probe's own overlap check failed `/calendar` in both
+themes with `"buildinpublic" overlaps "03:51"`.
+
+The shipped rule keeps the ORIGINAL vertical padding and lets `min-height`
+carry the box:
+
+```css
+.event-chip { min-height: 24px; padding: 0.125rem 0.375rem; }
+```
+
+The measured acceptance is not "the box is 24px" - it is "the box is 24px AND
+`scrollHeight <= clientHeight + 1`", because a clipped box is the shape the
+defect takes. `frontend/scripts/verify-c0-c1-chip.mjs` asserts both.
+
+### 7.2 The tag chips did not shrink, because of one keyword
+
+The tag chip carried `flex-shrink: 0`, so in a 129px chip the two name chips
+held their natural widths (69px and 40px) inside a `.event-tags` block that had
+shrunk to 21px. `overflow: hidden` clipped them visually, so nothing looked
+broken - but `getBoundingClientRect` reports the LAID-OUT box, and the probe
+measured the second tag chip overlapping the time.
+
+Two changes fixed it together, and neither is "delete a tag":
+
+- `flex-shrink: 0` -> `flex-shrink: 1` with a `min-width: 1.25rem` floor, so the
+  block actually contains what it renders.
+- `line-height: 1.3` -> `1.55` to match the chip's own type, so the tag chip
+  occupies the same vertical band as the time rather than starting 2px below it.
+- a `@container (max-width: 170px)` rule drops the SECOND tag chip only when the
+  chip cannot hold two, with the `+N` count carrying the truth. The first tag's
+  colour is still on the chip's left border, and the full names are in the
+  tooltip and on the detail panel.
+
+The rule this belongs to: **a rule the browser applies is not a rule the probe
+sees.** `overflow: hidden` clips a paint; it does not shrink a layout box.
+
+### 7.3 The week grid is a NESTED scroller, and a probe that does not know that measures nothing
+
+The drag-to-reschedule probe reported "nothing happened" for a long time. The
+chip it had chosen was at y=1044 in a 900px viewport - the grid is a nested
+scroller starting around y=268, so a mouse move to that coordinate fires NO
+events at all. The app was correct; the probe was measuring its own viewport.
+
+The probe now scrolls the chip's OWN cell to the top of the grid and requires
+BOTH the source chip and the target cell to be inside the GRID's visible box,
+not the viewport's. It also filters to `[draggable="true"]`, because
+`draggable="false"` is a published or past post the app deliberately refuses to
+move - a control that is correctly inert.
+
+### 7.4 The confirmation modal is `role="alertdialog"`, not `role="dialog"`
+
+The group-move confirmation ("Move all posts in this campaign by the same
+offset?") is rendered by `ModalManager.svelte` with `role="alertdialog"`. A
+probe that searched for `[role="dialog"]` never found it, and would have
+reported the group-move promise as broken when it was working.
+
+`frontend/scripts/verify-c1-group-complete.mjs` searches both roles, answers
+"Move all", and then asserts the outcome against the SERVER's own payload - not
+the DOM. The grid renders only the rows its scroll covers, so "the member is
+gone from the DOM" is a statement about the scroll, not about the move. The
+assertion is one `PUT .../date` with `"move_group": true` AND both members
+shifted by the SAME offset.
+
+### 7.5 A TEXT uuid in a uuid column 500s every reader of the table
+
+The fixture seeder wrote `integration_id` and `group_id` as 36-character TEXT
+strings. SQLite stores a `Uuid` as BLOB(16) (AGENTS.md §5.1.1, §9.33, §9.44), so
+every query that decoded those rows failed with `invalid length: expected 16
+bytes, found 36` - and `/api/calendar` answered 500 while the page rendered an
+empty grid with no error shown to the user.
+
+`scripts/seed_c1_fixtures.py` now writes BLOB(16) for every uuid column and
+prints the `typeof()` of each one it wrote, so a seeder that regresses fails at
+seed time rather than at 2am in the scheduler.

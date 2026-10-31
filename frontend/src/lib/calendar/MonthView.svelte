@@ -2,6 +2,8 @@
   import { tick } from "svelte";
   import { getMonthDays, isToday, isCurrentMonth, isPast, formatDateKey, days, monthsFull } from "./utils";
   import CalendarEvent from "./CalendarEvent.svelte";
+  import CellMoreButton from "./CellMoreButton.svelte";
+  import { capCell } from "./cell-cap";
   import type { CalendarEvent as CEvent } from "./types";
   import { timezone } from "$lib/stores/timezone.svelte";
 
@@ -34,6 +36,18 @@
   // DayView already had this; the month grid silently accepted drops with no
   // feedback, so the user could not tell whether a cell was a valid target.
   let dragOverDate = $state<string | null>(null);
+
+  // Which day cells have revealed their `+N more`. The cap is ONE rule
+  // (`capCell`) shared with the week and day grids, so the same day reads
+  // the same inside all three views.
+  let expandedCells = $state(new Set<string>());
+
+  function toggleCell(cellKey: string) {
+    const next = new Set(expandedCells);
+    if (next.has(cellKey)) next.delete(cellKey);
+    else next.add(cellKey);
+    expandedCells = next;
+  }
 
   function handleDragStart(e: DragEvent, eventId: string) {
     if (!e.dataTransfer) return;
@@ -197,6 +211,8 @@
           {@const key = formatDateKey(date)}
           {@const dayEvents = eventsByDate.get(key) || []}
           {@const past = isPast(date, timezone.value)}
+          {@const cellExpanded = expandedCells.has(key)}
+          {@const cappedDay = capCell(dayEvents, cellExpanded)}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             data-date={key}
@@ -239,7 +255,7 @@
                  whole month grid scrolling away. `min-h-0` lets the
                  flex child shrink. -->
             <div class="space-y-0.5 max-h-32 overflow-y-auto overscroll-contain min-h-0">
-              {#each dayEvents as event (event.id)}
+              {#each cappedDay.visible as event (event.id)}
                 <div
                   class="event-chip-row group/chip relative flex items-center gap-1 flex-1 min-w-0 min-h-6 focus-visible:outline-2 focus-visible:outline-accent {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
                   draggable={event.state !== 'published' && !past}
@@ -297,6 +313,12 @@
                   </span>
                 </div>
               {/each}
+              <!-- The same cap as the week and day grids, so a day reads
+                   identically in all three. The cell's own scroll stays as
+                   the fallback for a phone-width day column. -->
+              {#if cappedDay.hidden > 0}
+                <CellMoreButton hidden={cappedDay.hidden} expanded={cellExpanded} onToggle={() => toggleCell(key)} />
+              {/if}
             </div>
           </div>
         {/each}

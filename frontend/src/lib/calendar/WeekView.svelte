@@ -2,6 +2,8 @@
   import { tick } from "svelte";
   import { buildWeekDays, getDayHours, isPast, isToday } from "./utils";
   import CalendarEvent from "./CalendarEvent.svelte";
+  import CellMoreButton from "./CellMoreButton.svelte";
+  import { capCell } from "./cell-cap";
   import type { CalendarEvent as CEvent } from "./types";
   import { timezone } from "$lib/stores/timezone.svelte";
   import { makeTouchDragHandler, type TouchDropTarget } from "./touch-drag";
@@ -53,6 +55,18 @@
     }
     return map;
   });
+
+  // Which cells have revealed their `+N more`. Keyed by cell, so expanding
+  // one hour does not expand every hour in the week, and navigating away and
+  // back does not leave a day half-expanded.
+  let expandedCells = $state(new Set<string>());
+
+  function toggleCell(key: string) {
+    const next = new Set(expandedCells);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    expandedCells = next;
+  }
 
   function handleDrop(e: DragEvent, dateStr: string, hour: string) {
     e.preventDefault();
@@ -264,6 +278,9 @@
           {@const cellKey = `${wd.dateStr}-${hour}`}
           {@const isDragOver = dragOverKey === cellKey}
           {@const past = isCellPast(wd.date, hour)}
+          {@const cellEvents = eventsByDayHour.get(cellKey) || []}
+          {@const isExpanded = expandedCells.has(cellKey)}
+          {@const capped = capCell(cellEvents, isExpanded)}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             data-drop-date={wd.dateStr}
@@ -284,7 +301,7 @@
             onfocus={() => (activeCell = `${wd.dateStr}-${hour.slice(0, 2)}`)}
             onkeydown={(e) => handleKeyDown(e, wd.dateStr, hour)}
           >
-            {#each (eventsByDayHour.get(cellKey) || []) as event (event.id)}
+            {#each capped.visible as event (event.id)}
               <!-- `flex-1 min-w-0` so the chip keeps the cell's width when
                    the title collapses on hover. Without it the wrapper
                    shrank to the width of its content, which pulled the
@@ -334,6 +351,12 @@
                 <CalendarEvent {event} {onDuplicate} {onStats} {onDelete} />
               </div>
             {/each}
+            <!-- The cell cap: postiz's `slice(0,3)` + `Show more (N)`. Without
+                 it a busy slot is a wall - 23 chips rendered for 8 seeded
+                 posts, 6 of them stacked inside this one cell. -->
+            {#if capped.hidden > 0}
+              <CellMoreButton hidden={capped.hidden} expanded={isExpanded} onToggle={() => toggleCell(cellKey)} />
+            {/if}
           </div>
         {/each}
       </div>

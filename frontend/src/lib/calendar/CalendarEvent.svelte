@@ -17,6 +17,8 @@
     onDelete?: (id: string) => void;
   } = $props();
 
+  // The number shown is the same in both grids (two), and the month grid
+  // renders them as 4px DOTS rather than name chips - see the template.
   let visibleTags = $derived((event.tags || []).slice(0, 2));
   let overflowCount = $derived((event.tags?.length || 0) - 2);
 
@@ -206,30 +208,13 @@
     container-type: inline-size;
   }
 
-  /* The chip is 24px tall in EVERY grid, not just the month one.
-     The week and day chips were 21px, and a 21px target is under the WCAG 2.2
-     "Target Size (Minimum)" floor of 24x24 (2.5.8) - AGENTS.md 9.37: below 24
-     is a FAIL, not a warning. The month grid below had carried the floor all
-     along, in `.event-chip.compact`, with the comment that explains it; the
-     non-compact chip never got the same rule, and the probe measures the
-     rendered box, so the week and day grids were the two that failed.
+  /* The COMPACT chip - the month grid - is 24px tall.
+     It was 21px, and a 21px target is under even the WCAG 2.2
+     "Target Size (Minimum)" floor of 24x24 (2.5.8).
 
-     `padding: 0.125rem` on an 11px line is what made 21px, so the vertical
-     padding carries the box to 24px and the type size does not move. The week
-     grid's cells are `min-h-24`, so the extra 3px is absorbed by the cell
-     rather than pushing the row apart - the measured acceptance for this
-     change is that the CELL does not grow.
-
-     Do NOT "fix" this by removing anything from the chip: the time, the tag
-     colour bar, the tag name chips and the metric counts were each proposed
-     for deletion by an audit draft that had not rendered the page. They are
-     all present, they all clear contrast, and the 21px box was the only
-     defect. */
-  .event-chip {
-    min-height: 24px;
-    padding: 0.3125rem 0.375rem;
-  }
-
+     The month cell is `min-h-24` (96px), which is a MINIMUM: three
+     24px chips plus the day number need 112px, and the cell grows
+     to fit. The month grid scrolls anyway. */
   /* The COMPACT chip - the month grid - is 24px tall.
      It was 21px, and a 21px target is under even the WCAG 2.2
      "Target Size (Minimum)" floor of 24x24 (2.5.8).
@@ -238,6 +223,31 @@
      24px chips plus the day number need 112px, and the cell grows
      to fit. The month grid scrolls anyway. */
   .event-chip.compact { min-height: 24px; }
+
+  /* The NON-compact chip is 24px tall too - the same WCAG 2.2 2.5.8 floor.
+
+     The trap the C-0 attempt fell into: `min-height` with vertical PADDING
+     is not the tap target. The chip's children - the 17px time and the 13px
+     tag chips - sit on ONE row, so the chip's CONTENT height is 17px, not
+     34px. Padding `0.3125rem` (5px) top and bottom declared a 24px box
+     whose CONTENT area was 14px, and the 17px time overflowed it. The
+     children boxes then overlapped each other by more than 2px in both
+     axes, and the probe's overlap check failed the chip on /calendar in
+     both themes - a REAL defect, not a gate artifact: the tag chip and the
+     time genuinely collided inside a clipped box.
+
+     So the vertical padding STAYS at the original 0.125rem and the box
+     height comes from the line-height of the 11px type plus that padding:
+     11px * 1.5 + 2 * 2px = ~20px, and `min-height: 24px` carries the rest.
+     The children fit because the chip's own line box is 17px and the
+     padding does not eat into it.
+
+     Do NOT return to `padding: 0.3125rem 0.375rem` on this chip: it
+     clipped the time and the probe caught it. */
+  .event-chip {
+    min-height: 24px;
+    padding: 0.125rem 0.375rem;
+  }
 
   /* The month grid's chip is 24px tall - see `.event-chip.compact`.
      A pseudo-element hit-area was tried and dropped: the chip has
@@ -305,8 +315,15 @@
   .tag-dot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; }
   .tag-chip {
     max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    padding: 0 4px; border-radius: 3px; font-size: 0.625rem; line-height: 1.3;
-    font-weight: 500; flex-shrink: 0; min-width: 1.75rem;
+    padding: 0 4px; border-radius: 3px; font-size: 0.625rem;
+    font-weight: 500; flex-shrink: 1; min-width: 1.25rem;
+    /* The tag chip's line-height matches the chip's own type so it occupies
+       the SAME vertical band as the time. At the old `line-height: 1.3` the
+       chip was 13px against the time's 17px, and centred in the content area
+       it started 2px below the time - so their boxes intersected in both
+       axes and the probe reported the tag overlapping the time on every week
+       cell that had both. */
+    line-height: 1.55;
   }
   /* A week cell is ~130px wide and holds the tag, the time and the title.
      The title is the only one of the three that can be shortened without
@@ -325,6 +342,21 @@
      on the detail panel. */
   @container (max-width: 90px) {
     .tag-chip { display: none; }
+  }
+  /* A chip that holds the time AND the title AND the tag bar leaves little
+     for tag chips: at 129px the arithmetic is 3px bar + 8px padding + 28px
+     time + 57px title + gaps = ~104px, so 25px is left over. Two chips at
+     their 1.75rem floor (28px each) need 58px, and they OVERFLOWED the
+     21px block - clipped by `overflow: hidden`, but still laid out at their
+     natural width, so they measured as overlapping the time.
+
+     One chip fits in that space (28px + its own 4px padding inside the
+     1.75rem floor is marginal, and the SECOND one never fits at this chip
+     width). So the second tag chip is dropped here, and the `+N` count
+     carries the truth. The first tag's colour is also on the chip's left
+     border, and the full names are in the tooltip and the detail panel. */
+  @container (max-width: 170px) {
+    .tag-chip:nth-child(n + 2) { display: none; }
   }
   .tag-overflow { font-size: 0.625rem; color: rgb(var(--text-muted-rgb)); flex-shrink: 0; }
   /* The de-emphasised parts take the MUTED ink, not a dimmed state hue.
